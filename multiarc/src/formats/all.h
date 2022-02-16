@@ -73,6 +73,7 @@ int WINAPI _export SEVENZ_GetArcItem(struct PluginPanelItem *Item, struct ArcIte
 BOOL WINAPI _export SEVENZ_CloseArchive(struct ArcInfo *Info);
 BOOL WINAPI _export SEVENZ_GetFormatName(int Type,char *FormatName,char *DefaultExt);
 BOOL WINAPI _export SEVENZ_GetDefaultCommands(int Type,int Command,char *Dest);
+void  WINAPI _export SEVENZ_SetFarInfo(const struct PluginStartupInfo *Info);
 void  WINAPI _export HA_SetFarInfo(const struct PluginStartupInfo *Info);
 BOOL WINAPI _export HA_IsArchive(const char *Name,const unsigned char *Data,int DataSize);
 BOOL WINAPI _export HA_OpenArchive(const char *Name,int *Type,bool Silent);

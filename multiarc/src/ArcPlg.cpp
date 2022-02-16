@@ -62,7 +62,7 @@ ArcPlugins::ArcPlugins(const char *ModuleName)
 		ZIP_CloseArchive, ZIP_GetFormatName, ZIP_GetDefaultCommands, NULL, ZIP_GetSFXPos);
 
 	AddPluginItem(SEVENZ_IsArchive, SEVENZ_OpenArchive, SEVENZ_GetArcItem, NULL,
-		SEVENZ_CloseArchive, SEVENZ_GetFormatName, SEVENZ_GetDefaultCommands, NULL, NULL);
+		SEVENZ_CloseArchive, SEVENZ_GetFormatName, SEVENZ_GetDefaultCommands, SEVENZ_SetFarInfo, NULL);
 
 	AddPluginItem(ACE_IsArchive, ACE_OpenArchive, ACE_GetArcItem, NULL,
 		ACE_CloseArchive, ACE_GetFormatName, ACE_GetDefaultCommands, NULL, ACE_GetSFXPos);
