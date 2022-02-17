@@ -28,47 +28,17 @@
 #include "./CPP/Common/StringConvert.h"
 #include "./CPP/Common/StringToInt.h"
 #include "./CPP/Common/UTFConvert.h"
+#include "./CPP/Common/MyLinux.h"
 
 #include "./CPP/Windows/ErrorMsg.h"
 #include "./CPP/Windows/TimeUtils.h"
 
-//#include "../Common/ArchiveCommandLine.h"
-//#include "../Common/Bench.h"
-//#include "../Common/ExitCode.h"
-//#include "../Common/Extract.h"
-
-//#ifdef EXTERNAL_CODECS
-//#include "../Common/LoadCodecs.h"
-//#endif
-
 #include "./CPP/7zip/Common/RegisterCodec.h"
-
-//#include "BenchCon.h"
-//#include "ConsoleClose.h"
-//#include "ExtractCallbackConsole.h"
-//#include "HashCon.h"
-//#include "List.h"
-//#include "OpenCallbackConsole.h"
-//#include "UpdateCallbackConsole.h"
 
 #ifdef PROG_VARIANT_R
 #include "./CPP/../C/7zVersion.h"
 #else
 #include "./CPP/7zip/MyVersion.h"
-#endif
-
-#if defined(PROG_VARIANT_Z)
-  #define PROG_POSTFIX      "z"
-  #define PROG_POSTFIX_2  " (z)"
-#elif defined(PROG_VARIANT_R)
-  #define PROG_POSTFIX      "r"
-  #define PROG_POSTFIX_2  " (r)"
-#elif !defined(EXTERNAL_CODECS)
-  #define PROG_POSTFIX      "a"
-  #define PROG_POSTFIX_2  " (a)"
-#else
-  #define PROG_POSTFIX    ""
-  #define PROG_POSTFIX_2  ""
 #endif
 
 #include <stdio.h>
@@ -224,25 +194,34 @@ extern
 CStdOutStream *g_ErrStream;
 CStdOutStream *g_ErrStream = &g_StdErr;
 
-void * OpenFile7z(const char *path, bool & passwordIsDefined)
-{
-	Z_LOG("... %s\n", path);
+static CCodecs *g_Codecs = nullptr;
 
-	CREATE_CODECS_OBJECT
+static bool Init7z(void)
+{
+	CCodecs *codecs = new CCodecs; \
 	codecs->CaseSensitiveChange = false;
 	codecs->CaseSensitive = false;
-
 	HRESULT res = codecs->Load();
 	if( res != S_OK) {
 		Z_LOG("... codecs->Load() error %u\n", res);
-		return nullptr;
+		delete codecs;
+		return false;
 	}
 	Codecs_AddHashArcHandler(codecs);
+	g_Codecs = codecs;
+	return true;
+}
+
+void * OpenFile7z(const char *path, bool & passwordIsDefined)
+{
+	Z_LOG("... %s\n", path);
+	if( !g_Codecs && !Init7z())
+		return nullptr;
 
 	CArchiveLink * arcLink = new CArchiveLink();
 
 	COpenOptions options;
-	options.codecs = codecs;
+	options.codecs = g_Codecs;
 	CObjectVector<COpenType> types;
 	options.types = &types;
 	CIntVector excludedFormats;
@@ -255,74 +234,16 @@ void * OpenFile7z(const char *path, bool & passwordIsDefined)
 
 	COpenCallbackFar2l openCallbackFar2l;
 	openCallbackFar2l.Init(path);
-	res = arcLink->Open_Strict(options, &openCallbackFar2l);
+	HRESULT res = arcLink->Open_Strict(options, &openCallbackFar2l);
 	if( res != S_OK) {
 		Z_LOG("... arcLink->Open_Strict(%s) error %u\n", path, res);
 		return nullptr;
 	}
 
 	passwordIsDefined = openCallbackFar2l.PasswordIsDefined;
-
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
-	UInt32 numItems;
-	archive->GetNumberOfItems(&numItems);
-	Z_LOG("... numItems %u\n", numItems);
-	CReadArcItem item;
-	for (UInt32 i = 0; i < numItems; i++)
-	{
-		UString FilePath;
-		HRESULT res = arc.GetItemPath2(i, FilePath);
-		if (arc.Ask_Aux)
-		{
-			bool isAux;
-			Archive_IsItem_Aux(archive, i, isAux);
-			if (isAux) {
-				Z_LOG("isAux: %S \n", FilePath.Ptr());
-				continue;
-			}
-		}
-
-		bool isAltStream = false;
-		if (arc.Ask_AltStream)
-		{
-			Archive_IsItem_AltStream(archive, i, isAltStream);
-			if (isAltStream) {
-				Z_LOG("isAltStream: %S \n", FilePath.Ptr());
-				//continue;
-			}
-		}
-
-		bool isDir = false;
-		Archive_IsItem_Dir(archive, i, isDir);
-		if( isDir ) {
-			Z_LOG("isDir: %S \n", FilePath.Ptr());
-			continue;
-		}
-
-		NWindows::NCOM::CPropVariant prop;
-
-		UInt64 Size;
-		UInt64 PackSize;
-		FILETIME MTime;
-
-		archive->GetProperty(i, kpidSize, &prop);
-		ConvertPropVariantToUInt64(prop, Size);
-
-		archive->GetProperty(i, kpidPackSize, &prop);
-		ConvertPropVariantToUInt64(prop, PackSize);
-
-
-		archive->GetProperty(i, kpidMTime, &prop);
-		MTime = prop.filetime;
-		time_t time_t_var = FileTime_to_POSIX(MTime);
-
-		Z_LOG("file: %S size: %llu pack size: %llu time: %s\n", FilePath.Ptr(), Size, PackSize, ctime( &time_t_var ));
-	}
-	Z_LOG("arcLink %p\n", arcLink);
 	return arcLink;
 }
-void ClozeFile7z(void * _context)
+void CloseFile7z(void * _context)
 {
 	CArchiveLink * arcLink = (CArchiveLink*)_context;
 	delete arcLink;
@@ -335,19 +256,112 @@ unsigned int GetNumFiles7z(void * _context)
 	IInArchive *archive = arc.Archive;
 	UInt32 numItems;
 	archive->GetNumberOfItems(&numItems);
-	Z_LOG("... numItems %u\n", numItems);
 	return (unsigned int)numItems;
 }
 
-unsigned IsDir7z(void * _context, unsigned int _index)
+static bool GetCPropVariant(void * _context, unsigned int _index, PROPID propID, NWindows::NCOM::CPropVariant & prop)
 {
 	CArchiveLink * arcLink = (CArchiveLink*)_context;
 	const CArc &arc = arcLink->Arcs.Back();
 	IInArchive *archive = arc.Archive;
-	bool isDir = false;
-	Archive_IsItem_Dir(archive, _index, isDir);
-	Z_LOG("isDir: %u\n", isDir);
-	return isDir;
+	archive->GetProperty(_index, propID, &prop);
+	if( prop.vt == VT_EMPTY )
+		return false;
+	return true;
+}
+
+static bool GetBool(void * _context, unsigned int _index, PROPID propID)
+{
+	NWindows::NCOM::CPropVariant prop;
+	if(GetCPropVariant(_context, _index, propID, prop) && prop.vt == VT_BOOL)
+		return (bool)VARIANT_BOOLToBool(prop.boolVal);
+	return false;
+}
+
+static uint32_t GetUint32(void * _context, unsigned int _index, PROPID propID)
+{
+	NWindows::NCOM::CPropVariant prop;
+	if(GetCPropVariant(_context, _index, propID, prop) && (prop.vt == VT_UI4 || prop.vt == VT_I4))
+		return prop.ulVal;
+	return 0;
+}
+
+static uint64_t GetUint64(void * _context, unsigned int _index, PROPID propID)
+{
+	NWindows::NCOM::CPropVariant prop;
+	if(GetCPropVariant(_context, _index, propID, prop)) {
+		switch (prop.vt) {
+			case VT_UI8:
+				return (uint64_t)prop.hVal.QuadPart;
+			case VT_I8:
+				return (uint64_t)prop.uhVal.QuadPart;
+			case VT_UI4:
+				return (uint64_t)prop.ulVal;
+			case VT_I4:
+				return (uint64_t)prop.lVal;
+			case VT_UI2:
+				return (uint64_t)prop.uiVal;
+			case VT_I2:
+				return (uint64_t)prop.iVal;
+			case VT_UI1:
+				return (uint64_t)prop.bVal;
+			case VT_I1:
+				return (uint64_t)prop.cVal;
+			default:
+				break;
+		}
+	}
+	return (uint64_t)0;
+}
+
+uint32_t GetAttrib7z(void * _context, unsigned int _index)
+{
+	return GetUint32(_context, _index, kpidAttrib);
+}
+
+// The 7-zip archive format does not store standard Unix file permissions such as owner/group or extended file attributes.
+// But we support many others formats.
+uint32_t GetPosixAttrib7z(void * _context, unsigned int _index)
+{
+	uint32_t attr = GetUint32(_context, _index, kpidPosixAttrib);
+	if(attr)
+		return attr;
+	attr = GetUint32(_context, _index, kpidAttrib);
+	if( attr & FILE_ATTRIBUTE_UNIX_EXTENSION )
+		return attr >> 16;
+	return 0;
+}
+
+uint32_t GetCRC7z(void * _context, unsigned int _index)
+{
+	return GetUint32(_context, _index, kpidCRC);
+}
+
+uint64_t GetSize7z(void * _context, unsigned int _index)
+{
+	return GetUint64(_context, _index, kpidSize);
+}
+
+uint64_t GetPackSize7z(void * _context, unsigned int _index)
+{
+	return GetUint64(_context, _index, kpidPackSize);
+}
+
+bool IsDir7z(void * _context, unsigned int _index)
+{
+	return GetBool(_context, _index, kpidIsDir);
+}
+
+bool IsEncrypted7z(void * _context, unsigned int _index)
+{
+	return GetBool(_context, _index, kpidEncrypted);
+}
+
+bool IsSymlink7z(void * _context, unsigned int _index)
+{
+	if( GetBool(_context, _index, kpidSymLink) )
+		return true;
+	return MY_LIN_S_ISLNK(GetPosixAttrib7z(_context, _index));
 }
 
 bool GetName7z(void * _context, unsigned int _index, std::wstring & _tmp_str)
@@ -357,85 +371,26 @@ bool GetName7z(void * _context, unsigned int _index, std::wstring & _tmp_str)
 	UString FilePath;
 	HRESULT res = arc.GetItemPath2(_index, FilePath);
 	if( res != S_OK) {
-		Z_LOG("... codecs->Load() error %u\n", res);
+		Z_LOG("... arc.GetItemPath2() error %u\n", res);
 		return false;
 	}
 	_tmp_str = std::wstring(FilePath.Ptr());
-	Z_LOG("file: %S\n", _tmp_str.c_str());
 	return true;
-}
-
-uint32_t GetAttrib7z(void * _context, unsigned int _index)
-{
-	CArchiveLink * arcLink = (CArchiveLink*)_context;
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
-
-	NWindows::NCOM::CPropVariant prop;
-	archive->GetProperty(_index, kpidAttrib, &prop);
-	if (prop.vt == VT_EMPTY || prop.vt != VT_UI4)
-		return 0;
-	return prop.ulVal;
-}
-
-uint64_t GetSize7z(void * _context, unsigned int _index)
-{
-	CArchiveLink * arcLink = (CArchiveLink*)_context;
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
-
-	NWindows::NCOM::CPropVariant prop;
-	archive->GetProperty(_index, kpidSize, &prop);
-	UInt64 Size = 0;
-	ConvertPropVariantToUInt64(prop, Size);
-	return Size;
-}
-
-uint64_t GetPackSize7z(void * _context, unsigned int _index)
-{
-	CArchiveLink * arcLink = (CArchiveLink*)_context;
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
-
-	NWindows::NCOM::CPropVariant prop;
-	archive->GetProperty(_index, kpidPackSize, &prop);
-	UInt64 PackSize;
-	ConvertPropVariantToUInt64(prop, PackSize);
-	return PackSize;
-}
-
-uint32_t GetCRC7z(void * _context, unsigned int _index)
-{
-	CArchiveLink * arcLink = (CArchiveLink*)_context;
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
-
-	NWindows::NCOM::CPropVariant prop;
-	archive->GetProperty(_index, kpidCRC, &prop);
-	if (prop.vt == VT_EMPTY || prop.vt != VT_UI4)
-		return 0;
-	return prop.ulVal;
 }
 
 void GetCTime7z(void * _context, unsigned int _index, FILETIME & ftc)
 {
-	CArchiveLink * arcLink = (CArchiveLink*)_context;
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
 	NWindows::NCOM::CPropVariant prop;
-	archive->GetProperty(_index, kpidCTime, &prop);
-	ftc = prop.filetime;
+	if(GetCPropVariant(_context, _index, kpidCTime, prop) && prop.vt == VT_FILETIME)
+		ftc = prop.filetime;
 	return;
 }
 
 void GetMTime7z(void * _context, unsigned int _index, FILETIME & ftm)
 {
-	CArchiveLink * arcLink = (CArchiveLink*)_context;
-	const CArc &arc = arcLink->Arcs.Back();
-	IInArchive *archive = arc.Archive;
 	NWindows::NCOM::CPropVariant prop;
-	archive->GetProperty(_index, kpidMTime, &prop);
-	ftm = prop.filetime;
+	if(GetCPropVariant(_context, _index, kpidMTime, prop) && prop.vt == VT_FILETIME)
+		ftm = prop.filetime;
 	return;
 }
 

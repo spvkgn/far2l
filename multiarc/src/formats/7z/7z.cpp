@@ -6,6 +6,7 @@
   Copyright (c) 1996 Eugene Roshal
   Copyrigth (c) 2000 FAR group
   Copyrigth (c) 2016 elfmz
+  Copyrigth (c) 2022 VPROFi
 */
 #define _UNICODE
 #include <windows.h>
@@ -24,7 +25,7 @@
 #include <stdexcept>
 #include <farplug-mb.h>
 using namespace oldfar;
-#include "fmt.hpp"
+#include "MultiArc.hpp"
 
 #include "7zcommon.h"
 
@@ -80,6 +81,7 @@ static void z_log(const char *function, unsigned int line, const char *format, .
 
 #define Z_LOG(args...) z_log(__FUNCTION__, __LINE__, args)
 
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -106,7 +108,7 @@ class Traverser
 		return false;
 	}
 public:
-	Traverser(const char *path) : _index(0), _valid(false), _context(nullptr)
+	Traverser(const char *path) : _index(0), _valid(false), _context(nullptr), _passwordIsDefined(false)
 	{
 		Z_LOG("Traverser()\n");
 		if( !GetFileStat(path, &_archStat) )
@@ -115,7 +117,7 @@ public:
 		_context = OpenFile7z(path, _passwordIsDefined);
 		if ( _context != nullptr )
 			_valid = true;
-		else {
+		else if (_passwordIsDefined) {
 			const char *NamePtr = path;
 			while(*path) {
 				if(*path=='/')
@@ -135,15 +137,14 @@ public:
 	{
 		Z_LOG("~Traverser()\n");
 		if (_context) {
-			ClozeFile7z(_context);
-			_context = nullptr;
 			memset(ArchPassword, 0, sizeof(ArchPassword));
+			CloseFile7z(_context);
+			_context = nullptr;
 		}
 	}
 	
 	bool Valid() const
 	{
-		Z_LOG("Valid() %u\n", _valid);
 		return _valid;
 	}
 
@@ -167,8 +168,11 @@ public:
 	int Next(struct PluginPanelItem *Item, struct ArcItemInfo *Info)
 	{
 		Z_LOG("Next()\n");
-		if (!_valid)
+		if (!_valid || _context == nullptr)
 			return GETARC_READERROR;
+
+		if (_index >= GetNumFiles7z(_context))
+			return GETARC_EOF;
 
 		unsigned is_dir = 0;
 		DWORD attribs = 0;
@@ -177,41 +181,51 @@ public:
 		DWORD crc32 = 0;
 		FILETIME ftm = {}, ftc = {};
 
-		if ( _context != nullptr ) {
-			if (_index >= GetNumFiles7z(_context))
-				return GETARC_EOF;
-			is_dir = IsDir7z(_context, _index);
-			if ( !GetName7z(_context, _index, _tmp_str) )
-				return GETARC_READERROR;
-			attribs = (DWORD)GetAttrib7z(_context, _index);
-			file_size = GetSize7z(_context, _index);
-			packed_size = GetPackSize7z(_context, _index);
-			crc32 = (DWORD)GetCRC7z(_context,_index);
-			GetCTime7z(_context, _index, ftc);
-			GetMTime7z(_context, _index, ftm);
-			Z_LOG("file: %S attribs: 0x%08X size: %llu pack size: %llu crc32: 0x%08X\n", _tmp_str.c_str(), attribs, file_size, packed_size, crc32);
-		}
+		is_dir = IsDir7z(_context, _index);
+		if ( !GetName7z(_context, _index, _tmp_str) )
+			return GETARC_READERROR;
+		attribs = (DWORD)GetAttrib7z(_context, _index);
+		if( IsEncrypted7z(_context, _index) )
+			Item->Flags |= F_ENCRYPTED;
+		file_size = GetSize7z(_context, _index);
+		packed_size = GetPackSize7z(_context, _index);
+		crc32 = (DWORD)GetCRC7z(_context,_index);
+		GetCTime7z(_context, _index, ftc);
+		GetMTime7z(_context, _index, ftm);
 
 		const std::string &name = StrWide2MB(_tmp_str);
-		++_index;
-		
-		attribs&=~ (FILE_ATTRIBUTE_BROKEN | FILE_ATTRIBUTE_EXECUTABLE);
+
+		Z_LOG("file: %S attribs: 0x%08X Posixattribs: 0x%08X size: %llu pack size: %llu crc32: 0x%08X\n", _tmp_str.c_str(), attribs, GetPosixAttrib7z(_context, _index), file_size, packed_size, crc32);
+
 		strncpy(Item->FindData.cFileName, name.c_str(), ARRAYSIZE(Item->FindData.cFileName)-1);
-		Item->FindData.dwFileAttributes = attribs;
-		Item->FindData.dwUnixMode = is_dir ? 0755 : 0644;
+
+		Item->FindData.dwUnixMode = GetPosixAttrib7z(_context, _index);
+
+		if( Item->FindData.dwUnixMode ) {
+			if ((Item->FindData.dwUnixMode & S_IFMT) == 0)
+				Item->FindData.dwUnixMode|= S_IFREG;
+			Item->FindData.dwFileAttributes = WINPORT(EvaluateAttributesA)(Item->FindData.dwUnixMode, Item->FindData.cFileName);
+		} else {
+			Item->FindData.dwUnixMode = is_dir ? 0755 : 0644;
+			attribs&=~ (FILE_ATTRIBUTE_BROKEN | FILE_ATTRIBUTE_EXECUTABLE);
+			Item->FindData.dwFileAttributes = attribs;
+		}
+
 		Item->FindData.nFileSize = file_size;
 		Item->FindData.nPhysicalSize = packed_size;
 		Item->CRC32 = crc32;
 		
 		Item->FindData.ftLastWriteTime = ftm;
 		Item->FindData.ftCreationTime = ftc;
-		
 
 		Info->Solid = 0;
 		Info->Comment = 0;
 		Info->Encrypted = _passwordIsDefined;
 		Info->DictSize = 0;
-		Info->UnpVer = 0;		
+		Info->UnpVer = 0;
+
+		//Z_LOG("file: %S attribs: 0x%08X Posixattribs: 0x%08X size: %llu pack size: %llu crc32: 0x%08X\n", _tmp_str.c_str(), attribs, GetPosixAttrib7z(_context, _index), file_size, packed_size, crc32);
+		++_index;
 		
 		return GETARC_SUCCESS;
 	}
@@ -225,22 +239,62 @@ std::wstring CryptoGetTextPassword(const wchar_t * archive)
 	std::wstring pass;
 	if( !Traverser::ArchPassword[0] ) {
 		const std::string &title = StrWide2MB(std::wstring(archive));
-		if( !GetPassword(Traverser::ArchPassword,title.c_str()) ) {
-			const char *MsgItems[] = { title.c_str(), "can't open without password" };
-			gInfo.Message(gInfo.ModuleNumber, FMSG_WARNING | FMSG_MB_OK, NULL, MsgItems, ARRAYSIZE(MsgItems), 0);
+		if( !GetPassword(Traverser::ArchPassword,title.c_str()) )
 			return pass;
-		}
 	}
 	pass = MB2Wide(Traverser::ArchPassword);
 	return pass;
 }
 
 static Traverser *s_selected_traverser = NULL;
+struct posix_header
+{                               /* byte offset */
+  char name[100];               /*   0 = 0x000 */
+  char mode[8];                 /* 100 = 0x064 */
+  char uid[8];                  /* 108 = 0x06C */
+  char gid[8];                  /* 116 = 0x074 */
+  char size[12];                /* 124 = 0x07C */
+  char mtime[12];               /* 136 = 0x088 */
+  char chksum[8];               /* 148 = 0x094 */
+  char typeflag;                /* 156 = 0x09C */
+  char linkname[100];           /* 157 = 0x09D */
+  char magic[6];                /* 257 = 0x101 */
+  char version[2];              /* 263 = 0x107 */
+  char uname[32];               /* 265 = 0x109 */
+  char gname[32];               /* 297 = 0x129 */
+  char devmajor[8];             /* 329 = 0x149 */
+  char devminor[8];             /* 337 = 0x151 */
+  char prefix[155];             /* 345 = 0x159 */
+                                /* 500 = 0x1F4 */
+};
+#define TMAGIC   "ustar"    // ustar and a null
+#define OLDGNU_MAGIC "ustar  "  /* 7 chars and a null */
+static int IsTarHeader(const BYTE *Data,int DataSize)
+{
+  struct posix_header *Header;
+  if (DataSize<(int)sizeof(struct posix_header))
+    return(FALSE);
+  Header=(struct posix_header *)Data;
+  if(!strcmp (Header->magic, TMAGIC) || !strcmp (Header->magic, OLDGNU_MAGIC))
+	return(TRUE);
+  if (Data[0]==0x1f && (Data[1]==0x8b || Data[1]==0x9d))
+	return(TRUE);
+  if (Data[0]=='B' && Data[1]=='Z')
+	return(TRUE);
+  if (DataSize>=6 && memcmp(Data, "\xFD\x37\x7A\x58\x5A\x00", 6) == 0)
+	return(TRUE);
+  return FALSE;
+}
+
 BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,int DataSize)
 {
-	Z_LOG("SEVENZ_IsArchive()\n");
+	Z_LOG("\n");
 	if(s_selected_traverser && s_selected_traverser->IsSameFile(Name))
 		return TRUE;
+
+	// linux tar format more powerfull
+	if( IsTarHeader(Data, DataSize) )
+		return FALSE;
 
 	Traverser *t = new Traverser(Name);
 	if (!t->Valid()) {
@@ -252,30 +306,19 @@ BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,
 	delete s_selected_traverser;
 	s_selected_traverser = t;
 	return TRUE;
-/*
-static const unsigned char s_magic_of_7z[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C, 0x00};//last byte actually k7zMajorVersion
-	if (DataSize < (int)sizeof(s_magic_of_7z) || memcmp(Data, s_magic_of_7z, sizeof(s_magic_of_7z))!=0) {
-		return FALSE;
-	}
-
-	return TRUE;
-*/
 }
-
 
 BOOL WINAPI _export SEVENZ_OpenArchive(const char *Name,int *Type,bool Silent)
 {
-	Z_LOG("SEVENZ_OpenArchive()\n");
+	Z_LOG("\n");
 	if (!s_selected_traverser)
 		return FALSE;
 	return TRUE;
 }
 
-
-
 int WINAPI _export SEVENZ_GetArcItem(struct PluginPanelItem *Item, struct ArcItemInfo *Info)
 {
-	Z_LOG("SEVENZ_GetArcItem()\n");
+	Z_LOG("\n");
 	if (!s_selected_traverser)
 		return GETARC_READERROR;
 		
@@ -285,7 +328,7 @@ int WINAPI _export SEVENZ_GetArcItem(struct PluginPanelItem *Item, struct ArcIte
 
 BOOL WINAPI _export SEVENZ_CloseArchive(struct ArcInfo *Info)
 {
-	Z_LOG("SEVENZ_CloseArchive()\n");
+	Z_LOG("\n");
 	if (!s_selected_traverser)
 		return FALSE;
 		
@@ -304,7 +347,7 @@ void  WINAPI _export SEVENZ_SetFarInfo(const struct PluginStartupInfo *Info)
 
 BOOL WINAPI _export SEVENZ_GetFormatName(int Type,char *FormatName,char *DefaultExt)
 {
-	Z_LOG("SEVENZ_GetFormatName()\n");
+	Z_LOG("\n");
   if (Type==0)
   {
     strcpy(FormatName,"7Z");
@@ -316,12 +359,12 @@ BOOL WINAPI _export SEVENZ_GetFormatName(int Type,char *FormatName,char *Default
 
 BOOL WINAPI _export SEVENZ_GetDefaultCommands(int Type,int Command,char *Dest)
 {
-	Z_LOG("SEVENZ_GetDefaultCommands() Type %i Command %i\n", Type, Command);
+	Z_LOG("Type %i Command %i\n", Type, Command);
   if (Type==0)
   {
     static const char *Commands[]={
-    /*Extract               */"^7z x %%A %%FMq*4096",
-    /*Extract without paths */"^7z e {-p%%P} %%A %%FMq*4096",
+    /*Extract               */"^7z x -snld %%A %%FMq*4096",
+    /*Extract without paths */"^7z e -snld {-p%%P} %%A %%FMq*4096",
     /*Test                  */"^7z t %%A",
     /*Delete                */"^7z d {-p%%P} %%A @%%LN",
     /*Comment archive       */"",
@@ -330,10 +373,10 @@ BOOL WINAPI _export SEVENZ_GetDefaultCommands(int Type,int Command,char *Dest)
     /*Lock archive          */"",
     /*Protect archive       */"",
     /*Recover archive       */"",
-    /*Add files             */"^7z a -y {-p%%P} %%A @%%LN",
-    /*Move files            */"^7z a -y -sdel {-p%%P} %%A @%%LN",
-    /*Add files and folders */"^7z a -y -r {-p%%P} %%A @%%LN",
-    /*Move files and folders*/"^7z a -y -r -sdel {-p%%P} %%A @%%LN",
+    /*Add files             */"^7z a -y {-p%%P} -snh -snl %%A @%%LN",
+    /*Move files            */"^7z a -y -sdel {-p%%P} -snh -snl %%A @%%LN",
+    /*Add files and folders */"^7z a -y -r {-p%%P} -snh -snl %%A @%%LN",
+    /*Move files and folders*/"^7z a -y -r -sdel {-p%%P} -snh -snl %%A @%%LN",
     /*"All files" mask      */"*"
     };
     if (Command<(int)(ARRAYSIZE(Commands)))

@@ -1770,7 +1770,7 @@ HRESULT CArchiveExtractCallback::SetFromLinkPath(
     relatPath = GetDirPrefixOf(_item.Path);
   relatPath += linkInfo.linkPath;
   
-  if (!IsSafePath(relatPath))
+  if (!_ntOptions.SymLinks_AllowDangerous.Val && !IsSafePath(relatPath))
   {
     return SendMessageError2(
           0, // errorCode
