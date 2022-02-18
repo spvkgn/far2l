@@ -108,7 +108,7 @@ class Traverser
 		return false;
 	}
 public:
-	Traverser(const char *path) : _index(0), _valid(false), _context(nullptr), _passwordIsDefined(false)
+	Traverser(const char *path) : _index(0), _valid(false), _passwordIsDefined(false), _context(nullptr)
 	{
 		Z_LOG("Traverser()\n");
 		if( !GetFileStat(path, &_archStat) )
@@ -294,6 +294,11 @@ BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,
 
 	// linux tar format more powerfull
 	if( IsTarHeader(Data, DataSize) )
+		return FALSE;
+
+	// deb not fully supported 
+	const char *dot=(const char *)strrchr((char*)Name,'.');
+	if( dot!=NULL && (strcasecmp(dot,".deb")==0) )
 		return FALSE;
 
 	Traverser *t = new Traverser(Name);
