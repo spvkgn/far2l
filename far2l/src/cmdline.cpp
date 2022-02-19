@@ -460,7 +460,8 @@ int CommandLine::ProcessKey(int Key)
 
 			ActivePanel->SetCurPath();
 
-			if (!(Opt.ExcludeCmdHistory&EXCLUDECMDHISTORY_NOTCMDLINE))
+			// addition to the option, exclude from history when command starts with a space
+			if (!(Opt.ExcludeCmdHistory&EXCLUDECMDHISTORY_NOTCMDLINE) && !strStr.Begins(L' '))
 				CtrlObject->CmdHistory->AddToHistory(strStr);
 
 			ProcessOSAliases(strStr);
