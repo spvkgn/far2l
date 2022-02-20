@@ -18,8 +18,6 @@
 
 #include "./CPP/../C/CpuArch.h"
 
-//#include "./CPP/Common/MyInitGuid.h"
-
 #include "./CPP/Common/CommandLineParser.h"
 #include "./CPP/Common/IntToString.h"
 #include "./CPP/Common/MyException.h"
@@ -140,7 +138,6 @@ std::wstring CryptoGetTextPassword(const wchar_t * archive);
 
 HRESULT COpenCallbackFar2l::Open_CryptoGetTextPassword(BSTR *password)
 {
-  Z_LOG("\n");
   *password = NULL;
   if (!PasswordIsDefined)
   {
@@ -153,37 +150,21 @@ HRESULT COpenCallbackFar2l::Open_CryptoGetTextPassword(BSTR *password)
 
 HRESULT COpenCallbackFar2l::Open_Finished()
 {
-  Z_LOG("\n");
   return S_OK;
 }
 
 HRESULT COpenCallbackFar2l::Open_CheckBreak()
 {
-  Z_LOG("\n");
   return S_OK;
 }
 
 HRESULT COpenCallbackFar2l::Open_SetTotal(const UInt64 *files, const UInt64 *bytes)
 {
-  if(bytes && files) {
-    Z_LOG("files %llu, bytes %llu\n", *files, *bytes);
-  } else if(bytes) {
-    Z_LOG("bytes %llu\n", *bytes);
-  } else {
-    Z_LOG("files %p, bytes %p\n", files, bytes);
-  }
   return S_OK;
 }
 
 HRESULT COpenCallbackFar2l::Open_SetCompleted(const UInt64 *files, const UInt64 *bytes)
 {
-  if(bytes && files) {
-    Z_LOG("files %llu, bytes %llu\n", *files, *bytes);
-  } else if(bytes) {
-    Z_LOG("bytes %llu\n", *bytes);
-  } else {
-    Z_LOG("files %p, bytes %p\n", files, bytes);
-  }
   return S_OK;
 }
 
@@ -214,7 +195,6 @@ static bool Init7z(void)
 
 void * OpenFile7z(const char *path, bool & passwordIsDefined)
 {
-	Z_LOG("... %s\n", path);
 	if( !g_Codecs && !Init7z())
 		return nullptr;
 

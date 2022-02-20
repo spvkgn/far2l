@@ -40,47 +40,9 @@ using namespace oldfar;
   #endif
 #endif
 
-
-static FARAPIMESSAGE       FarMessage = NULL;
-static INT_PTR             FarModuleNumber = 0;
-
-struct PluginStartupInfo gInfo;
+struct PluginStartupInfo   gInfo;
 
 /////////////////////////////
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#define PYPLUGIN_DEBUGLOG "/tmp/far2.7z.cpp.log"
-#if !defined(__APPLE__) && !defined(__FreeBSD__)
-# include <alloca.h>
-#endif
-
-static void z_log(const char *function, unsigned int line, const char *format, ...)
-{
-    va_list args;
-    char *xformat = (char *)alloca(strlen(format) + strlen(function) + 64);
-    sprintf(xformat, "[7Z]: %s@%u%s%s",
-        function, line, (*format != '\n') ? " - " : "", format);
-
-    FILE *stream = nullptr;
-    if (PYPLUGIN_DEBUGLOG[0]) {
-        stream = fopen(PYPLUGIN_DEBUGLOG, "at");
-    }
-    if (!stream) {
-        stream = stderr;
-    }
-    va_start(args, format);
-    vfprintf(stream, xformat, args);
-    va_end(args);
-
-    if (stream != stderr) {
-        fclose(stream);
-    }
-}
-
-#define Z_LOG(args...) z_log(__FUNCTION__, __LINE__, args)
-
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -110,7 +72,6 @@ class Traverser
 public:
 	Traverser(const char *path) : _index(0), _valid(false), _passwordIsDefined(false), _context(nullptr)
 	{
-		Z_LOG("Traverser()\n");
 		if( !GetFileStat(path, &_archStat) )
 			return;
 		memset(ArchPassword, 0, sizeof(ArchPassword));
@@ -135,7 +96,6 @@ public:
 	
 	~Traverser()
 	{
-		Z_LOG("~Traverser()\n");
 		if (_context) {
 			memset(ArchPassword, 0, sizeof(ArchPassword));
 			CloseFile7z(_context);
@@ -167,7 +127,6 @@ public:
 	
 	int Next(struct PluginPanelItem *Item, struct ArcItemInfo *Info)
 	{
-		Z_LOG("Next()\n");
 		if (!_valid || _context == nullptr)
 			return GETARC_READERROR;
 
@@ -194,8 +153,6 @@ public:
 		GetMTime7z(_context, _index, ftm);
 
 		const std::string &name = StrWide2MB(_tmp_str);
-
-		Z_LOG("file: %S attribs: 0x%08X Posixattribs: 0x%08X size: %llu pack size: %llu crc32: 0x%08X\n", _tmp_str.c_str(), attribs, GetPosixAttrib7z(_context, _index), file_size, packed_size, crc32);
 
 		strncpy(Item->FindData.cFileName, name.c_str(), ARRAYSIZE(Item->FindData.cFileName)-1);
 
@@ -224,7 +181,6 @@ public:
 		Info->DictSize = 0;
 		Info->UnpVer = 0;
 
-		//Z_LOG("file: %S attribs: 0x%08X Posixattribs: 0x%08X size: %llu pack size: %llu crc32: 0x%08X\n", _tmp_str.c_str(), attribs, GetPosixAttrib7z(_context, _index), file_size, packed_size, crc32);
 		++_index;
 		
 		return GETARC_SUCCESS;
@@ -246,7 +202,7 @@ std::wstring CryptoGetTextPassword(const wchar_t * archive)
 	return pass;
 }
 
-static Traverser *s_selected_traverser = NULL;
+///////////////////////////////////
 struct posix_header
 {                               /* byte offset */
   char name[100];               /*   0 = 0x000 */
@@ -271,24 +227,26 @@ struct posix_header
 #define OLDGNU_MAGIC "ustar  "  /* 7 chars and a null */
 static int IsTarHeader(const BYTE *Data,int DataSize)
 {
-  struct posix_header *Header;
-  if (DataSize<(int)sizeof(struct posix_header))
-    return(FALSE);
-  Header=(struct posix_header *)Data;
-  if(!strcmp (Header->magic, TMAGIC) || !strcmp (Header->magic, OLDGNU_MAGIC))
-	return(TRUE);
-  if (Data[0]==0x1f && (Data[1]==0x8b || Data[1]==0x9d))
-	return(TRUE);
-  if (Data[0]=='B' && Data[1]=='Z')
-	return(TRUE);
-  if (DataSize>=6 && memcmp(Data, "\xFD\x37\x7A\x58\x5A\x00", 6) == 0)
-	return(TRUE);
-  return FALSE;
+    struct posix_header *Header;
+    if (DataSize<(int)sizeof(struct posix_header))
+        return(FALSE);
+    Header=(struct posix_header *)Data;
+    if(!strcmp (Header->magic, TMAGIC) || !strcmp (Header->magic, OLDGNU_MAGIC))
+        return(TRUE);
+    if (Data[0]==0x1f && (Data[1]==0x8b || Data[1]==0x9d))
+        return(TRUE);
+    if (Data[0]=='B' && Data[1]=='Z')
+        return(TRUE);
+    if (DataSize>=6 && memcmp(Data, "\xFD\x37\x7A\x58\x5A\x00", 6) == 0)
+        return(TRUE);
+    return FALSE;
 }
+
+///////////////////////////////////
+static Traverser *s_selected_traverser = NULL;
 
 BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,int DataSize)
 {
-	Z_LOG("\n");
 	if(s_selected_traverser && s_selected_traverser->IsSameFile(Name))
 		return TRUE;
 
@@ -315,7 +273,6 @@ BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,
 
 BOOL WINAPI _export SEVENZ_OpenArchive(const char *Name,int *Type,bool Silent)
 {
-	Z_LOG("\n");
 	if (!s_selected_traverser)
 		return FALSE;
 	return TRUE;
@@ -323,7 +280,6 @@ BOOL WINAPI _export SEVENZ_OpenArchive(const char *Name,int *Type,bool Silent)
 
 int WINAPI _export SEVENZ_GetArcItem(struct PluginPanelItem *Item, struct ArcItemInfo *Info)
 {
-	Z_LOG("\n");
 	if (!s_selected_traverser)
 		return GETARC_READERROR;
 		
@@ -333,7 +289,6 @@ int WINAPI _export SEVENZ_GetArcItem(struct PluginPanelItem *Item, struct ArcIte
 
 BOOL WINAPI _export SEVENZ_CloseArchive(struct ArcInfo *Info)
 {
-	Z_LOG("\n");
 	if (!s_selected_traverser)
 		return FALSE;
 		
@@ -344,15 +299,11 @@ BOOL WINAPI _export SEVENZ_CloseArchive(struct ArcInfo *Info)
 
 void  WINAPI _export SEVENZ_SetFarInfo(const struct PluginStartupInfo *Info)
 {
-   Z_LOG("Info %p\n", Info);
    gInfo = *Info;
-   FarMessage = Info->Message;
-   FarModuleNumber = Info->ModuleNumber;
 }
 
 BOOL WINAPI _export SEVENZ_GetFormatName(int Type,char *FormatName,char *DefaultExt)
 {
-	Z_LOG("\n");
   if (Type==0)
   {
     strcpy(FormatName,"7Z");
@@ -364,7 +315,6 @@ BOOL WINAPI _export SEVENZ_GetFormatName(int Type,char *FormatName,char *Default
 
 BOOL WINAPI _export SEVENZ_GetDefaultCommands(int Type,int Command,char *Dest)
 {
-	Z_LOG("Type %i Command %i\n", Type, Command);
   if (Type==0)
   {
     static const char *Commands[]={
