@@ -273,6 +273,7 @@ set(SOURCES
     src/formats/7z/C/Lzma2DecMt.c
     src/formats/7z/C/Lzma2Enc.c
     src/formats/7z/C/LzmaEnc.c
+    src/formats/7z/C/LzmaDec.c
     src/formats/7z/C/MtCoder.c
     src/formats/7z/C/MtDec.c
     src/formats/7z/C/Ppmd7.c
@@ -373,7 +374,6 @@ else()
         src/formats/7z/C/Sha256Opt.c
         src/formats/7z/C/AesOpt.c
         src/formats/7z/C/LzFindOpt.c
-        src/formats/7z/C/LzmaDec.c
     )
 
 endif()
