@@ -126,7 +126,7 @@ static PluginType PluginTypeByExtension(const wchar_t *lpModuleName)
 		if (wcscmp(ext, L".far-plug-mb")==0)
 			return MULTIBYTE_PLUGIN;
 	}
-	
+
 	return NOT_PLUGIN;
 }
 
@@ -600,7 +600,7 @@ HANDLE PluginManager::OpenFilePlugin(
 				PluginHandle *handle = items.getItem(i);
 				mitem.Clear();
 				mitem.strName = PointToName(handle->pPlugin->GetModuleName());
-				//NB: here is really should be used sizeof(handle), not sizeof(*handle) 
+				//NB: here is really should be used sizeof(handle), not sizeof(*handle)
 				//cuz sizeof(void *) has special meaning in SetUserData!
 				menu.SetUserData(handle, sizeof(handle), menu.AddItem(&mitem));
 			}
@@ -1278,7 +1278,7 @@ void PluginManager::Configure(int StartPos)
 						if (!HotKeysPresent)
 							ListItem.strName = strName;
 						else if (!strHotKey.IsEmpty())
-							ListItem.strName.Format(L"&%c%ls  %ls",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
+							ListItem.strName.Format(L"&%lc%ls  %ls",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
 						else
 							ListItem.strName.Format(L"   %ls", strName.CPtr());
 
@@ -1374,12 +1374,12 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 	}
 
 	int MenuItemNumber=0;
-	ChangeMacroMode CMM(MACRO_MENU);
 	int Editor = ModalType==MODALTYPE_EDITOR,
 	             Viewer = ModalType==MODALTYPE_VIEWER,
 	                      Dialog = ModalType==MODALTYPE_DIALOG;
 	PluginMenuItemData item;
 	{
+		ChangeMacroMode CMM(MACRO_MENU);
 		VMenu PluginList(Msg::PluginCommandsMenuTitle,nullptr,0,ScrY-4);
 		PluginList.SetFlags(VMENU_WRAPMODE);
 		PluginList.SetHelp(L"PluginCommands");
@@ -1451,7 +1451,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						if (!HotKeysPresent)
 							ListItem.strName = strName;
 						else if (!strHotKey.IsEmpty())
-							ListItem.strName.Format(L"&%c%ls  %ls",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
+							ListItem.strName.Format(L"&%lc%ls  %ls",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
 						else
 							ListItem.strName.Format(L"   %ls", strName.CPtr());
 
@@ -1622,7 +1622,7 @@ bool PluginManager::SetHotKeyDialog(
 )
 {
 	KeyFileHelper kfh(PluginsIni());
-	const auto &Setting = kfh.GetString(SettingsSection, SettingName);
+	const auto &Setting = kfh.GetString(SettingsSection, SettingName, L"");
 	WCHAR Letter[2] = {Setting.empty() ? 0 : Setting[0], 0};
 	if (!HotkeyLetterDialog(Msg::PluginHotKeyTitle, DlgPluginTitle, Letter[0]))
 		return false;
