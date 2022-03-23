@@ -1,6 +1,6 @@
 #include <string>
 int Main2(int numArgs, char *args[]);
-void * OpenFile7z(const char *path, bool & PasswordIsDefined);
+void * OpenFile7z(const wchar_t *path, bool & PasswordIsDefined);
 unsigned int GetNumFiles7z(void * _context);
 bool IsDir7z(void * _context, unsigned int _index);
 bool IsEncrypted7z(void * _context, unsigned int _index);

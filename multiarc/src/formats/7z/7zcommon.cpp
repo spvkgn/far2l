@@ -125,7 +125,7 @@ public:
 
   virtual ~COpenCallbackFar2l() {}
   
-  void Init(const char * archive)
+  void Init(const wchar_t * archive)
   {
 	Archive = archive;
   }
@@ -193,7 +193,7 @@ static bool Init7z(void)
 	return true;
 }
 
-void * OpenFile7z(const char *path, bool & passwordIsDefined)
+void * OpenFile7z(const wchar_t *path, bool & passwordIsDefined)
 {
 	if( !g_Codecs && !Init7z())
 		return nullptr;
@@ -216,7 +216,7 @@ void * OpenFile7z(const char *path, bool & passwordIsDefined)
 	openCallbackFar2l.Init(path);
 	HRESULT res = arcLink->Open_Strict(options, &openCallbackFar2l);
 	if( res != S_OK) {
-		Z_LOG("... arcLink->Open_Strict(%s) error %u\n", path, res);
+                Z_LOG("... arcLink->Open_Strict(%S) result 0x%08X\n", options.filePath.Ptr(), res);
 		return nullptr;
 	}
 

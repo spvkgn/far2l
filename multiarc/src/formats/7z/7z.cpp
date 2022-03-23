@@ -75,7 +75,9 @@ public:
 		if( !GetFileStat(path, &_archStat) )
 			return;
 		memset(ArchPassword, 0, sizeof(ArchPassword));
-		_context = OpenFile7z(path, _passwordIsDefined);
+                std::wstring dst;
+                MB2Wide(path, dst);
+		_context = OpenFile7z(dst.c_str(), _passwordIsDefined);
 		if ( _context != nullptr )
 			_valid = true;
 		else if (_passwordIsDefined) {

@@ -76,40 +76,21 @@ set(SOURCES
     src/formats/7z/CPP/7zip/UI/Console/Main.cpp
 
     src/formats/7z/CPP/7zip/Common/StreamBinder.cpp
+    src/formats/7z/CPP/Windows/Synchronization.cpp
     src/formats/7z/CPP/7zip/Common/VirtThread.cpp
     src/formats/7z/CPP/7zip/Common/MemBlocks.cpp
     src/formats/7z/CPP/7zip/Common/OutMemStream.cpp
     src/formats/7z/CPP/7zip/Common/ProgressMt.cpp
-    src/formats/7z/CPP/7zip/Common/CreateCoder.cpp
-    src/formats/7z/CPP/7zip/Common/CWrappers.cpp
-    src/formats/7z/CPP/7zip/Common/FilePathAutoRename.cpp
-    src/formats/7z/CPP/7zip/Common/FileStreams.cpp
-    src/formats/7z/CPP/7zip/Common/InBuffer.cpp
-    src/formats/7z/CPP/7zip/Common/InOutTempBuffer.cpp
-    src/formats/7z/CPP/7zip/Common/FilterCoder.cpp
-    src/formats/7z/CPP/7zip/Common/LimitedStreams.cpp
-    src/formats/7z/CPP/7zip/Common/MethodId.cpp
-    src/formats/7z/CPP/7zip/Common/MethodProps.cpp
-    src/formats/7z/CPP/7zip/Common/OffsetStream.cpp
-    src/formats/7z/CPP/7zip/Common/OutBuffer.cpp
-    src/formats/7z/CPP/7zip/Common/ProgressUtils.cpp
-    src/formats/7z/CPP/7zip/Common/PropId.cpp
-    src/formats/7z/CPP/7zip/Common/StreamObjects.cpp
-    src/formats/7z/CPP/7zip/Common/StreamUtils.cpp
-    src/formats/7z/CPP/7zip/Common/UniqBlocks.cpp
-    src/formats/7z/CPP/Windows/Synchronization.cpp
-    src/formats/7z/CPP/Common/MyWindows.cpp
-    src/formats/7z/CPP/Common/CommandLineParser.cpp
     src/formats/7z/CPP/Common/CRC.cpp
     src/formats/7z/CPP/Common/CrcReg.cpp
     src/formats/7z/CPP/Common/DynLimBuf.cpp
     src/formats/7z/CPP/Common/IntToString.cpp
-    src/formats/7z/CPP/Common/ListFileUtils.cpp
     src/formats/7z/CPP/Common/LzFindPrepare.cpp
+    src/formats/7z/CPP/Common/MyMap.cpp
     src/formats/7z/CPP/Common/MyString.cpp
+    src/formats/7z/CPP/Common/MyVector.cpp
+    src/formats/7z/CPP/Common/MyXml.cpp
     src/formats/7z/CPP/Common/NewHandler.cpp
-    src/formats/7z/CPP/Common/StdInStream.cpp
-    src/formats/7z/CPP/Common/StdOutStream.cpp
     src/formats/7z/CPP/Common/Sha1Prepare.cpp
     src/formats/7z/CPP/Common/Sha1Reg.cpp
     src/formats/7z/CPP/Common/Sha256Prepare.cpp
@@ -117,22 +98,120 @@ set(SOURCES
     src/formats/7z/CPP/Common/StringConvert.cpp
     src/formats/7z/CPP/Common/StringToInt.cpp
     src/formats/7z/CPP/Common/UTFConvert.cpp
-    src/formats/7z/CPP/Common/MyVector.cpp
     src/formats/7z/CPP/Common/Wildcard.cpp
     src/formats/7z/CPP/Common/XzCrc64Init.cpp
     src/formats/7z/CPP/Common/XzCrc64Reg.cpp
-    src/formats/7z/CPP/Windows/ErrorMsg.cpp
     src/formats/7z/CPP/Windows/FileDir.cpp
     src/formats/7z/CPP/Windows/FileFind.cpp
     src/formats/7z/CPP/Windows/FileIO.cpp
-    src/formats/7z/CPP/Windows/FileLink.cpp
     src/formats/7z/CPP/Windows/FileName.cpp
     src/formats/7z/CPP/Windows/PropVariant.cpp
-    src/formats/7z/CPP/Windows/PropVariantConv.cpp
     src/formats/7z/CPP/Windows/PropVariantUtils.cpp
     src/formats/7z/CPP/Windows/System.cpp
-    src/formats/7z/CPP/Windows/SystemInfo.cpp
     src/formats/7z/CPP/Windows/TimeUtils.cpp
+    src/formats/7z/CPP/7zip/Archive/ApmHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/ArHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/ArjHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Base64Handler.cpp
+    src/formats/7z/CPP/7zip/Archive/Bz2Handler.cpp
+    src/formats/7z/CPP/7zip/Archive/ComHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/CpioHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/CramfsHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/DeflateProps.cpp
+    src/formats/7z/CPP/7zip/Archive/DmgHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/ElfHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/ExtHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/FatHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/FlvHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/GzHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/GptHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/HandlerCont.cpp
+    src/formats/7z/CPP/7zip/Archive/HfsHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/IhexHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/LzhHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/LzmaHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/MachoHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/MbrHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/MslzHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/MubHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/NtfsHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/PeHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/PpmdHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/QcowHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/RpmHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/SplitHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/SquashfsHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/SwfHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/UefiHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/VdiHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/VhdHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/VhdxHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/VmdkHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/XarHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/XzHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/ZHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/CoderMixer2.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/DummyOutStream.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/FindSignature.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/InStreamWithCRC.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/ItemNameUtils.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/MultiStream.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/OutStreamWithCRC.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/OutStreamWithSha1.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/HandlerOut.cpp
+    src/formats/7z/CPP/7zip/Archive/Common/ParseProperties.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zCompressionMode.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zDecode.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zEncode.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zExtract.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zFolderInStream.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zHandlerOut.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zHeader.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zIn.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zOut.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zProperties.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zSpecStream.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zUpdate.cpp
+    src/formats/7z/CPP/7zip/Archive/7z/7zRegister.cpp
+    src/formats/7z/CPP/7zip/Archive/Cab/CabBlockInStream.cpp
+    src/formats/7z/CPP/7zip/Archive/Cab/CabHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Cab/CabHeader.cpp
+    src/formats/7z/CPP/7zip/Archive/Cab/CabIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Cab/CabRegister.cpp
+    src/formats/7z/CPP/7zip/Archive/Chm/ChmHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Chm/ChmIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Iso/IsoHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Iso/IsoHeader.cpp
+    src/formats/7z/CPP/7zip/Archive/Iso/IsoIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Iso/IsoRegister.cpp
+    src/formats/7z/CPP/7zip/Archive/Nsis/NsisDecode.cpp
+    src/formats/7z/CPP/7zip/Archive/Nsis/NsisHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Nsis/NsisIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Nsis/NsisRegister.cpp
+    src/formats/7z/CPP/7zip/Archive/Rar/RarHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Rar/Rar5Handler.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarHandlerOut.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarHeader.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarOut.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarUpdate.cpp
+    src/formats/7z/CPP/7zip/Archive/Tar/TarRegister.cpp
+    src/formats/7z/CPP/7zip/Archive/Udf/UdfHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Udf/UdfIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Wim/WimHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Wim/WimHandlerOut.cpp
+    src/formats/7z/CPP/7zip/Archive/Wim/WimIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Wim/WimRegister.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipAddCommon.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipHandler.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipHandlerOut.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipIn.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipItem.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipOut.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipUpdate.cpp
+    src/formats/7z/CPP/7zip/Archive/Zip/ZipRegister.cpp
     src/formats/7z/CPP/7zip/Compress/Bcj2Coder.cpp
     src/formats/7z/CPP/7zip/Compress/Bcj2Register.cpp
     src/formats/7z/CPP/7zip/Compress/BcjCoder.cpp
@@ -153,12 +232,15 @@ set(SOURCES
     src/formats/7z/CPP/7zip/Compress/DeflateRegister.cpp
     src/formats/7z/CPP/7zip/Compress/DeltaFilter.cpp
     src/formats/7z/CPP/7zip/Compress/ImplodeDecoder.cpp
+    src/formats/7z/CPP/7zip/Compress/LzfseDecoder.cpp
+    src/formats/7z/CPP/7zip/Compress/LzhDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/Lzma2Decoder.cpp
     src/formats/7z/CPP/7zip/Compress/Lzma2Encoder.cpp
     src/formats/7z/CPP/7zip/Compress/Lzma2Register.cpp
     src/formats/7z/CPP/7zip/Compress/LzmaDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/LzmaEncoder.cpp
     src/formats/7z/CPP/7zip/Compress/LzmaRegister.cpp
+    src/formats/7z/CPP/7zip/Compress/LzmsDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/LzOutWindow.cpp
     src/formats/7z/CPP/7zip/Compress/LzxDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/PpmdDecoder.cpp
@@ -167,11 +249,22 @@ set(SOURCES
     src/formats/7z/CPP/7zip/Compress/PpmdZip.cpp
     src/formats/7z/CPP/7zip/Compress/QuantumDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/ShrinkDecoder.cpp
+    src/formats/7z/CPP/7zip/Compress/XpressDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/XzDecoder.cpp
     src/formats/7z/CPP/7zip/Compress/XzEncoder.cpp
+    src/formats/7z/CPP/7zip/Compress/ZlibDecoder.cpp
+    src/formats/7z/CPP/7zip/Compress/ZlibEncoder.cpp
+    src/formats/7z/CPP/7zip/Compress/ZDecoder.cpp
+    src/formats/7z/CPP/7zip/Compress/Rar1Decoder.cpp
+    src/formats/7z/CPP/7zip/Compress/Rar2Decoder.cpp
+    src/formats/7z/CPP/7zip/Compress/Rar3Decoder.cpp
+    src/formats/7z/CPP/7zip/Compress/Rar3Vm.cpp
+    src/formats/7z/CPP/7zip/Compress/Rar5Decoder.cpp
+    src/formats/7z/CPP/7zip/Compress/RarCodecsRegister.cpp
     src/formats/7z/CPP/7zip/Crypto/7zAes.cpp
     src/formats/7z/CPP/7zip/Crypto/7zAesRegister.cpp
     src/formats/7z/CPP/7zip/Crypto/HmacSha1.cpp
+    src/formats/7z/CPP/7zip/Crypto/HmacSha256.cpp
     src/formats/7z/CPP/7zip/Crypto/MyAes.cpp
     src/formats/7z/CPP/7zip/Crypto/MyAesReg.cpp
     src/formats/7z/CPP/7zip/Crypto/Pbkdf2HmacSha1.cpp
@@ -179,53 +272,36 @@ set(SOURCES
     src/formats/7z/CPP/7zip/Crypto/WzAes.cpp
     src/formats/7z/CPP/7zip/Crypto/ZipCrypto.cpp
     src/formats/7z/CPP/7zip/Crypto/ZipStrong.cpp
-    src/formats/7z/CPP/7zip/Archive/Bz2Handler.cpp
-    src/formats/7z/CPP/7zip/Archive/GzHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/LzmaHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/SplitHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/XzHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/CoderMixer2.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/DummyOutStream.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/HandlerOut.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/InStreamWithCRC.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/ItemNameUtils.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/MultiStream.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/OutStreamWithCRC.cpp
-    src/formats/7z/CPP/7zip/Archive/Common/ParseProperties.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zCompressionMode.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zDecode.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zEncode.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zExtract.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zFolderInStream.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zHandlerOut.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zHeader.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zIn.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zOut.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zProperties.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zRegister.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zSpecStream.cpp
-    src/formats/7z/CPP/7zip/Archive/7z/7zUpdate.cpp
-    src/formats/7z/CPP/7zip/Archive/Cab/CabBlockInStream.cpp
-    src/formats/7z/CPP/7zip/Archive/Cab/CabHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/Cab/CabHeader.cpp
-    src/formats/7z/CPP/7zip/Archive/Cab/CabIn.cpp
-    src/formats/7z/CPP/7zip/Archive/Cab/CabRegister.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarHandlerOut.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarHeader.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarIn.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarOut.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarUpdate.cpp
-    src/formats/7z/CPP/7zip/Archive/Tar/TarRegister.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipAddCommon.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipHandler.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipHandlerOut.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipIn.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipItem.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipOut.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipUpdate.cpp
-    src/formats/7z/CPP/7zip/Archive/Zip/ZipRegister.cpp
+    src/formats/7z/CPP/7zip/Crypto/Rar20Crypto.cpp
+    src/formats/7z/CPP/7zip/Crypto/Rar5Aes.cpp
+    src/formats/7z/CPP/7zip/Crypto/RarAes.cpp
+    src/formats/7z/CPP/7zip/Common/CreateCoder.cpp
+    src/formats/7z/CPP/7zip/Common/CWrappers.cpp
+    src/formats/7z/CPP/7zip/Common/InBuffer.cpp
+    src/formats/7z/CPP/7zip/Common/InOutTempBuffer.cpp
+    src/formats/7z/CPP/7zip/Common/FilterCoder.cpp
+    src/formats/7z/CPP/7zip/Common/LimitedStreams.cpp
+    src/formats/7z/CPP/7zip/Common/LockedStream.cpp
+    src/formats/7z/CPP/7zip/Common/MethodId.cpp
+    src/formats/7z/CPP/7zip/Common/MethodProps.cpp
+    src/formats/7z/CPP/7zip/Common/OffsetStream.cpp
+    src/formats/7z/CPP/7zip/Common/OutBuffer.cpp
+    src/formats/7z/CPP/7zip/Common/ProgressUtils.cpp
+    src/formats/7z/CPP/7zip/Common/PropId.cpp
+    src/formats/7z/CPP/7zip/Common/StreamObjects.cpp
+    src/formats/7z/CPP/7zip/Common/StreamUtils.cpp
+    src/formats/7z/CPP/7zip/Common/UniqBlocks.cpp
+    src/formats/7z/CPP/Common/MyWindows.cpp
+    src/formats/7z/CPP/Common/CommandLineParser.cpp
+    src/formats/7z/CPP/Common/ListFileUtils.cpp
+    src/formats/7z/CPP/Common/StdInStream.cpp
+    src/formats/7z/CPP/Common/StdOutStream.cpp
+    src/formats/7z/CPP/Windows/ErrorMsg.cpp
+    src/formats/7z/CPP/Windows/FileLink.cpp
+    src/formats/7z/CPP/Windows/PropVariantConv.cpp
+    src/formats/7z/CPP/Windows/SystemInfo.cpp
+    src/formats/7z/CPP/7zip/Common/FilePathAutoRename.cpp
+    src/formats/7z/CPP/7zip/Common/FileStreams.cpp
     src/formats/7z/CPP/7zip/UI/Common/ArchiveCommandLine.cpp
     src/formats/7z/CPP/7zip/UI/Common/ArchiveExtractCallback.cpp
     src/formats/7z/CPP/7zip/UI/Common/ArchiveOpenCallback.cpp
@@ -251,48 +327,54 @@ set(SOURCES
     src/formats/7z/CPP/7zip/UI/Console/ExtractCallbackConsole.cpp
     src/formats/7z/CPP/7zip/UI/Console/HashCon.cpp
     src/formats/7z/CPP/7zip/UI/Console/List.cpp
+
     src/formats/7z/CPP/7zip/UI/Console/OpenCallbackConsole.cpp
     src/formats/7z/CPP/7zip/UI/Console/PercentPrinter.cpp
     src/formats/7z/CPP/7zip/UI/Console/UpdateCallbackConsole.cpp
     src/formats/7z/CPP/7zip/UI/Console/UserInputUtils.cpp
-    
-    src/formats/7z/C/Threads.c
-    src/formats/7z/C/7zStream.c
-    src/formats/7z/C/Alloc.c
-    src/formats/7z/C/Bcj2.c
-    src/formats/7z/C/Bcj2Enc.c
-    src/formats/7z/C/Bra.c
-    src/formats/7z/C/Bra86.c
-    src/formats/7z/C/BraIA64.c
-    src/formats/7z/C/BwtSort.c
-    src/formats/7z/C/CpuArch.c
-    src/formats/7z/C/Delta.c
-    src/formats/7z/C/HuffEnc.c
-    src/formats/7z/C/LzFind.c
-    src/formats/7z/C/Lzma2Dec.c
+
+
+    src/formats/7z/C/7zBuf2.c    
+    src/formats/7z/C/7zStream.c  
+    src/formats/7z/C/Alloc.c     
+    src/formats/7z/C/Bcj2.c      
+    src/formats/7z/C/Bcj2Enc.c   
+    src/formats/7z/C/Blake2s.c   
+    src/formats/7z/C/Bra.c       
+    src/formats/7z/C/Bra86.c     
+    src/formats/7z/C/BraIA64.c   
+    src/formats/7z/C/BwtSort.c   
+    src/formats/7z/C/CpuArch.c   
+    src/formats/7z/C/Delta.c     
+    src/formats/7z/C/HuffEnc.c   
+    src/formats/7z/C/LzFind.c    
+    src/formats/7z/C/Lzma2Dec.c  
     src/formats/7z/C/Lzma2DecMt.c
-    src/formats/7z/C/Lzma2Enc.c
-    src/formats/7z/C/LzmaEnc.c
-    src/formats/7z/C/LzmaDec.c
-    src/formats/7z/C/MtCoder.c
-    src/formats/7z/C/MtDec.c
-    src/formats/7z/C/Ppmd7.c
-    src/formats/7z/C/Ppmd7Dec.c
-    src/formats/7z/C/Ppmd7Enc.c
-    src/formats/7z/C/Ppmd8.c
-    src/formats/7z/C/Ppmd8Dec.c
-    src/formats/7z/C/Ppmd8Enc.c
-    src/formats/7z/C/Sort.c
-    src/formats/7z/C/Xz.c
-    src/formats/7z/C/XzDec.c
-    src/formats/7z/C/XzEnc.c
-    src/formats/7z/C/XzIn.c
-    src/formats/7z/C/XzCrc64.c
-    src/formats/7z/C/7zCrc.c
-    src/formats/7z/C/Aes.c
-    src/formats/7z/C/Sha256.c
-    src/formats/7z/C/Sha1.c
-    src/formats/7z/C/LzFindMt.c
+    src/formats/7z/C/Lzma2Enc.c  
+    src/formats/7z/C/LzmaDec.c   
+    src/formats/7z/C/LzmaEnc.c   
+    src/formats/7z/C/MtCoder.c   
+    src/formats/7z/C/MtDec.c     
+    src/formats/7z/C/Ppmd7.c     
+    src/formats/7z/C/Ppmd7Dec.c  
+    src/formats/7z/C/Ppmd7aDec.c 
+    src/formats/7z/C/Ppmd7Enc.c  
+    src/formats/7z/C/Ppmd8.c     
+    src/formats/7z/C/Ppmd8Dec.c  
+    src/formats/7z/C/Ppmd8Enc.c  
+    src/formats/7z/C/Sort.c      
+    src/formats/7z/C/Xz.c        
+    src/formats/7z/C/XzDec.c     
+    src/formats/7z/C/XzEnc.c     
+    src/formats/7z/C/XzIn.c      
+    src/formats/7z/C/XzCrc64.c   
+    src/formats/7z/C/7zCrc.c     
+    src/formats/7z/C/Aes.c       
+    src/formats/7z/C/Sha256.c    
+    src/formats/7z/C/Sha1.c      
+    src/formats/7z/C/LzFindMt.c  
+    src/formats/7z/C/Threads.c   
+
     
     src/formats/ha/ha/acoder.c
     src/formats/ha/ha/archive.c
