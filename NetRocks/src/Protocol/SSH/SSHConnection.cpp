@@ -210,6 +210,29 @@ SSHConnection::SSHConnection(const std::string &host, unsigned int port, const s
 			throw std::runtime_error("Key file authentication failed");
 		}
 
+	} else if (protocol_options.GetInt("InteractiveLogin", 0) != 0) {
+		int rc;
+		for (int loop = 0; loop < 3; ++loop) {
+			rc = ssh_userauth_kbdint(ssh, username.empty() ? nullptr : username.c_str(), NULL);
+			if (g_netrocks_verbosity > 0) {
+				fprintf(stderr, "kbdint: %d\n", rc);
+			}
+			if (rc != SSH_AUTH_INFO) {
+				break;
+			}
+			for (unsigned int i = 0, n = ssh_userauth_kbdint_getnprompts(ssh); i < n; ++i) {
+				char echo[2] = {0, 0};
+				const char *prompt = ssh_userauth_kbdint_getprompt(ssh, i, echo);
+				int ans_rc = (i + 1 == n) ? ssh_userauth_kbdint_setanswer(ssh, i, password.c_str()) : -1;
+				if (g_netrocks_verbosity > 0) {
+					fprintf(stderr, "kbdint_setanswer[%d]: %d for '%s'\n", i, ans_rc, prompt);
+				}
+			}
+		}
+		if (rc != SSH_AUTH_SUCCESS) {
+			throw ProtocolAuthFailedError();//"Authentication failed", ssh_get_error(ssh), rc);
+		}
+
 	} else {
 		if (protocol_options.GetInt("SSHAgentEnable", 0) != 0) {
 			const char *ssh_agent_sock = getenv("SSH_AUTH_SOCK");
@@ -304,6 +327,15 @@ void SSHExecutedCommand::IOLoop()
 	// get PTY size that is sent immediately
 	OnReadFDCtl(fd_ctl);
 
+	if (_pty) {
+		for (const auto &i : _conn->env_set) {
+			int rc_env = ssh_channel_request_env(_channel, i.first.c_str(), i.second.c_str());
+			if (rc_env != SSH_OK) {
+				fprintf(stderr, "SSHExecutedCommand: error %d setting env '%s'\n", rc_env, i.first.c_str());
+			}
+		}
+	}
+
 	std::string cmd;
 	if (!_working_dir.empty() && _working_dir != "." && _working_dir != "./") {
 		cmd = _working_dir;
@@ -311,22 +343,6 @@ void SSHExecutedCommand::IOLoop()
 		cmd.insert(0, "cd ");
 		cmd+= " && ";
 	}
-
-	for (const auto &i : _conn->env_set) {
-		cmd+= "export ";
-		cmd+= i.first;
-		cmd+= "=";
-		std::string val = i.second;
-		QuoteCmdArg(val);
-		cmd+= val;
-		cmd+= " && ";
-	}
-	for (const auto &i : _conn->env_unset) {
-		cmd+= "unset ";
-		cmd+= i;
-		cmd+= " && ";
-	}
-
 
 	cmd+= _command_line;
 
@@ -435,7 +451,7 @@ void *SSHExecutedCommand::ThreadProc()
 	return nullptr;
 }
 
-SSHExecutedCommand::SSHExecutedCommand(std::shared_ptr<SSHConnection> conn, const std::string &working_dir, const std::string &command_line, const std::string &fifo)
+SSHExecutedCommand::SSHExecutedCommand(std::shared_ptr<SSHConnection> conn, const std::string &working_dir, const std::string &command_line, const std::string &fifo, bool pty)
 	:
 	_conn(conn),
 	_working_dir(working_dir),
@@ -451,9 +467,11 @@ SSHExecutedCommand::SSHExecutedCommand(std::shared_ptr<SSHConnection> conn, cons
 		throw ProtocolError("ssh channel session",  ssh_get_error(_conn->ssh));
 	}
 
-	rc = ssh_channel_request_pty(_channel);
-	if (rc == SSH_OK) {
-		_pty = true;
+	if (pty) {
+		rc = ssh_channel_request_pty(_channel);
+		if (rc == SSH_OK) {
+			_pty = true;
+		}
 	}
 
 	if (pipe_cloexec(_kickass) == -1) {
@@ -494,12 +512,10 @@ SSHExecutedCommand::~SSHExecutedCommand()
 					} else {
 						_conn->env_set[var_parts[0]].clear();
 					}
-					_conn->env_unset.erase(var_parts[0]);
 				}
 
 			} else if (parts[0] == "unset") {
 				StrTrim(parts[1]);
-				_conn->env_unset.insert(parts[1]);
 				_conn->env_set.erase(parts[1]);
 			}
 		}

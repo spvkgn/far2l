@@ -11,6 +11,10 @@
 # Разное
  * если перед командой ввести пробел, то такая команда не попадет в историю far2l
 # far2l
+=======
+[![Cirrus Build Status](https://api.cirrus-ci.com/github/elfmz/far2l.svg)](https://cirrus-ci.com/github/elfmz/far2l) [![Coverage Status](https://codecov.io/gh/elfmz/far2l/coverage.svg?branch=master)](https://codecov.io/gh/elfmz/far2l?branch=master) [![Coverity Scan](https://scan.coverity.com/projects/241/badge.svg)](https://scan.coverity.com/projects/far2l) [![Language Grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/elfmz/far2l.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/elfmz/far2l/context:cpp) [![Packages](https://repology.org/badge/tiny-repos/far2l.svg)](https://repology.org/project/far2l)
+
+# far2l [![tag](https://img.shields.io/github/tag/elfmz/far2l.svg)](https://github.com/elfmz/far2l/tags)
 Linux fork of FAR Manager v2 (http://farmanager.com/)   
 Works also on OSX/MacOS and BSD (but later not tested on regular manner)   
 BETA VERSION.   
@@ -62,7 +66,7 @@ apt-get install gawk m4 libwxgtk3.0-gtk3-dev libx11-dev libxi-dev libpcre3-dev l
 In older distributives: use libpcre2-dev and libwxgtk3.0-dev instead of libpcre3-dev and libwxgtk3.0-gtk3-dev
 
 #### Clone and Build
- * Clone current master `git: clone https://github.com/elfmz/far2l`
+ * Clone current master `git clone https://github.com/elfmz/far2l`
  * Checkout some stable release tag (master considered unstable): `git checkout v_2.#.#`
  * Prepare build directory:
 ``` sh

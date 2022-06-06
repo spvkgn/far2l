@@ -1036,7 +1036,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 					if (SaveAs)
 					{
 						FARString strSaveAsName = Flags.Check(FFILEEDIT_SAVETOSAVEAS)?strFullFileName:strFileName;
-						
+
 						bool AddSignature = DecideAboutSignature();
 						if (!dlgSaveFileAs(strSaveAsName, SaveAsTextFormat, codepage, AddSignature))
 							return FALSE;
@@ -1405,11 +1405,14 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 		!EditFile.Open(Name, GENERIC_READ, FILE_SHARE_READ|(Opt.EdOpt.EditOpenedForWrite?FILE_SHARE_WRITE:0), nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 	{
 		SysErrorCode=WINPORT(GetLastError)();
-
 		if ((SysErrorCode != ERROR_FILE_NOT_FOUND) && (SysErrorCode != ERROR_PATH_NOT_FOUND))
 		{
 			UserBreak = -1;
 			Flags.Set(FFILEEDIT_OPENFAILED);
+		}
+		else if (m_codepage != CP_AUTODETECT && Flags.Check(FFILEEDIT_NEW))
+		{
+			Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 		}
 
 		return FALSE;
@@ -1482,7 +1485,6 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 	int StrLength,GetCode;
 	UINT dwCP=0;
 	bool Detect=false;
-
 	if (m_codepage == CP_AUTODETECT || IsUnicodeOrUtfCodePage(m_codepage))
 	{
 		bool bSignatureDetected = false;
@@ -1923,7 +1925,8 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 				int Length;
 				CurPtr->GetBinaryString(&SaveStr,&EndSeq,Length);
 				BOOL UsedDefaultCharStr=FALSE,UsedDefaultCharEOL=FALSE;
-				WINPORT(WideCharToMultiByte)(codepage,WC_NO_BEST_FIT_CHARS,SaveStr,Length,nullptr,0,nullptr,&UsedDefaultCharStr);
+				if (Length && !WINPORT(WideCharToMultiByte)(codepage,WC_NO_BEST_FIT_CHARS,SaveStr,Length,nullptr,0,nullptr,&UsedDefaultCharStr))
+					return SAVEFILE_ERROR;
 
 				if (!*EndSeq && CurPtr->m_next)
 					EndSeq=*m_editor->GlobalEOL?m_editor->GlobalEOL:DOS_EOL_fmt;
@@ -1931,7 +1934,9 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 				if (TextFormat&&*EndSeq)
 					EndSeq=m_editor->GlobalEOL;
 
-				WINPORT(WideCharToMultiByte)(codepage,WC_NO_BEST_FIT_CHARS,EndSeq,StrLength(EndSeq),nullptr,0,nullptr,&UsedDefaultCharEOL);
+				int EndSeqLen = StrLength(EndSeq);
+				if (EndSeqLen && !WINPORT(WideCharToMultiByte)(codepage,WC_NO_BEST_FIT_CHARS,EndSeq,EndSeqLen,nullptr,0,nullptr,&UsedDefaultCharEOL))
+					return SAVEFILE_ERROR;
 
 				if (!BadSaveConfirmed && (UsedDefaultCharStr||UsedDefaultCharEOL))
 				{
@@ -1996,8 +2001,18 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 			try
 			{
 				File EditFile;
-				if (!EditFile.Open(Name, GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_ARCHIVE|FILE_FLAG_SEQUENTIAL_SCAN))
+				bool EditFileOpened = EditFile.Open(Name, GENERIC_WRITE, FILE_SHARE_READ,
+					nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_ARCHIVE|FILE_FLAG_SEQUENTIAL_SCAN);
+				if (!EditFileOpened && (WINPORT(GetLastError)() == ERROR_NOT_SUPPORTED || WINPORT(GetLastError)() == ERROR_CALL_NOT_IMPLEMENTED)) {
+					EditFileOpened = EditFile.Open(Name, GENERIC_WRITE, FILE_SHARE_READ,
+						nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_ARCHIVE|FILE_FLAG_SEQUENTIAL_SCAN);
+					if (EditFileOpened) {
+						fprintf(stderr, "FileEditor::SaveFile: CREATE_ALWAYS for '%ls'\n", Name);
+					}
+				}
+				if (!EditFileOpened) {
 					throw WINPORT(GetLastError)();
+				}
 
 				if (!Flags.Check(FFILEEDIT_NEW))
 				{

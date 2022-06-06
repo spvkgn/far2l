@@ -64,7 +64,7 @@ class SSHExecutedCommand : protected Threaded
 	virtual void *ThreadProc();
 
 public:
-	SSHExecutedCommand(std::shared_ptr<SSHConnection> conn, const std::string &working_dir, const std::string &command_line, const std::string &fifo);
+	SSHExecutedCommand(std::shared_ptr<SSHConnection> conn, const std::string &working_dir, const std::string &command_line, const std::string &fifo, bool pty);
 	virtual ~SSHExecutedCommand();
 
 	void KeepAlive();
@@ -75,7 +75,6 @@ struct SSHConnection
 {
 	std::shared_ptr<SSHExecutedCommand> executed_command;
 	std::map<std::string, std::string> env_set {{"TERM", "xterm"}};
-	std::set<std::string> env_unset;
 
 	SSHSession ssh;
 
