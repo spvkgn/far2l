@@ -28,20 +28,6 @@ static std::string AskpassIpcFile(const unsigned long ipc_id, const char *purpos
 	return InMyCache(sz);
 }
 
-static void set_nonblock(int sc)
-{
-    int flags = fcntl(sc, F_GETFL, 0);
-    assert(flags != -1);
-    fcntl(sc, F_SETFL, flags | O_NONBLOCK);
-}
-
-static void set_block(int sc)
-{
-    int flags = fcntl(sc, F_GETFL, 0);
-    assert(flags != -1);
-    fcntl(sc, F_SETFL, flags & (~O_NONBLOCK));
-}
-
 size_t SudoAskpassServer::sFillBuffer(Buffer &buf, unsigned char code, const std::string &str)
 {
 	buf.code = code;
@@ -101,7 +87,6 @@ SudoAskpassServer::~SudoAskpassServer()
 
 void SudoAskpassServer::Thread()
 {
-//	set_nonblock(_srv_fd);
 	for (;;) try {
 		_sock->WaitForClient(_kickass[0]);
 		Buffer buf;
@@ -167,7 +152,7 @@ SudoAskpassResult SudoAskpassServer::sRequestToServer(unsigned char code, std::s
 		fprintf(stderr, "sRequestToServer: no ipc\n");
 		return SAR_FAILED;
 	}
-	fprintf(stderr, "sRequestToServer: ipc_srv='%s'\n", ipc_srv);
+//	fprintf(stderr, "sRequestToServer: ipc_srv='%s'\n", ipc_srv);
 
 	SudoAskpassResult out = SAR_FAILED;
 	try {
@@ -183,7 +168,7 @@ SudoAskpassResult SudoAskpassServer::sRequestToServer(unsigned char code, std::s
 		int rlen = sock.Recv(&buf, sizeof(buf));
 		if (rlen > 0) {
 			out = (SudoAskpassResult)buf.code;
-			if (out == SAR_OK && rlen >= 1)
+			if (out == SAR_OK)
 				str.assign(buf.str, rlen - 1);
 		}
 	} catch (std::exception &e) {

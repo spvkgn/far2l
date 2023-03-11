@@ -186,7 +186,7 @@ bool apiExpandEnvironmentStrings(
 BOOL apiGetVolumeInformation(
     const wchar_t *lpwszRootPathName,
     FARString *pVolumeName,
-    LPDWORD lpVolumeSerialNumber,
+    DWORD64 *lpVolumeSerialNumber,
     LPDWORD lpMaximumComponentLength,
     LPDWORD lpFileSystemFlags,
     FARString *pFileSystemName
@@ -272,6 +272,11 @@ BOOL apiSetFileAttributes(
     LPCWSTR lpFileName,
     DWORD dwFileAttributes
 );
+
+
+bool apiPathExists(LPCWSTR lpPathName);
+bool apiPathIsDir(LPCWSTR lpPathName);
+bool apiPathIsFile(LPCWSTR lpPathName);
 
 struct IUnmakeWritable
 {

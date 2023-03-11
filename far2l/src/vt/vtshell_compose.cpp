@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "vtshell_compose.h"
 #include <utils.h>
+#include <RandomString.h>
 #include <TestPath.h>
 #include <errno.h>
 #include <atomic>
@@ -13,20 +14,7 @@
 void VT_ComposeMarker(std::string &marker)
 {
 	marker.clear();
-
-	for (size_t l = 8 + (rand() % 9); l; --l) {
-		switch (rand() % 3) {
-			case 0:
-				marker+= 'A' + (rand() % ('Z' + 1 - 'A'));
-				break;
-			case 1:
-				marker+= 'a' + (rand() % ('z' + 1 - 'a'));
-				break;
-			case 2:
-				marker+= '0' + (rand() % ('9' + 1 - '0'));
-				break;
-		}
-	}
+	RandomStringAppend(marker, 8, 16, RNDF_ALNUM);
 }
 
 std::string VT_ComposeMarkerCommand(const std::string &marker)
@@ -80,10 +68,10 @@ static std::string VT_ComposeInitialTitleCommand(const char *cd, const char *cmd
 		if ((ch >= 0 && ch < 0x20)) {
 			out+= '\x01';
 
+		} else if (ch == '\'') {
+			out+= "'\\''";
+
 		} else {
-			if (ch == '\'' || ch == '\\') {
-				out+= '\\';
-			}
 			out+= ch;
 		}
 	}
@@ -105,7 +93,7 @@ VT_ComposeCommandExec::VT_ComposeCommandExec(const char *cd, const char *cmd, bo
 	const char *pwd_file_ext = need_sudo ? ".spwd" : ".pwd";
 
 	unsigned int id = ++s_vt_script_id;
-	char name[128]; 
+	char name[128];
 	sprintf(name, "vtcmd/%x_%u", getpid(), id);
 	_cmd_script = InMyTemp(name);
 	_pwd_file = _cmd_script + pwd_file_ext;
@@ -175,7 +163,8 @@ void VT_ComposeCommandExec::Create(const char *cd, const char *cmd, bool need_su
 	}
 
 	if (need_sudo) {
-		content+= StrPrintf("sudo sh -c \"cd \\\"%s\\\" && %s%s\"\n",
+		content+= Opt.SudoEnabled ? "sudo -A " : "sudo ";
+		content+= StrPrintf("sh -c \"cd \\\"%s\\\" && %s%s\"\n",
 			EscapeEscapes(EscapeCmdStr(cd)).c_str(), EscapeCmdStr(cmd).c_str(), pwd_suffix.c_str());
 	} else {
 		content+= StrPrintf("cd \"%s\" && %s%s\n",

@@ -28,8 +28,6 @@
 #include "FarTTY.h"
 #include "../FSClipboardBackend.h"
 
-bool IsUnstableWidthChar(wchar_t c);
-
 static volatile long s_terminal_size_change_id = 0;
 static TTYBackend * g_vtb = nullptr;
 
@@ -93,10 +91,14 @@ TTYBackend::TTYBackend(const char *full_exe_path, int std_in, int std_out, const
 	if (pipe_cloexec(_kickass) == -1) {
 		_kickass[0] = _kickass[1] = -1;
 	} else {
-		fcntl(_kickass[1], F_SETFL,
-			fcntl(_kickass[1], F_GETFL, 0) | O_NONBLOCK);
+		MakeFDNonBlocking(_kickass[1]);
 	}
 
+	struct winsize w{};
+	if (GetWinSize(w)) {
+		g_winport_con_out->SetSize(w.ws_col, w.ws_row);
+	}
+	g_winport_con_out->GetSize(_cur_width, _cur_height);
 	g_vtb = this;
 }
 
@@ -121,11 +123,24 @@ TTYBackend::~TTYBackend()
 	DetachNotifyPipe();
 }
 
+bool TTYBackend::GetWinSize(struct winsize &w)
+{
+	int r = ioctl(_stdout, TIOCGWINSZ, &w);
+	if (UNLIKELY(r != 0)) {
+		r = ioctl(_stdin, TIOCGWINSZ, &w);
+		if (UNLIKELY(r != 0)) {
+			perror("GetWinSize");
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void TTYBackend::DetachNotifyPipe()
 {
 	if (_notify_pipe != -1) {
-	    fcntl(_notify_pipe, F_SETFL,
-			fcntl(_notify_pipe, F_GETFL, 0) | O_NONBLOCK);
+		MakeFDNonBlocking(_notify_pipe);
 
 		if (_result && write(_notify_pipe, _result,
 				sizeof(*_result)) != sizeof(*_result)) {
@@ -175,7 +190,7 @@ void TTYBackend::ReaderThread()
 
 			} else {
 				g_winport_backend = L"TTY";
-				_clipboard_backend_setter.Set<FSClipboardBackend>();
+				ChooseSimpleClipboardBackend();
 			}
 		}
 		prev_far2l_tty = _far2l_tty;
@@ -304,7 +319,8 @@ void TTYBackend::WriterThread()
 	bool gone_background = false;
 	try {
 		TTYOutput tty_out(_stdout, _far2l_tty);
-
+		DispatchPalette(tty_out);
+//		DispatchTermResized(tty_out);
 		while (!_exiting && !_deadio) {
 			AsyncEvent ae;
 			ae.all = 0;
@@ -314,10 +330,17 @@ void TTYBackend::WriterThread()
 					_async_cond.wait(lock);
 				}
 				if (_ae.all != 0) {
-					std::swap(ae, _ae);
+					std::swap(ae.all, _ae.all);
+					if (ae.flags.palette) {
+						_async_cond.notify_all();
+					}
 					break;
 				}
 			} while (!_exiting && !_deadio);
+
+			if (ae.flags.palette) {
+				DispatchPalette(tty_out);
+			}
 
 			if (ae.flags.term_resized) {
 				DispatchTermResized(tty_out);
@@ -333,6 +356,10 @@ void TTYBackend::WriterThread()
 
 			if (ae.flags.far2l_interract)
 				DispatchFar2lInterract(tty_out);
+
+			if (ae.flags.osc52clip_set) {
+				DispatchOSC52ClipSet(tty_out);
+			}
 
 			tty_out.Flush();
 			tcdrain(_stdout);
@@ -356,78 +383,79 @@ void TTYBackend::WriterThread()
 
 /////////////////////////////////////////////////////////////////////////
 
-void TTYBackend::DispatchTermResized(TTYOutput &tty_out)
+void TTYBackend::DispatchPalette(TTYOutput &tty_out)
 {
-	struct winsize w = {};
-	int r = ioctl(_stdout, TIOCGWINSZ, &w);
-	if (r != 0) {
-		r = ioctl(_stdin, TIOCGWINSZ, &w);
-	}
-	if (r == 0) {
-		if (_cur_width != w.ws_col || _cur_height != w.ws_row) {
-			_cur_width = w.ws_col;
-			_cur_height = w.ws_row;
-			g_winport_con_out->SetSize(_cur_width, _cur_height);
-			g_winport_con_out->GetSize(_cur_width, _cur_height);
-			INPUT_RECORD ir = {};
-			ir.EventType = WINDOW_BUFFER_SIZE_EVENT;
-			ir.Event.WindowBufferSizeEvent.dwSize.X = _cur_width;
-			ir.Event.WindowBufferSizeEvent.dwSize.Y = _cur_height;
-			g_winport_con_in->Enqueue(&ir, 1);
+	TTYBasePalette palette;
+	{
+		std::lock_guard<std::mutex> lock(_palette_mtx);
+		palette = _palette;
+		if (_override_default_palette) {
+			for (size_t i = 0; i < BASE_PALETTE_SIZE; ++i) {
+				if (palette.background[i] == (DWORD)-1) {
+					palette.background[i] = g_winport_palette.background[i].AsRGB();
+				}
+				if (palette.foreground[i] == (DWORD)-1) {
+					palette.foreground[i] = g_winport_palette.foreground[i].AsRGB();
+				}
+			}
 		}
-		std::vector<CHAR_INFO> tmp;
-		tty_out.MoveCursorStrict(1, 1);
-		_prev_height = _prev_width = 0;
-		_prev_output.swap(tmp);// ensure memory released
 	}
+	tty_out.ChangePalette(palette);
 }
 
-bool TTYBackend::IsUnstableWidthCharCached(wchar_t c)
+void TTYBackend::DispatchTermResized(TTYOutput &tty_out)
 {
-	const size_t h = size_t(c) % ARRAYSIZE(_stable_width_chars_cache);
-	if (_stable_width_chars_cache[h] != c) {
-		if (IsUnstableWidthChar(c)) {
-			return true;
-		}
-		_stable_width_chars_cache[h] = c;
+	struct winsize w{};
+	if (!GetWinSize(w)) {
+		return;
 	}
-	return false;
+
+	if (_cur_width != w.ws_col || _cur_height != w.ws_row) {
+		g_winport_con_out->SetSize(w.ws_col, w.ws_row);
+		g_winport_con_out->GetSize(_cur_width, _cur_height);
+		INPUT_RECORD ir = {};
+		ir.EventType = WINDOW_BUFFER_SIZE_EVENT;
+		ir.Event.WindowBufferSizeEvent.dwSize.X = _cur_width;
+		ir.Event.WindowBufferSizeEvent.dwSize.Y = _cur_height;
+		g_winport_con_in->Enqueue(&ir, 1);
+	}
+	std::vector<CHAR_INFO> tmp;
+	tty_out.MoveCursorStrict(1, 1);
+	_prev_height = _prev_width = 0;
+	_prev_output.swap(tmp);// ensure memory released
 }
 
 //#define LOG_OUTPUT_COUNT
 void TTYBackend::DispatchOutput(TTYOutput &tty_out)
 {
-	_cur_output.resize(_cur_width * _cur_height);
+	_cur_output.resize(size_t(_cur_width) * _cur_height);
 
 	COORD data_size = {CheckedCast<SHORT>(_cur_width), CheckedCast<SHORT>(_cur_height) };
 	COORD data_pos = {0, 0};
 	SMALL_RECT screen_rect = {0, 0, CheckedCast<SHORT>(_cur_width - 1), CheckedCast<SHORT>(_cur_height - 1)};
 	g_winport_con_out->Read(&_cur_output[0], data_size, data_pos, screen_rect);
 #ifdef LOG_OUTPUT_COUNT
-	unsigned long printed_count = 0, printed_skipable = 0, forced_by_unstable = 0;
+	unsigned long printed_count = 0, printed_skipable = 0;
 #endif
 	if (_cur_output.empty()) {
 		;
 
 	} else if (_cur_width != _prev_width || _cur_height != _prev_height) {
 		for (unsigned int y = 0; y < _cur_height; ++y) {
-			const CHAR_INFO *cur_line = &_cur_output[y * _cur_width];
+			const CHAR_INFO *cur_line = &_cur_output[size_t(y) * _cur_width];
 			tty_out.MoveCursorLazy(y + 1, 1);
 			tty_out.WriteLine(cur_line, _cur_width);
 		}
 
 	} else for (unsigned int y = 0; y < _cur_height; ++y) {
-		const CHAR_INFO *cur_line = &_cur_output[y * _cur_width];
-		const CHAR_INFO *prev_line = &_prev_output[y * _prev_width];
-
-		const auto UnstableWidth = [&](unsigned int x_)
-		{
-			return IsUnstableWidthCharCached(cur_line[x_].Char.UnicodeChar)
-				|| IsUnstableWidthCharCached(prev_line[x_].Char.UnicodeChar);
-		};
+		const CHAR_INFO *cur_line = &_cur_output[size_t(y) * _cur_width];
+		const CHAR_INFO *prev_line = &_prev_output[size_t(y) * _prev_width];
 
 		const auto ApproxWeight = [&](unsigned int x_)
 		{
+			if (CI_USING_COMPOSITE_CHAR(cur_line[x_])) {
+				return 4;
+			}
 			return ((cur_line[x_].Char.UnicodeChar > 0x7f) ? 2 : 1);
 		};
 
@@ -438,33 +466,6 @@ void TTYBackend::DispatchOutput(TTYOutput &tty_out)
 		};
 
 		for (unsigned int x = 0, skipped_start = 0, skipped_weight = 0; x < _cur_width; ++x) {
-			// If first or next character is/was 'special' - like fullwidth or diacric then need
-			// to write whole line til the end to avoid artifacts on non-far2l terminals
-			if (!_far2l_tty && ((x + 2 < _cur_width && UnstableWidth(x + 1)) || (x == 0 && UnstableWidth(x)))) {
-#ifdef LOG_OUTPUT_COUNT
-				fprintf(stderr, "!!! OUTPUT_UNSTABLE: 0x%x '%lc' or 0x%x '%lc'\n",
-					cur_line[x + 1].Char.UnicodeChar, cur_line[x + 1].Char.UnicodeChar,
-					prev_line[x + 1].Char.UnicodeChar, prev_line[x + 1].Char.UnicodeChar);
-				forced_by_unstable+= _cur_width - x;
-#endif
-				// print line's remainder fully without exceptions, but keep box-drawing characters at
-				// expected positions overwriting tails of previously printed sequence of full-width chars.
-				tty_out.MoveCursorLazy(y + 1, x + 1);
-				for (;;) {
-					unsigned int edge;
-					for (edge = x + 1; edge < _cur_width && !WCHAR_IS_PSEUDOGRAPHIC(cur_line[edge].Char.UnicodeChar);) {
-						++edge;
-					}
-					tty_out.WriteLine(&cur_line[x], edge - x);
-					if (edge == _cur_width) {
-						break;
-					}
-					x = edge;
-					tty_out.MoveCursorStrict(y + 1, x + 1);
-				}
-				break;
-			}
-
 			if (!Modified(x)) {
 				skipped_weight+= ApproxWeight(x);
 				continue;
@@ -498,9 +499,9 @@ void TTYBackend::DispatchOutput(TTYOutput &tty_out)
 		}
 	}
 #ifdef LOG_OUTPUT_COUNT
-	fprintf(stderr, "!!! OUTPUT_COUNT: (normal=%lu + skipable=%lu + unstable=%lu) = %lu of %lu\n",
-		printed_count, printed_skipable, forced_by_unstable,
-		printed_count + printed_skipable + forced_by_unstable,
+	fprintf(stderr, "!!! OUTPUT_COUNT: (normal=%lu + skipable=%lu) = %lu of %lu\n",
+		printed_count, printed_skipable,
+		printed_count + printed_skipable,
 		(unsigned long)_cur_output.size());
 #endif
 	_prev_width = _cur_width;
@@ -546,13 +547,23 @@ void TTYBackend::DispatchFar2lInterract(TTYOutput &tty_out)
 				if (id && _far2l_interracts_sent.find(id) == _far2l_interracts_sent.end()) break;
 			}
 		}
-		i->stk_ser.PushPOD(id);
+		i->stk_ser.PushNum(id);
 
 		if (i->waited)
 			_far2l_interracts_sent.emplace(id, i);
 
 		tty_out.SendFar2lInterract(i->stk_ser);
 	}
+}
+
+void TTYBackend::DispatchOSC52ClipSet(TTYOutput &tty_out)
+{
+	std::string osc52clip;
+	{
+		std::unique_lock<std::mutex> lock(_async_mutex);
+		osc52clip.swap(_osc52clip);
+	}
+	tty_out.SendOSC52ClipSet(osc52clip);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -600,9 +611,10 @@ COORD TTYBackend::OnConsoleGetLargestWindowSize()
 
 		try {
 			StackSerializer stk_ser;
-			stk_ser.PushPOD(FARTTY_INTERRACT_GET_WINDOW_MAXSIZE);
+			stk_ser.PushNum(FARTTY_INTERRACT_GET_WINDOW_MAXSIZE);
 			if (Far2lInterract(stk_ser, true)) {
-				stk_ser.PopPOD(out);
+				stk_ser.PopNum(out.Y);
+				stk_ser.PopNum(out.X);
 				_largest_window_size = out;
 				_largest_window_size_ready = true;
 			}
@@ -626,14 +638,14 @@ bool TTYBackend::OnConsoleSetFKeyTitles(const char **titles)
 			if (state != 0) {
 				stk_ser.PushStr(titles[i]);
 			}
-			stk_ser.PushPOD(state);
+			stk_ser.PushNum(state);
 		}
-		stk_ser.PushPOD(FARTTY_INTERRACT_SET_FKEY_TITLES);
+		stk_ser.PushNum(FARTTY_INTERRACT_SET_FKEY_TITLES);
 
 		if (Far2lInterract(stk_ser, detect_support)) {
 			if (detect_support) {
 				bool supported = false;
-				stk_ser.PopPOD(supported);
+				stk_ser.PopNum(supported);
 				fprintf(stderr, "%s: %ssupported\n",
 					__FUNCTION__, supported ? "" : "not ");
 				_fkeys_support = supported
@@ -650,21 +662,113 @@ bool TTYBackend::OnConsoleSetFKeyTitles(const char **titles)
 	return (_fkeys_support == FKS_SUPPORTED);
 }
 
+BYTE TTYBackend::OnConsoleGetColorPalette()
+{
+	if (_far2l_tty) try {
+		StackSerializer stk_ser;
+		stk_ser.PushNum(FARTTY_INTERRACT_GET_COLOR_PALETTE);
+		Far2lInterract(stk_ser, true);
+		uint8_t bits, reserved;
+		stk_ser.PopNum(bits);
+		stk_ser.PopNum(reserved);
+		return bits;
+
+	} catch (std::exception &) {
+		return 4;
+	}
+
+	static BYTE s_out = []() {
+		const char *env = getenv("COLORTERM");
+		if (env) {
+			return (strcmp(env, "truecolor") == 0 || strcmp(env, "24bit") == 0) ? 24 : 8;
+		}
+		env = getenv("TERM");
+		if (env && strstr(env, "256") != nullptr) {
+			return 8;
+		}
+		return 4;
+	} ();
+
+	return s_out;
+}
+
 void TTYBackend::OnConsoleAdhocQuickEdit()
 {
 	try {
 		StackSerializer stk_ser;
-		stk_ser.PushPOD(FARTTY_INTERRACT_CONSOLE_ADHOC_QEDIT);
+		stk_ser.PushNum(FARTTY_INTERRACT_CONSOLE_ADHOC_QEDIT);
 		Far2lInterract(stk_ser, false);
 	} catch (std::exception &) {}
 }
 
-DWORD TTYBackend::OnConsoleSetTweaks(DWORD tweaks)
+DWORD64 TTYBackend::OnConsoleSetTweaks(DWORD64 tweaks)
 {
-	return 0;
+	const auto prev_osc52clip_set = _osc52clip_set;
+	_osc52clip_set = (tweaks & CONSOLE_OSC52CLIP_SET) != 0;
+
+	if (_osc52clip_set != prev_osc52clip_set && !_far2l_tty && !_ttyx) {
+		ChooseSimpleClipboardBackend();
+	}
+
+	bool override_default_palette = (tweaks & CONSOLE_TTY_PALETTE_OVERRIDE) != 0;
+
+	{
+		std::lock_guard<std::mutex> lock(_palette_mtx);
+		std::swap(override_default_palette, _override_default_palette);
+	}
+
+	if (override_default_palette != ((tweaks & CONSOLE_TTY_PALETTE_OVERRIDE) != 0)) {
+		{
+			std::unique_lock<std::mutex> lock(_async_mutex);
+			_ae.flags.palette = true;
+			_async_cond.notify_all();
+			while (_ae.flags.palette) {
+				_async_cond.wait(lock);
+			}
+		}
+	}
+
+//
+
+	DWORD64 out = TWEAK_STATUS_SUPPORT_TTY_PALETTE;
+
+	if (!_far2l_tty && !_ttyx) {
+		out|= TWEAK_STATUS_SUPPORT_OSC52CLIP_SET;
+	}
+
+	return out;
+}
+
+void TTYBackend::OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK)
+{
+	if (Index >= BASE_PALETTE_SIZE) {
+		fprintf(stderr, "%s: too big index=%u\n", __FUNCTION__, Index);
+		return;
+	}
+
+	{
+		std::unique_lock<std::mutex> lock(_palette_mtx);
+		if (_palette.foreground[Index] == *ColorFG && _palette.background[Index] == *ColorBK) {
+			return;
+		}
+
+		std::swap(_palette.foreground[Index], *ColorFG);
+		std::swap(_palette.background[Index], *ColorBK);
+	}
+
+	std::unique_lock<std::mutex> lock(_async_mutex);
+	_ae.flags.palette = true;
+	_async_cond.notify_all();
+	while (_ae.flags.palette) {
+		_async_cond.wait(lock);
+	}
 }
 
 void TTYBackend::OnConsoleChangeFont()
+{
+}
+
+void TTYBackend::OnConsoleSaveWindowState()
 {
 }
 
@@ -672,9 +776,28 @@ void TTYBackend::OnConsoleSetMaximized(bool maximized)
 {
 	try {
 		StackSerializer stk_ser;
-		stk_ser.PushPOD(maximized ? FARTTY_INTERRACT_WINDOW_MAXIMIZE : FARTTY_INTERRACT_WINDOW_RESTORE);
+		stk_ser.PushNum(maximized ? FARTTY_INTERRACT_WINDOW_MAXIMIZE : FARTTY_INTERRACT_WINDOW_RESTORE);
 		Far2lInterract(stk_ser, false);
 	} catch (std::exception &) {}
+}
+
+void TTYBackend::ChooseSimpleClipboardBackend()
+{
+	if (_osc52clip_set) {
+		IOSC52Interractor *interractor = this;
+		_clipboard_backend_setter.Set<OSC52ClipboardBackend>(interractor);
+	} else {
+		_clipboard_backend_setter.Set<FSClipboardBackend>();
+	}
+}
+
+void TTYBackend::OSC52SetClipboard(const char *text)
+{
+	fprintf(stderr, "TTYBackend::OSC52SetClipboard\n");
+	std::unique_lock<std::mutex> lock(_async_mutex);
+	_osc52clip = text;
+	_ae.flags.osc52clip_set = true;
+	_async_cond.notify_all();
 }
 
 bool TTYBackend::Far2lInterract(StackSerializer &stk_ser, bool wait)
@@ -730,10 +853,10 @@ static void OnFar2lKey(bool down, StackSerializer &stk_ser)
 		ir.Event.KeyEvent.bKeyDown = down ? TRUE : FALSE;
 
 		ir.Event.KeyEvent.uChar.UnicodeChar = (wchar_t)stk_ser.PopU32();
-		stk_ser.PopPOD(ir.Event.KeyEvent.dwControlKeyState);
-		stk_ser.PopPOD(ir.Event.KeyEvent.wVirtualScanCode);
-		stk_ser.PopPOD(ir.Event.KeyEvent.wVirtualKeyCode);
-		stk_ser.PopPOD(ir.Event.KeyEvent.wRepeatCount);
+		stk_ser.PopNum(ir.Event.KeyEvent.dwControlKeyState);
+		stk_ser.PopNum(ir.Event.KeyEvent.wVirtualScanCode);
+		stk_ser.PopNum(ir.Event.KeyEvent.wVirtualKeyCode);
+		stk_ser.PopNum(ir.Event.KeyEvent.wRepeatCount);
 		g_winport_con_in->Enqueue(&ir, 1);
 
 	} catch (std::exception &) {
@@ -773,13 +896,13 @@ static void OnFar2lMouse(bool compact, StackSerializer &stk_ser)
 				| ( (ir.Event.MouseEvent.dwButtonState & 0xff00) << 8);
 
 		} else {
-			stk_ser.PopPOD(ir.Event.MouseEvent.dwEventFlags);
-			stk_ser.PopPOD(ir.Event.MouseEvent.dwControlKeyState);
-			stk_ser.PopPOD(ir.Event.MouseEvent.dwButtonState);
+			stk_ser.PopNum(ir.Event.MouseEvent.dwEventFlags);
+			stk_ser.PopNum(ir.Event.MouseEvent.dwControlKeyState);
+			stk_ser.PopNum(ir.Event.MouseEvent.dwButtonState);
 		}
 
-		stk_ser.PopPOD(ir.Event.MouseEvent.dwMousePosition.Y);
-		stk_ser.PopPOD(ir.Event.MouseEvent.dwMousePosition.X);
+		stk_ser.PopNum(ir.Event.MouseEvent.dwMousePosition.Y);
+		stk_ser.PopNum(ir.Event.MouseEvent.dwMousePosition.X);
 
 		g_winport_con_in->Enqueue(&ir, 1);
 
@@ -843,7 +966,7 @@ void TTYBackend::OnFar2lReply(StackSerializer &stk_ser)
 	}
 
 	uint8_t id;
-	stk_ser.PopPOD(id);
+	stk_ser.PopNum(id);
 
 	std::unique_lock<std::mutex> lock_sent(_far2l_interracts_sent);
 
@@ -932,7 +1055,7 @@ void TTYBackend::OnConsoleDisplayNotification(const wchar_t *title, const wchar_
 		StackSerializer stk_ser;
 		stk_ser.PushStr(Wide2MB(text));
 		stk_ser.PushStr(Wide2MB(title));
-		stk_ser.PushPOD(FARTTY_INTERRACT_DESKTOP_NOTIFICATION);
+		stk_ser.PushNum(FARTTY_INTERRACT_DESKTOP_NOTIFICATION);
 		Far2lInterract(stk_ser, false);
 	} catch (std::exception &) {}
 }

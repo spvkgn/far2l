@@ -306,7 +306,7 @@ int FileViewer::ProcessKey(int Key)
 				FARString strViewFileName;
 				View.GetFileName(strViewFileName);
 				File Edit;
-				if(!Edit.Open(strViewFileName, GENERIC_READ, FILE_SHARE_READ|(Opt.EdOpt.EditOpenedForWrite?FILE_SHARE_WRITE:0), nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
+				if(!Edit.Open(strViewFileName, GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 				{
 					Message(MSG_WARNING|MSG_ERRORTYPE,1,Msg::EditTitle,Msg::EditCannotOpen,strViewFileName,Msg::Ok);
 					return TRUE;
@@ -338,7 +338,7 @@ int FileViewer::ProcessKey(int Key)
 
 			return TRUE;
 		}
-		case KEY_ALTSHIFTF9:
+		case KEY_F9: case KEY_ALTSHIFTF9:
 			// Работа с локальной копией ViewerOptions
 			ViewerOptions ViOpt;
 			ViOpt.TabSize=View.GetTabSize();
@@ -503,7 +503,7 @@ void FileViewer::ShowStatus()
 	);
 	SetColor(COL_VIEWERSTATUS);
 	GotoXY(X1,Y1);
-	FS<<fmt::LeftAlign()<<fmt::Width(View.Width+(View.ViOpt.ShowScrollbar?1:0))<<fmt::Precision(View.Width+(View.ViOpt.ShowScrollbar?1:0))<<strStatus;
+	FS << fmt::Cells() << fmt::LeftAlign() << fmt::Size(View.Width+(View.ViOpt.ShowScrollbar?1:0)) << strStatus;
 
 	if (Opt.ViewerEditorClock && IsFullScreen())
 		ShowTime(FALSE);
@@ -530,7 +530,9 @@ static void ModalViewFileInternal(const std::string &pathname, int DisableHistor
 	FrameManager->EnterModalEV();
 	FrameManager->ExecuteModal();
 	FrameManager->ExitModalEV();
-	Viewer.GetExitCode();	
+	const int r = Viewer.GetExitCode();
+	if (r != 0)
+		fprintf(stderr, "%s: viewer error %d for '%s'\n", __FUNCTION__, r, pathname.c_str());
 }
 
 void ModalViewFile(const std::string &pathname, bool scroll_to_end)

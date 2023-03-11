@@ -236,6 +236,11 @@ void MenuFileToReg(const wchar_t *MenuKey, File& MenuFile, GetFileString& GetStr
 	}
 }
 
+void UserMenu::Present(bool ChoiceMenuType)
+{
+	UserMenu Menu(ChoiceMenuType);
+}
+
 UserMenu::UserMenu(bool ChoiceMenuType)
 	: grs(s_cfg_reader)
 {
@@ -254,7 +259,7 @@ void UserMenu::ProcessUserMenu(bool ChoiceMenuType)
 	// по умолчанию меню - это FarMenu.ini
 	MenuMode=MM_LOCAL;
 	FARString strLocalMenuKey;
-	strLocalMenuKey.Format(L"UserMenu/LocalMenu%u",GetProcessUptimeMSec());
+	strLocalMenuKey.Format(L"UserMenu/LocalMenu%lu",(unsigned long)GetProcessUptimeMSec());
 	{ ConfigWriter(strLocalMenuKey.GetMB()).RemoveSection(); }
 	ConfigReaderScope::Update(s_cfg_reader);
 	MenuModified=MenuNeedRefresh=false;
@@ -491,7 +496,7 @@ static int FillUserMenu(VMenu& UserMenu,const wchar_t *MenuKey,int MenuPos,int *
 			FuncNum=PrepareHotKey(strHotKey);
 			int Offset=strHotKey.At(0)==L'&'?5:4;
 			FormatString FString;
-			FString<<((!strHotKey.IsEmpty() && !FuncNum)?L"&":L"")<<fmt::LeftAlign()<<fmt::Width(Offset)<<fmt::Precision(Offset)<<strHotKey;
+			FString<<((!strHotKey.IsEmpty() && !FuncNum)?L"&":L"")<<fmt::LeftAlign()<<fmt::Size(Offset)<<strHotKey;
 			UserMenuItem.strName=std::move(FString.strValue());
 			UserMenuItem.strName+=strLabel;
 
@@ -858,10 +863,7 @@ int UserMenu::ProcessSingleMenu(const wchar_t *MenuKey,int MenuPos,const wchar_t
 								isSilent=true;
 							}
 
-							ProcessOSAliases(strCommand);
-							// TODO: Ахтунг. В режиме isSilent имеем проблемы с командами, которые выводят что-то на экран
-							//       Здесь необходимо переделка, например, перед исполнением подсунуть временный экранный буфер, а потом его содержимое подсунуть в ScreenBuf...
-
+							// ProcessOSAliases(strCommand);
 							if (!isSilent)
 							{
 								CtrlObject->CmdLine->ExecString(strCommand,FALSE, 0, 0, ListFileUsed);
@@ -871,7 +873,7 @@ int UserMenu::ProcessSingleMenu(const wchar_t *MenuKey,int MenuPos,const wchar_t
 								SaveScreen SaveScr;
 								CtrlObject->Cp()->LeftPanel->CloseFile();
 								CtrlObject->Cp()->RightPanel->CloseFile();
-								Execute(strCommand, 0, 0, 0, ListFileUsed, true);
+								Execute(strCommand, 0, 0, ListFileUsed, true);
 							}
 //							WaitForClose(strName);
 						}

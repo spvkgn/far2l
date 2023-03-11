@@ -84,20 +84,8 @@ private:
 	DWORD BufferSize = 0;
 	UINT64 CurPtr = 0, LastPtr = 0;
 	UINT64 FileSize = 0;
-
-
-	template <class T>
-		inline T AlignUp(T v)
-	{
-		T a = v & (T)(AlignSize - 1);
-		return a ? v + (AlignSize - a) : v;
-	}
-
-	template <class T>
-		inline T AlignDown(T v)
-	{
-		return v & (~(T)(AlignSize - 1));
-	}
+	// something from /proc/ that has zero stat size but still can read some content from it
+	bool PseudoFile = false;
 
 	DWORD DirectReadAt(UINT64 Ptr, LPVOID Data, DWORD DataSize);
 	LPBYTE AllocBuffer(size_t Size);

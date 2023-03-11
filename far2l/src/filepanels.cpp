@@ -418,11 +418,11 @@ int FilePanels::ProcessKey(int Key)
 		{
 			if (!LeftPanel->IsVisible() && !RightPanel->IsVisible())
 			{
-				Help Hlp(L"Terminal");
+				Help::Present(L"Terminal");
 			}
 			else if (!ActivePanel->ProcessKey(KEY_F1))
 			{
-				Help Hlp(L"Contents");
+				Help::Present(L"Contents");
 			}
 
 			return TRUE;
@@ -629,9 +629,7 @@ int FilePanels::ProcessKey(int Key)
 		}
 		case KEY_ALTF7:
 		{
-			{
-				FindFiles FindFiles;
-			}
+			FindFiles::Present();
 			break;
 		}
 		case KEY_CTRLUP:  case KEY_CTRLNUMPAD8:

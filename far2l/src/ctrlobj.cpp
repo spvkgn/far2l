@@ -48,6 +48,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "syslog.hpp"
 #include "interf.hpp"
 #include "config.hpp"
+#include "ConfigSaveLoad.hpp"
 #include "fileowner.hpp"
 #include "dirmix.hpp"
 #include "console.hpp"
@@ -106,6 +107,9 @@ void ControlObject::Init()
 
 	this->MainKeyBar->Refresh(Opt.ShowKeyBar);
 
+	FrameManager->InsertFrame(FPanels);
+	FrameManager->PluginCommit();
+
 	Cp()->LeftPanel->Update(0);
 	Cp()->RightPanel->Update(0);
 
@@ -115,7 +119,6 @@ void ControlObject::Init()
 		Cp()->RightPanel->GoToFile(Opt.strRightCurFile);
 	}
 
-	FrameManager->InsertFrame(FPanels);
 	FARString strStartCurDir;
 	Cp()->ActivePanel->GetCurDir(strStartCurDir);
 	FarChDir(strStartCurDir);
@@ -128,6 +131,10 @@ void ControlObject::Init()
 		Console.SetTitle(strOldTitle);
 	}
 	Macro.LoadMacros();
+
+	auto *CurFrame = FrameManager->GetCurrentFrame();
+	if (LIKELY(CurFrame))
+		CurFrame->Show(); // otherwise panels displayed empty on start sometimes
 	/*
 		FarChDir(StartCurDir);
 	*/

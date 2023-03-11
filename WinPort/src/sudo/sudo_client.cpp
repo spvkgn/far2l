@@ -68,7 +68,7 @@ namespace Sudo
 			bt.RecvPOD(cmd);
 
 			if (bt.IsFailed() || cmd!=SUDO_CMD_PING)
-				throw "ping failed";
+				throw std::runtime_error("ping failed");
 				
 			std::string cwd = g_curdir_override;
 			if (cwd.empty()) {
@@ -90,13 +90,13 @@ namespace Sudo
 				bt.RecvPOD(cmd);
 			
 				if (bt.IsFailed() || cmd!=SUDO_CMD_CHDIR)
-					throw "chdir failed";
+					throw std::runtime_error("chdir failed");
 					
 				fprintf(stderr, "Sudo::ClientInitSequence: chdir='%s' -> %d\n", g_curdir_override.c_str(), r);
 			}
 
-		} catch (const char *what) {
-			fprintf(stderr, "Sudo::ClientInitSequence - %s\n", what);
+		} catch (std::exception &e) {
+			fprintf(stderr, "Sudo::ClientInitSequence - %s\n", e.what());
 			CloseClientConnection();
 			return false;
 		}
@@ -133,7 +133,7 @@ namespace Sudo
 			throw std::runtime_error("pipe-leash");
 		}
 
-		fcntl(leash[0], F_SETFD, FD_CLOEXEC);
+		MakeFDCloexec(leash[0]);
 
 		int r = fork();
 		if (r == 0) {
@@ -147,8 +147,15 @@ namespace Sudo
 				close(fd);
 			}
 
-			if (chdir("/bin") == -1)  //avoid locking arbitrary current dir
-				perror("chdir");
+			// avoid locking arbitrary current dir and
+			// allow starting in portable env (see #1505)
+			const char *farhome = getenv("FARHOME");
+			if (!farhome || chdir(farhome) == -1) {
+				if (chdir("/bin") == -1) {
+					perror("chdir");
+				}
+			}
+
 			//if process doesn't have terminal then sudo caches password per parent pid
 			//so don't use intermediate shell for running it!
 			r = execlp("sudo", "-n", "-A", "-k", g_sudo_app.c_str(), ipc.c_str(), NULL);
@@ -325,8 +332,8 @@ namespace Sudo
 		__attribute__ ((visibility("default"))) void sudo_client_region_leave()
 		{
 			std::lock_guard<std::mutex> lock(s_uds_mutex);
-			assert(global_client_region_counter > 0);
-			assert(thread_client_region_counter.count > 0);
+			ASSERT(global_client_region_counter > 0);
+			ASSERT(thread_client_region_counter.count > 0);
 
 			global_client_region_counter--;
 			thread_client_region_counter.count--;

@@ -1,4 +1,6 @@
 #include <mutex>
+#include <map>
+#include <vector>
 
 #include "WinPort.h"
 #include "Backend.h"
@@ -8,20 +10,6 @@ static std::mutex g_winport_con_mode_mutex;
 
 extern "C" {
 	
-	WINPORT_DECL(GetConsoleFontSize,COORD,( HANDLE hConsoleOutput, DWORD  nFont))
-	{
-		//hardcoded for a now
-		COORD rv = {16, 24};
-		return rv;
-	}
-
-	WINPORT_DECL(GetCurrentConsoleFont,BOOL,( HANDLE hConsoleOutput, BOOL bMaximumWindow,PCONSOLE_FONT_INFO lpConsoleCurrentFont))
-	{
-		lpConsoleCurrentFont->nFont = 0; //hardcoded for a now
-		lpConsoleCurrentFont->dwFontSize = WINPORT(GetConsoleFontSize)(hConsoleOutput, lpConsoleCurrentFont->nFont);
-		return TRUE;
-	}
-
 	WINPORT_DECL(GetLargestConsoleWindowSize,COORD,(HANDLE hConsoleOutput))
 	{
 		return g_winport_con_out->GetLargestConsoleWindowSize();
@@ -137,9 +125,9 @@ extern "C" {
 	}
 
 
-	WINPORT_DECL(SetConsoleTextAttribute,BOOL,(HANDLE hConsoleOutput, WORD wAttributes))
+	WINPORT_DECL(SetConsoleTextAttribute,BOOL,(HANDLE hConsoleOutput, DWORD64 qAttributes))
 	{
-		g_winport_con_out->SetAttributes(wAttributes);
+		g_winport_con_out->SetAttributes(qAttributes);
 		return TRUE;
 	}
 
@@ -167,9 +155,9 @@ extern "C" {
 		return TRUE;
 	}
 
-	WINPORT_DECL(FillConsoleOutputAttribute, BOOL, (HANDLE hConsoleOutput, WORD wAttribute, DWORD nLength, COORD dwWriteCoord, LPDWORD lpNumberOfAttrsWritten))
+	WINPORT_DECL(FillConsoleOutputAttribute, BOOL, (HANDLE hConsoleOutput, DWORD64 qAttributes, DWORD nLength, COORD dwWriteCoord, LPDWORD lpNumberOfAttrsWritten))
 	{
-		*lpNumberOfAttrsWritten = g_winport_con_out->FillAttributeAt(wAttribute, nLength, dwWriteCoord);
+		*lpNumberOfAttrsWritten = g_winport_con_out->FillAttributeAt(qAttributes, nLength, dwWriteCoord);
 		return TRUE;
 	}
 
@@ -218,27 +206,9 @@ extern "C" {
 		return TRUE;
 	}
 
-	WINPORT_DECL(ReadConsole,BOOL,(HANDLE hConsoleInput, WCHAR *lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID pInputControl))
+	WINPORT_DECL(WaitConsoleInput,BOOL,(DWORD dwTimeout))
 	{
-		INPUT_RECORD ir;
-		*lpNumberOfCharsRead = 0;
-		if (pInputControl) {
-			fprintf(stderr, "TODO: ReadConsole - pInputControl\n");
-		}
-		while (nNumberOfCharsToRead) {
-			DWORD rd = 0;
-			if (!WINPORT(ReadConsoleInput)(hConsoleInput, &ir, 1, &rd))
-				return FALSE;
-			if (ir.EventType==KEY_EVENT && 
-				ir.Event.KeyEvent.bKeyDown && 
-				ir.Event.KeyEvent.uChar.UnicodeChar) {
-				*lpBuffer = ir.Event.KeyEvent.uChar.UnicodeChar;
-				++lpBuffer;
-				--nNumberOfCharsToRead;
-				++(*lpNumberOfCharsRead);
-			}
-		}
-		return TRUE;
+		return g_winport_con_in->WaitForNonEmpty((dwTimeout == INFINITE) ? -1 : dwTimeout) ? TRUE : FALSE;
 	}
 
 	WINPORT_DECL(WriteConsoleInput,BOOL,(HANDLE hConsoleInput, const INPUT_RECORD *lpBuffer, DWORD nLength, LPDWORD lpNumberOfEventsWritten))
@@ -248,11 +218,6 @@ extern "C" {
 		return TRUE;
 	}
 
-
-	WINPORT_DECL(GetConsoleAlias, DWORD,(LPWSTR lpSource, LPWSTR lpTargetBuffer, DWORD TargetBufferLength, LPWSTR lpExeName))
-	{
-		return 0;
-	}
 
 	static PHANDLER_ROUTINE gHandlerRoutine = NULL;
 
@@ -311,9 +276,14 @@ extern "C" {
 		return TRUE;
 	}
 
-	WINPORT_DECL(SetConsoleTweaks, DWORD, (DWORD tweaks))
+	WINPORT_DECL(SetConsoleTweaks, DWORD64, (DWORD64 tweaks))
 	{
 		return g_winport_con_out->SetConsoleTweaks(tweaks);
+	}
+
+	WINPORT_DECL(SaveConsoleWindowState,VOID,())
+	{
+		return g_winport_con_out->ConsoleSaveWindowState();
 	}
 
 	WINPORT_DECL(ConsoleChangeFont, VOID, ())
@@ -339,5 +309,84 @@ extern "C" {
 	WINPORT_DECL(SetConsoleFKeyTitles, BOOL, (const CHAR **titles))
 	{
 		return g_winport_con_out->SetFKeyTitles(titles) ? TRUE : FALSE;
+	}
+
+	WINPORT_DECL(GetConsoleColorPalette,BYTE,())
+	{
+		return g_winport_con_out->GetColorPalette();
+	}
+
+	WINPORT_DECL(OverrideConsoleColor, VOID, (DWORD Index, DWORD *ColorFG, DWORD *ColorBK))
+	{
+		return g_winport_con_out->OverrideColor(Index, ColorFG, ColorBK);
+	}
+
+	WINPORT_DECL(SetConsoleRepaintsDefer, VOID, (BOOL Deferring))
+	{
+		if (Deferring) {
+			g_winport_con_out->RepaintsDeferStart();
+		} else {
+			g_winport_con_out->RepaintsDeferFinish();
+		}
+	}
+
+	static struct {
+		struct Cmp
+		{
+			bool operator()(const WCHAR *a, const WCHAR *b) const { return wcscmp(a, b) < 0; }
+		};
+		std::mutex mtx;
+		std::vector<WCHAR *> id2str;
+		std::map<const WCHAR *, COMP_CHAR, Cmp> str2id;
+	} s_composite_chars;
+
+	WINPORT_DECL(CompositeCharRegister,COMP_CHAR,(const WCHAR *lpSequence))
+	{
+		if (!lpSequence[0]) {
+			return 0;
+		}
+		if (!lpSequence[1]) {
+			return lpSequence[0];
+		}
+
+		std::lock_guard<std::mutex> lock(s_composite_chars.mtx);
+		auto it = s_composite_chars.str2id.find(lpSequence);
+		if (it != s_composite_chars.str2id.end()) {
+			return it->second | COMPOSITE_CHAR_MARK;
+		}
+		wchar_t *wd = wcsdup(lpSequence);
+		try {
+			if (!wd)
+				throw std::logic_error("wcsdup failed");
+
+			const COMP_CHAR id = COMP_CHAR(s_composite_chars.id2str.size());
+			s_composite_chars.id2str.emplace_back(wd);
+			s_composite_chars.str2id.emplace(wd, id);
+			return id | COMPOSITE_CHAR_MARK;
+
+		} catch (std::exception &e) {
+			fprintf(stderr, "%s: %s for '%ls'\n", __FUNCTION__, e.what(), lpSequence);
+			free(wd);
+		}
+		return 0;
+	}
+
+	WINPORT_DECL(CompositeCharLookup,const WCHAR *,(COMP_CHAR CompositeChar))
+	{
+		if ((CompositeChar & COMPOSITE_CHAR_MARK) == 0) {
+			fprintf(stderr, "%s: invoked for not composite-char 0x%llx\n",
+				__FUNCTION__,  (unsigned long long)CompositeChar);
+			return L"\u2022";
+		}
+
+		const COMP_CHAR id = CompositeChar & (~COMPOSITE_CHAR_MARK);
+
+		std::lock_guard<std::mutex> lock(s_composite_chars.mtx);
+		if (id >= (COMP_CHAR)s_composite_chars.id2str.size()) {
+			fprintf(stderr, "%s: out of range composite-char 0x%llx\n",
+				__FUNCTION__,  (unsigned long long)CompositeChar);
+			return L"\u2022";
+		}
+		return s_composite_chars.id2str[id];
 	}
 }

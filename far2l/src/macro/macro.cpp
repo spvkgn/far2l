@@ -726,11 +726,11 @@ uint32_t KeyMacro::ProcessKey(uint32_t Key)
 			int WaitInMainLoop0=WaitInMainLoop;
 			InternalInput=TRUE;
 			WaitInMainLoop=FALSE;
-			// Залочить _текущий_ фрейм, а не _последний немодальный_
-			FrameManager->GetCurrentFrame()->Lock(); // отменим прорисовку фрейма
-			MacroKey=AssignMacroKey();
-			FrameManager->ResetLastInputRecord();
-			FrameManager->GetCurrentFrame()->Unlock(); // теперь можно :-)
+			{ // Залочить _текущий_ фрейм, а не _последний немодальный_
+				LockCurrentFrame LCF;  // временно отменим прорисовку фрейма
+				MacroKey=AssignMacroKey();
+				FrameManager->ResetLastInputRecord();
+			}
 			// выставляем флаги по умолчанию.
 			DWORD Flags=MFLAGS_DISABLEOUTPUT; // ???
 			// добавим проверку на удаление
@@ -1048,7 +1048,7 @@ TVar KeyMacro::FARPseudoVariable(DWORD Flags,DWORD CheckCode,DWORD& Err)
 					Cond=GetSubKey(CtrlObject->Macro.GetMode());
 					break;
 				case MCODE_C_FULLSCREENMODE: // Fullscreen?
-					Cond=IsFullscreen();
+					Cond=false;
 					break;
 				case MCODE_C_ISUSERADMIN: // IsUserAdmin?
 					Cond=(int64_t)Opt.IsUserAdmin;
@@ -1218,8 +1218,8 @@ TVar KeyMacro::FARPseudoVariable(DWORD Flags,DWORD CheckCode,DWORD& Err)
 						SelPanel->GetFileName(strFileName,SelPanel->GetCurrentPos(),FileAttr);
 						int GetFileCount=SelPanel->GetFileCount();
 						Cond=(!GetFileCount ||
-						      (GetFileCount == 1 && TestParentFolderName(strFileName)))
-						     ?1:0;
+								(GetFileCount == 1 && TestParentFolderName(strFileName)))
+							?1:0;
 					}
 
 					break;
@@ -1686,7 +1686,7 @@ TVar KeyMacro::FARPseudoVariable(DWORD Flags,DWORD CheckCode,DWORD& Err)
 						Cond=L"";
 
 					if ((CtrlObject->Macro.GetMode()==MACRO_VIEWER || CtrlObject->Macro.GetMode()==MACRO_QVIEWPANEL) &&
-					        CtrlObject->Plugins.CurViewer && CtrlObject->Plugins.CurViewer->IsVisible())
+						CtrlObject->Plugins.CurViewer && CtrlObject->Plugins.CurViewer->IsVisible())
 					{
 						if (CheckCode == MCODE_V_VIEWERFILENAME)
 						{
@@ -1988,24 +1988,7 @@ static bool windowscrollFunc(const TMacroFunction*)
 	VMStack.Pop(A); // 0 - вертикаль (по умолчанию), 1 - горизонталь.
 	VMStack.Pop(L); // Положительное число - вперёд (вниз/вправо), отрицательное - назад (вверх/влево).
 
-	if (Opt.WindowMode)
-	{
-		int Lines=(int)L.i(), Columns=0;
-		L=0;
-		if (A.i())
-		{
-			Columns=Lines;
-			Lines=0;
-		}
-
-		if (Console.ScrollWindow(Lines, Columns))
-		{
-			Ret=true;
-			L=1;
-		}
-	}
-	else
-		L=0;
+	L=0;
 
 	VMStack.Push(L);
 	return Ret;
@@ -2831,8 +2814,8 @@ static bool editorsetFunc(const TMacroFunction*)
 				Ret=EdOpt.AllowEmptySpaceAfterEof; break;
 			case 15: // ShowScrollBar;
 				Ret=EdOpt.ShowScrollBar; break;
-			case 16: // EditOpenedForWrite;
-				Ret=EdOpt.EditOpenedForWrite; break;
+			case 16: // UseEditorConfigOrg;
+				Ret=EdOpt.UseEditorConfigOrg; break;
 			case 17: // SearchSelFound;
 				Ret=EdOpt.SearchSelFound; break;
 			case 18: // SearchRegexp;
@@ -2881,8 +2864,8 @@ static bool editorsetFunc(const TMacroFunction*)
 					EdOpt.AllowEmptySpaceAfterEof=longState; break;
 				case 15: // ShowScrollBar;
 					EdOpt.ShowScrollBar=longState; break;
-				case 16: // EditOpenedForWrite;
-					EdOpt.EditOpenedForWrite=longState; break;
+				case 16: // UseEditorConfigOrg;
+					EdOpt.UseEditorConfigOrg=longState; break;
 				case 17: // SearchSelFound;
 					EdOpt.SearchSelFound=longState; break;
 				case 18: // SearchRegexp;
@@ -3440,15 +3423,14 @@ static bool panelitemFunc(const TMacroFunction*)
 
 	int Index=(int)(P1.toInteger())-1;
 	int TypeInfo=(int)P2.toInteger();
-	FileListItem filelistItem;
 
 	if (TypePanel == TREE_PANEL)
 	{
-		TreeItem treeItem;
+		const TreeItem *treeItem = (const TreeItem *)SelPanel->GetItem(Index);
 
-		if (SelPanel->GetItem(Index,&treeItem) && !TypeInfo)
+		if (treeItem && !TypeInfo)
 		{
-			VMStack.Push(TVar(treeItem.strName));
+			VMStack.Push(TVar(treeItem->strName));
 			return true;
 		}
 	}
@@ -3459,91 +3441,92 @@ static bool panelitemFunc(const TMacroFunction*)
 		if (TypeInfo == 11)
 			SelPanel->ReadDiz();
 
-		if (!SelPanel->GetItem(Index,&filelistItem))
+		const FileListItem *filelistItem = (const FileListItem *)SelPanel->GetItem(Index);
+		if (!filelistItem)
 			TypeInfo=-1;
 
 		switch (TypeInfo)
 		{
 			case 0:  // Name
-				Ret=TVar(filelistItem.strName);
+				Ret=TVar(filelistItem->strName);
 				break;
 			case 1:  // ShortName obsolete, use Name
-				Ret=TVar(filelistItem.strName);
+				Ret=TVar(filelistItem->strName);
 				break;
 			case 2:  // FileAttr
-				Ret=TVar((int64_t)filelistItem.FileAttr);
+				Ret=TVar((int64_t)filelistItem->FileAttr);
 				break;
 			case 3:  // CreationTime
-				ConvertDate(filelistItem.CreationTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
+				ConvertDate(filelistItem->CreationTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
 				strDate += L" ";
 				strDate += strTime;
 				Ret=TVar(strDate.CPtr());
 				break;
 			case 4:  // AccessTime
-				ConvertDate(filelistItem.AccessTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
+				ConvertDate(filelistItem->AccessTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
 				strDate += L" ";
 				strDate += strTime;
 				Ret=TVar(strDate.CPtr());
 				break;
 			case 5:  // WriteTime
-				ConvertDate(filelistItem.WriteTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
+				ConvertDate(filelistItem->WriteTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
 				strDate += L" ";
 				strDate += strTime;
 				Ret=TVar(strDate.CPtr());
 				break;
 			case 6:  // FileSize
-				Ret=TVar((int64_t)filelistItem.FileSize);
+				Ret=TVar((int64_t)filelistItem->FileSize);
 				break;
 			case 7:  // PhysicalSize
-				Ret=TVar((int64_t)filelistItem.PhysicalSize);
+				Ret=TVar((int64_t)filelistItem->PhysicalSize);
 				break;
 			case 8:  // Selected
-				Ret=TVar((int64_t)((DWORD)filelistItem.Selected));
+				Ret=TVar((int64_t)((DWORD)filelistItem->Selected));
 				break;
 			case 9:  // NumberOfLinks
-				Ret=TVar((int64_t)filelistItem.NumberOfLinks);
+				Ret=TVar((int64_t)filelistItem->NumberOfLinks);
 				break;
 			case 10:  // SortGroup
-				Ret=filelistItem.SortGroup;
+				Ret=filelistItem->SortGroup;
 				break;
 			case 11:  // DizText
 			{
-				const wchar_t *LPtr=filelistItem.DizText;
+				const wchar_t *LPtr=filelistItem->DizText;
 				Ret=TVar(LPtr);
 				break;
 			}
 			case 12:  // Owner
-				Ret=TVar(filelistItem.strOwner);
+				Ret=TVar(filelistItem->strOwner);
 				break;
 			case 13:  // CRC32
-				Ret=TVar((int64_t)filelistItem.CRC32);
+				Ret=TVar((int64_t)filelistItem->CRC32);
 				break;
 			case 14:  // Position
-				Ret=filelistItem.Position;
+				Ret=(int)filelistItem->Position;
 				break;
 			case 15:  // CreationTime (FILETIME)
-				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem.CreationTime));
+				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem->CreationTime));
 				break;
 			case 16:  // AccessTime (FILETIME)
-				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem.AccessTime));
+				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem->AccessTime));
 				break;
 			case 17:  // WriteTime (FILETIME)
-				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem.WriteTime));
+				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem->WriteTime));
 				break;
 			case 18: // NumberOfStreams (deprecated)
-				Ret=TVar((int64_t)((filelistItem.FileAttr & FILE_ATTRIBUTE_DIRECTORY) ? 0 : 1));
+				Ret=TVar((int64_t)((filelistItem->FileAttr & FILE_ATTRIBUTE_DIRECTORY) ? 0 : 1));
 				break;
 			case 19: // StreamsSize (deprecated)
 				Ret=TVar((int64_t)0);
 				break;
 			case 20:  // ChangeTime
-				ConvertDate(filelistItem.ChangeTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
+				ConvertDate(filelistItem->ChangeTime,strDate,strTime,8,FALSE,FALSE,TRUE,TRUE);
 				strDate += L" ";
 				strDate += strTime;
 				Ret=TVar(strDate.CPtr());
 				break;
 			case 21:  // ChangeTime (FILETIME)
-				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem.ChangeTime));
+				Ret=TVar((int64_t)FileTimeToUI64(&filelistItem->ChangeTime));
 				break;
 		}
 	}
@@ -3862,8 +3845,8 @@ static bool callpluginFunc(const TMacroFunction*)
 		int ResultCallPlugin=0;
 
 		if (CtrlObject->Plugins.CallPlugin((DWORD)SysID.i(),OpenFrom,
-		                                   Param.isString() ? (void*)Param.s() :
-		                                   (void*)(size_t)Param.i(),&ResultCallPlugin))
+			Param.isString() ? (void*)Param.s() :
+			(void*)(size_t)Param.i(),&ResultCallPlugin))
 			Ret=ResultCallPlugin;
 
 		if( Opt.Macro.CallPluginRules )
@@ -4066,10 +4049,10 @@ int KeyMacro::GetKey()
 			}
 
 			if (Mode==MACRO_EDITOR &&
-			        IsRedrawEditor &&
-			        CtrlObject->Plugins.CurEditor &&
-			        CtrlObject->Plugins.CurEditor->IsVisible() &&
-			        LockScr)
+				IsRedrawEditor &&
+				CtrlObject->Plugins.CurEditor &&
+				CtrlObject->Plugins.CurEditor->IsVisible() &&
+				LockScr)
 			{
 				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
 				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
@@ -4141,10 +4124,10 @@ done:
 			will NOT send this event while screen is locked.
 		*/
 		if (Mode==MACRO_EDITOR &&
-		        IsRedrawEditor &&
-		        CtrlObject->Plugins.CurEditor &&
-		        CtrlObject->Plugins.CurEditor->IsVisible() &&
-		        LockScr)
+			IsRedrawEditor &&
+			CtrlObject->Plugins.CurEditor &&
+			CtrlObject->Plugins.CurEditor->IsVisible() &&
+			LockScr)
 		{
 			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
 			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
@@ -5120,7 +5103,7 @@ wchar_t *KeyMacro::MkTextSequence(DWORD *Buffer,int BufferSize,const wchar_t *Sr
 				(Key&KEY_MACRO_ENDBASE) >= KEY_MACRO_BASE && (Key&KEY_MACRO_ENDBASE) <= KEY_MACRO_ENDBASE ||
 				(Key&KEY_OP_ENDBASE) >= KEY_OP_BASE && (Key&KEY_OP_ENDBASE) <= KEY_OP_ENDBASE ||
 				*/
-			    !KeyToText(Key,strMacroKeyText)
+				!KeyToText(Key,strMacroKeyText)
 			)
 			{
 				return Src?wcsdup(Src):nullptr;
@@ -5314,7 +5297,7 @@ int KeyMacro::ReadMacroFunction(int ReadMode, FARString& strBuffer)
 #if 1
 		std::string strUpKeyName = "KeyMacros/Funcs";
 		ConfigReader cfg_reader(strUpKeyName);
-		const auto &Sections = cfg_reader.EnumSectionsAt();
+		const auto &Sections = cfg_reader.EnumSectionsAt(true);
 		for (const auto &strFuncSection : Sections)
 		{
 			cfg_reader.SelectSection(strFuncSection);
@@ -5348,10 +5331,7 @@ int KeyMacro::ReadMacroFunction(int ReadMode, FARString& strBuffer)
 			bool UsePluginFunc = !((Flags & 2) && (mr.Buffer || strGUID.IsEmpty()));
 
 			// зарегистрировать функцию
-			FARString strFuncName(strFuncSection);
-			size_t pos;
-			if (strFuncName.RPos(pos, L'/'))
-				strFuncName.LShift(pos + 1);
+			FARString strFuncName = strFuncSection.substr(strUpKeyName.size() + 1);
 
 			TMacroFunction MFunc={
 				strFuncName.CPtr(),
@@ -5451,9 +5431,10 @@ TMacroFunction *KeyMacro::RegisterMacroFunction(const TMacroFunction *tmfunc)
 
 bool KeyMacro::UnregMacroFunction(size_t Index)
 {
-	if (Index < 0) // size_t < 0 ???
-	{
-		if (AMacroFunction)
+	if (Index == (size_t)-1)
+	{	
+		fprintf(stderr, "If you see this in output - uncomment code below and check again\n");
+		/*if (AMacroFunction)
 		{
 			TMacroFunction *pTemp;
 			for (size_t I=0; I < CMacroFunction; ++I)
@@ -5474,22 +5455,19 @@ bool KeyMacro::UnregMacroFunction(size_t Index)
 			AllocatedFuncCount=0;
 			free(AMacroFunction);
 			AMacroFunction=nullptr;
-		}
+		} */
 	}
+	else if (AMacroFunction && Index < CMacroFunction)
+		AMacroFunction[Index].Code=MCODE_F_NOFUNC;
 	else
-	{
-		if (AMacroFunction && Index >=0 && Index < CMacroFunction)
-			AMacroFunction[Index].Code=MCODE_F_NOFUNC;
-		else
-			return false;
-	}
+		return false;
 
 	return true;
 }
 
 const TMacroFunction *KeyMacro::GetMacroFunction(size_t Index)
 {
-	if (AMacroFunction && Index >= 0 && Index < CMacroFunction)
+	if (AMacroFunction && Index < CMacroFunction)
 		return AMacroFunction+Index;
 
 	return nullptr;
@@ -5514,23 +5492,17 @@ int KeyMacro::ReadMacros(int ReadMode, FARString &strBuffer)
 	int ErrorCount=0;
 
 	ConfigReader cfg_reader(strUpKeyName);
-	const auto &Sections = cfg_reader.EnumSectionsAt();
+	const auto &Sections = cfg_reader.EnumSectionsAt(true);
 	for (const auto &MacroSection : Sections)
 	{
 		DWORD MFlags = 0;
-		FARString strKeyText = MacroSection;
-		size_t pos;
-
-		if (strKeyText.RPos(pos, L'/'))
-		{
-			strKeyText.LShift(pos + 1);
-		}
+		FARString strKeyText = MacroSection.substr(strUpKeyName.size() + 1);
 
 		// ПОМНИМ! что название макроса, начинающееся на символ ~ - это
 		// заблокированный макрос!!!
 		if (strKeyText.At(0) == L'~' && strKeyText.At(1))
 		{
-			pos = 1;
+			size_t pos = 1;
 
 			while (strKeyText.At(pos) && strKeyText.At(pos) == L'~')// && IsSpace(KeyText[1]))
 				++pos;
@@ -5665,10 +5637,10 @@ void KeyMacro::RunStartMacro()
 		DWORD CurFlags;
 
 		if (((CurFlags=MR[I].Flags)&MFLAGS_MODEMASK)==MACRO_SHELL &&
-		        MR[I].BufferSize>0 &&
-		        // исполняем не задисабленные макросы
-		        !(CurFlags&MFLAGS_DISABLEMACRO) &&
-		        (CurFlags&MFLAGS_RUNAFTERFARSTART) && CtrlObject)
+			MR[I].BufferSize>0 &&
+			// исполняем не задисабленные макросы
+			!(CurFlags&MFLAGS_DISABLEMACRO) &&
+			(CurFlags&MFLAGS_RUNAFTERFARSTART) && CtrlObject)
 		{
 			if (CheckAll(MACRO_SHELL,CurFlags))
 				PostNewMacro(MR+I);
@@ -5694,11 +5666,11 @@ void KeyMacro::RunStartMacro()
 		DWORD CurFlags;
 
 		if (((CurFlags=MR[I].Flags)&MFLAGS_MODEMASK)==Mode &&   // этот макрос из этой оперы?
-		        MR[I].BufferSize > 0 &&                             // что-то должно быть
-		        !(CurFlags&MFLAGS_DISABLEMACRO) &&                  // исполняем не задисабленные макросы
-		        (CurFlags&MFLAGS_RUNAFTERFARSTART) &&               // и тока те, что должны стартовать
-		        !(CurFlags&MFLAGS_RUNAFTERFARSTARTED)      // и тем более, которые еще не стартовали
-		   )
+			MR[I].BufferSize > 0 &&                             // что-то должно быть
+			!(CurFlags&MFLAGS_DISABLEMACRO) &&                  // исполняем не задисабленные макросы
+			(CurFlags&MFLAGS_RUNAFTERFARSTART) &&               // и тока те, что должны стартовать
+			!(CurFlags&MFLAGS_RUNAFTERFARSTARTED)      // и тем более, которые еще не стартовали
+		)
 		{
 			if (CheckAll(Mode,CurFlags)) // прежде чем запостить - проверим флаги
 			{
@@ -5812,7 +5784,7 @@ LONG_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,LONG
 		}
 	}
 	else if (Msg == DN_KEY && (((Param2&KEY_END_SKEY) < KEY_END_FKEY) ||
-	                           (((Param2&KEY_END_SKEY) > INTERNAL_KEY_BASE) && (Param2&KEY_END_SKEY) < INTERNAL_KEY_BASE_2)))
+		(((Param2&KEY_END_SKEY) > INTERNAL_KEY_BASE) && (Param2&KEY_END_SKEY) < INTERNAL_KEY_BASE_2)))
 	{
 		//if((Param2&0x00FFFFFF) >= 'A' && (Param2&0x00FFFFFF) <= 'Z' && ShiftPressed)
 		//Param2|=KEY_SHIFT;
@@ -5821,9 +5793,9 @@ LONG_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,LONG
 		// <Обработка особых клавиш: F1 & Enter>
 		// Esc & (Enter и предыдущий Enter) - не обрабатываем
 		if (Param2 == KEY_ESC ||
-		        ((Param2 == KEY_ENTER||Param2 == KEY_NUMENTER) && (LastKey == KEY_ENTER||LastKey == KEY_NUMENTER)) ||
-		        Param2 == KEY_CTRLDOWN ||
-		        Param2 == KEY_F1)
+			((Param2 == KEY_ENTER||Param2 == KEY_NUMENTER) && (LastKey == KEY_ENTER||LastKey == KEY_NUMENTER)) ||
+			Param2 == KEY_CTRLDOWN ||
+			Param2 == KEY_F1)
 		{
 			return FALSE;
 		}
@@ -5882,31 +5854,31 @@ M1:
 				FARString strBuf;
 				if ((Mac->Flags&0xFF)==MACRO_COMMON)
 					strBuf.Format((!MacroDlg->RecBufferSize
-					                  ? (DisFlags ? Msg::MacroCommonDeleteAssign : Msg::MacroCommonDeleteKey)
-					                  : Msg::MacroCommonReDefinedKey), strKeyText.CPtr());
+						? (DisFlags ? Msg::MacroCommonDeleteAssign : Msg::MacroCommonDeleteKey)
+						: Msg::MacroCommonReDefinedKey), strKeyText.CPtr());
 				else
 					strBuf.Format((!MacroDlg->RecBufferSize
-					                  ? (DisFlags ? Msg::MacroDeleteAssign : Msg::MacroDeleteKey)
-					                  : Msg::MacroReDefinedKey), strKeyText.CPtr());
+						? (DisFlags ? Msg::MacroDeleteAssign : Msg::MacroDeleteKey)
+						: Msg::MacroReDefinedKey), strKeyText.CPtr());
 
 				// проверим "а не совпадает ли всё?"
 				int Result=0;
 				if (!(!DisFlags &&
-				        Mac->Buffer && MacroDlg->RecBuffer &&
-				        Mac->BufferSize == MacroDlg->RecBufferSize &&
-				        (
-				            (Mac->BufferSize >  1 && !memcmp(Mac->Buffer,MacroDlg->RecBuffer,MacroDlg->RecBufferSize*sizeof(DWORD))) ||
-				            (Mac->BufferSize == 1 && (DWORD)(DWORD_PTR)Mac->Buffer == (DWORD)(DWORD_PTR)MacroDlg->RecBuffer)
-				        )
-				   ))
-					Result=Message(MSG_WARNING,2,Msg::Warning,
-					          strBuf,
-					          Msg::MacroSequence,
-					          strBufKey,
-					          (!MacroDlg->RecBufferSize?Msg::MacroDeleteKey2:
-					              (DisFlags?Msg::MacroDisDisabledKey:Msg::MacroReDefinedKey2)),
-					          (DisFlags && MacroDlg->RecBufferSize?Msg::MacroDisOverwrite:Msg::Yes),
-					          (DisFlags && MacroDlg->RecBufferSize?Msg::MacroDisAnotherKey:Msg::No));
+					Mac->Buffer && MacroDlg->RecBuffer &&
+					Mac->BufferSize == MacroDlg->RecBufferSize &&
+					(
+						(Mac->BufferSize >  1 && !memcmp(Mac->Buffer,MacroDlg->RecBuffer,MacroDlg->RecBufferSize*sizeof(DWORD))) ||
+						(Mac->BufferSize == 1 && (DWORD)(DWORD_PTR)Mac->Buffer == (DWORD)(DWORD_PTR)MacroDlg->RecBuffer)
+					)
+				))
+				Result=Message(MSG_WARNING,2,Msg::Warning,
+					strBuf,
+					Msg::MacroSequence,
+					strBufKey,
+					(!MacroDlg->RecBufferSize?Msg::MacroDeleteKey2:
+						(DisFlags?Msg::MacroDisDisabledKey:Msg::MacroReDefinedKey2)),
+					(DisFlags && MacroDlg->RecBufferSize?Msg::MacroDisOverwrite:Msg::Yes),
+					(DisFlags && MacroDlg->RecBufferSize?Msg::MacroDisAnotherKey:Msg::No));
 
 				if (!Result)
 				{
@@ -6126,15 +6098,9 @@ int KeyMacro::GetMacroSettings(uint32_t Key,DWORD &Flags)
 	Dialog Dlg(MacroSettingsDlg,ARRAYSIZE(MacroSettingsDlg),ParamMacroDlgProc,(LONG_PTR)&Param);
 	Dlg.SetPosition(-1,-1,73,19);
 	Dlg.SetHelp(L"KeyMacroSetting");
-	Frame* BottomFrame = FrameManager->GetBottomFrame();
-	if(BottomFrame)
 	{
-		BottomFrame->Lock(); // отменим прорисовку фрейма
-	}
-	Dlg.Process();
-	if(BottomFrame)
-	{
-		BottomFrame->Unlock(); // теперь можно :-)
+		LockBottomFrame LBF;// временно отменим прорисовку фрейма
+		Dlg.Process();
 	}
 
 	if (Dlg.GetExitCode()!=MS_BUTTON_OK)
@@ -6146,27 +6112,27 @@ int KeyMacro::GetMacroSettings(uint32_t Key,DWORD &Flags)
 	if (MacroSettingsDlg[MS_CHECKBOX_A_PANEL].Selected)
 	{
 		Flags|=MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected==2?0:
-		       (MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected==0?MFLAGS_NOPLUGINPANELS:MFLAGS_NOFILEPANELS);
+			(MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected==0?MFLAGS_NOPLUGINPANELS:MFLAGS_NOFILEPANELS);
 		Flags|=MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected==2?0:
-		       (MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected==0?MFLAGS_NOFOLDERS:MFLAGS_NOFILES);
+			(MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected==0?MFLAGS_NOFOLDERS:MFLAGS_NOFILES);
 		Flags|=MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected==2?0:
-		       (MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected==0?MFLAGS_NOSELECTION:MFLAGS_SELECTION);
+			(MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected==0?MFLAGS_NOSELECTION:MFLAGS_SELECTION);
 	}
 
 	if (MacroSettingsDlg[MS_CHECKBOX_P_PANEL].Selected)
 	{
 		Flags|=MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected==2?0:
-		       (MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected==0?MFLAGS_PNOPLUGINPANELS:MFLAGS_PNOFILEPANELS);
+			(MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected==0?MFLAGS_PNOPLUGINPANELS:MFLAGS_PNOFILEPANELS);
 		Flags|=MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected==2?0:
-		       (MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected==0?MFLAGS_PNOFOLDERS:MFLAGS_PNOFILES);
+			(MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected==0?MFLAGS_PNOFOLDERS:MFLAGS_PNOFILES);
 		Flags|=MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected==2?0:
-		       (MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected==0?MFLAGS_PNOSELECTION:MFLAGS_PSELECTION);
+			(MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected==0?MFLAGS_PNOSELECTION:MFLAGS_PSELECTION);
 	}
 
 	Flags|=MacroSettingsDlg[MS_CHECKBOX_CMDLINE].Selected==2?0:
-	       (MacroSettingsDlg[MS_CHECKBOX_CMDLINE].Selected==0?MFLAGS_NOTEMPTYCOMMANDLINE:MFLAGS_EMPTYCOMMANDLINE);
+		(MacroSettingsDlg[MS_CHECKBOX_CMDLINE].Selected==0?MFLAGS_NOTEMPTYCOMMANDLINE:MFLAGS_EMPTYCOMMANDLINE);
 	Flags|=MacroSettingsDlg[MS_CHECKBOX_SELBLOCK].Selected==2?0:
-	       (MacroSettingsDlg[MS_CHECKBOX_SELBLOCK].Selected==0?MFLAGS_EDITNOSELECTION:MFLAGS_EDITSELECTION);
+		(MacroSettingsDlg[MS_CHECKBOX_SELBLOCK].Selected==0?MFLAGS_EDITNOSELECTION:MFLAGS_EDITSELECTION);
 	return TRUE;
 }
 
@@ -6377,7 +6343,7 @@ int KeyMacro::GetIndex(uint32_t Key, int ChechMode, bool UseCommon)
 {
 	if (MacroLIB)
 	{
-		for (int I=0; I < 2; ++I)
+		for (int I=0;; ++I)
 		{
 			int Pos,Len;
 			MacroRecord *MPtr=nullptr;
@@ -6406,8 +6372,8 @@ int KeyMacro::GetIndex(uint32_t Key, int ChechMode, bool UseCommon)
 				for (Pos=0; Pos < Len; ++Pos, ++MPtr)
 				{
 					if (!((MPtr->Key ^ Key) & ~0xFFFFu) &&
-					        (Upper(static_cast<WCHAR>(MPtr->Key))==Upper(static_cast<WCHAR>(Key))) &&
-					        (MPtr->BufferSize > 0))
+						(Upper(static_cast<WCHAR>(MPtr->Key))==Upper(static_cast<WCHAR>(Key))) &&
+						(MPtr->BufferSize > 0))
 					{
 						//        && (ChechMode == -1 || (MPtr->Flags&MFLAGS_MODEMASK) == ChechMode))
 						//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
@@ -6418,7 +6384,7 @@ int KeyMacro::GetIndex(uint32_t Key, int ChechMode, bool UseCommon)
 			}
 
 			// здесь смотрим на MACRO_COMMON
-			if (ChechMode != -1 && !I && UseCommon)
+			if (I == 0 && ChechMode != -1 && UseCommon)
 				ChechMode=MACRO_COMMON;
 			else
 				break;
@@ -6469,7 +6435,7 @@ int KeyMacro::GetMacroKeyInfo(bool FromReg,int Mode,int Pos, FARString &strKeyNa
 
 			if (Mode >= MACRO_OTHER || Mode == MACRO_FUNCS)
 			{
-				const auto &Sections = cfg_reader.EnumSectionsAt();
+				const auto &Sections = cfg_reader.EnumSectionsAt(true);
 				if (Pos < 0 || Pos >= (int)Sections.size())
 					return -1;
 
@@ -6486,12 +6452,7 @@ int KeyMacro::GetMacroKeyInfo(bool FromReg,int Mode,int Pos, FARString &strKeyNa
 					strDescription = strDescr;
 				}
 
-				strKeyName = Sections[Pos];
-				size_t pos;
-
-				if (strKeyName.RPos(pos, L'/'))
-					strKeyName.LShift(pos + 1);
-
+				strKeyName = Sections[Pos].substr(strUpKeyName.size() + 1);
 				return Pos + 1;
 
 			}
@@ -6515,7 +6476,7 @@ int KeyMacro::GetMacroKeyInfo(bool FromReg,int Mode,int Pos, FARString &strKeyNa
 				}
 				else
 				{ // guess who
-				    wchar_t *llEnd = nullptr;
+					wchar_t *llEnd = nullptr;
 					long long llVal = wcstoll(Val.CPtr(), &llEnd, 10);
 					if (!Val.IsEmpty() && llEnd && !*llEnd)
 					{

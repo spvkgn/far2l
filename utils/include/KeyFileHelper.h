@@ -4,8 +4,20 @@
 #include <vector>
 #include <map>
 
-struct KeyFileValues : std::map<std::string, std::string>
+struct KeyFileCmp
 {
+	inline KeyFileCmp(bool case_insensitive = false) : _case_insensitive(case_insensitive) {}
+
+	bool operator()(const std::string& a, const std::string& b) const;
+
+private:
+	bool _case_insensitive = false;
+};
+
+struct KeyFileValues : std::map<std::string, std::string, KeyFileCmp>
+{
+	KeyFileValues(bool case_insensitive = false);
+
 	bool HasKey(const std::string &name) const;
 	std::string GetString(const std::string &name, const char *def = "") const;
 	std::wstring GetString(const std::string &name, const wchar_t *def) const;
@@ -24,7 +36,7 @@ class KeyFileReadSection : public KeyFileValues
 	bool _section_loaded;
 
 public:
-	KeyFileReadSection(const std::string &filename, const std::string &section);
+	KeyFileReadSection(const std::string &filename, const std::string &section, bool case_insensitive = false);
 
 	bool SectionLoaded() const { return _section_loaded; }
 };
@@ -32,12 +44,36 @@ public:
 class KeyFileReadHelper
 {
 protected:
-	struct Sections : std::map<std::string, KeyFileValues> {} _kf;
+	class Sections {
+		typedef std::map<std::string, KeyFileValues, KeyFileCmp> Map;
+		typedef std::vector<Map::iterator> IteratorsVec;
+
+	public:
+		Map _map;
+		IteratorsVec _ordered;
+
+		Map::const_iterator FindInMap(const std::string &name) const;
+		Map::iterator FindInMap(const std::string &name);
+		IteratorsVec::iterator FindInVec(Map::iterator it);
+
+	public:
+		Sections(bool case_insensitive);
+		size_t Size() const { return _map.size(); }
+		const KeyFileValues *Find(const std::string &section) const;
+		KeyFileValues *Find(const std::string &section);
+		KeyFileValues *Ensure(const std::string &section);
+		bool Remove(const std::string &section);
+		size_t RemoveAt(const std::string &section);
+		bool Rename(const std::string &section, const std::string &new_name);
+		const IteratorsVec &Enumeration() const;
+	} _kf;
+
 	struct stat _filestat {};
 	bool _loaded = false;
+	bool _case_insensitive;
 
 public:
-	KeyFileReadHelper(const std::string &filename, const char *load_only_section = nullptr);
+	KeyFileReadHelper(const std::string &filename, const char *load_only_section = nullptr, bool case_insensitive = false);
 
 	bool IsLoaded() const { return _loaded; }
 
@@ -69,7 +105,7 @@ class KeyFileHelper : public KeyFileReadHelper
 	bool _dirty;
 
 public:
-	KeyFileHelper(const std::string &filename, bool load = true);
+	KeyFileHelper(const std::string &filename, bool load = true, bool case_insensitive = false);
 	~KeyFileHelper();
 
 	bool Save(bool only_if_dirty = true);

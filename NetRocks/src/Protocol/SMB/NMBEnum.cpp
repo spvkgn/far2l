@@ -15,6 +15,7 @@
 #include <set>
 #include <algorithm>
 
+#include <utils.h>
 
 #define NBNS_OP_QUERY                   0
 #define NBNS_OP_REGISTER                5
@@ -146,11 +147,13 @@ NMBEnum::NMBEnum(const std::string &group)
 		}
 		struct timeval tv = {};
 		tv.tv_usec = 100000;
-		if (setsockopt(_sc, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,  sizeof(tv)) < 0) {
+		if (setsockopt(_sc, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(tv)) < 0) {
 			perror("NetBiosNSEnum - SO_RCVTIMEO");
 		}
 
-		StartThread();
+		if (!StartThread()) {
+			perror("NetBiosNSEnum - thread");
+		}
 	} else {
 		perror("NetBiosNSEnum - socket");
 	}
@@ -190,7 +193,7 @@ void *NMBEnum::ThreadProc()
 				sin.sin_port = _ns_port;//i.second.port;
 				sin.sin_addr.s_addr = i.first;
 
-				memset(&s.packet, 0, sizeof(s.packet));
+				ZeroFill(s.packet);
 				fprintf(stderr, "NMBEnum::Query '%s' to 0x%x\n", i.second.group.c_str(), i.first);
 				EncodeNetbiosName(s.packet, i.second.group.c_str(), 0x20, 0);
 
@@ -206,7 +209,7 @@ void *NMBEnum::ThreadProc()
 				}
 
 				if (sendto(_sc, &s, sizeof(s.packet), 0, (struct sockaddr *)&sin, sizeof(sin)) <= 0) {
-       					perror("sendto");
+					perror("sendto");
 				}
 			}
 		}

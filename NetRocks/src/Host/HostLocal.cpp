@@ -5,11 +5,12 @@
 #include <sys/statvfs.h>
 #include <utime.h>
 #include <dirent.h>
+#include <limits.h>
 
 #ifdef __APPLE__
-  #include <sys/mount.h>
-#elif !defined(__FreeBSD__)
-  #include <sys/statfs.h>
+	#include <sys/mount.h>
+#elif !defined(__FreeBSD__) && !defined(__HAIKU__)
+	#include <sys/statfs.h>
 #endif
 
 #include <string>
@@ -20,10 +21,11 @@
 #include <pwd.h>
 #include <grp.h>
 #include <CheckedCast.hpp>
-
+#include <utils.h>
 #include "HostLocal.h"
 
 #ifdef NETROCKS_PROTOCOL
+# include <utimens_compat.h>
 # define API(x) x
 
 #else
@@ -32,6 +34,7 @@
 # include <sudo.h>
 # define API(x) sdc_##x
 #endif
+
 
 HostLocal::HostLocal()
 {
@@ -97,15 +100,9 @@ void HostLocal::GetInformation(FileInformation &file_info, const std::string &pa
 	if (r == -1) {
 		throw ProtocolError("stat failed", errno);
 	}
-#ifdef __APPLE__
-	file_info.access_time = s.st_atimespec;
-	file_info.modification_time = s.st_mtimespec;
-	file_info.status_change_time = s.st_ctimespec;
-#else
 	file_info.access_time = s.st_atim;
 	file_info.modification_time = s.st_mtim;
 	file_info.status_change_time = s.st_ctim;
-#endif
 	file_info.size = s.st_size;
 	file_info.mode = s.st_mode;
 }
@@ -144,14 +141,10 @@ void HostLocal::Rename(const std::string &path_old, const std::string &path_new)
 
 void HostLocal::SetTimes(const std::string &path, const timespec &access_time, const timespec &modification_time)
 {
-	struct timeval times[2] = {};
-	times[0].tv_sec = access_time.tv_sec;
-	times[0].tv_usec = suseconds_t(access_time.tv_nsec / 1000);
-	times[1].tv_sec = modification_time.tv_sec;
-	times[1].tv_usec = suseconds_t(modification_time.tv_nsec / 1000);
-	int r = API(utimes)(path.c_str(), times);
+	struct timespec times[2] = {access_time, modification_time};
+	int r = API(utimens)(path.c_str(), times);
 	if (r == -1) {
-		throw ProtocolError("utimes failed", errno);
+		throw ProtocolError("utimens failed", errno);
 	}
 }
 
@@ -159,7 +152,7 @@ void HostLocal::SetMode(const std::string &path, mode_t mode)
 {
 	int r = API(chmod)(path.c_str(), mode);
 	if (r == -1) {
-		throw ProtocolError("utimes failed", errno);
+		throw ProtocolError("chmod failed", errno);
 	}
 }
 
@@ -264,17 +257,9 @@ public:
 			owner = UserByID(s.st_uid);
 			group = GroupByID(s.st_gid);
 
-#ifdef __APPLE__
-			file_info.access_time = s.st_atimespec;
-			file_info.modification_time = s.st_mtimespec;
-			file_info.status_change_time = s.st_ctimespec;
-#else
 			file_info.access_time = s.st_atim;
 			file_info.modification_time = s.st_mtim;
 			file_info.status_change_time = s.st_ctim;
-#endif
-
-
 			file_info.size = s.st_size;
 			file_info.mode = s.st_mode;
 			return true;

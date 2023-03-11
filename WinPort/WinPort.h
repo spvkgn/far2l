@@ -22,8 +22,6 @@ extern "C" {
 	const wchar_t *WinPortBackend();
 
 	///console API
-	WINPORT_DECL(GetConsoleFontSize,COORD,( HANDLE hConsoleOutput, DWORD  nFont));
-	WINPORT_DECL(GetCurrentConsoleFont,BOOL,( HANDLE hConsoleOutput, BOOL bMaximumWindow,PCONSOLE_FONT_INFO lpConsoleCurrentFont));
 	WINPORT_DECL(GetLargestConsoleWindowSize,COORD,(HANDLE hConsoleOutput));
 	WINPORT_DECL(SetConsoleWindowInfo,BOOL,(HANDLE hConsoleOutput, BOOL bAbsolute, const SMALL_RECT *lpConsoleWindow));
 	WINPORT_DECL(SetConsoleTitle,BOOL,(const WCHAR *title));
@@ -36,12 +34,15 @@ extern "C" {
 	WINPORT_DECL(GetConsoleMode,BOOL,(HANDLE hConsoleHandle,LPDWORD lpMode));
 	WINPORT_DECL(SetConsoleMode,BOOL,(HANDLE hConsoleHandle, DWORD dwMode));
 	WINPORT_DECL(ScrollConsoleScreenBuffer,BOOL,(HANDLE hConsoleOutput, const SMALL_RECT *lpScrollRectangle, const SMALL_RECT *lpClipRectangle, COORD dwDestinationOrigin, const CHAR_INFO *lpFill));
-	WINPORT_DECL(SetConsoleTextAttribute,BOOL,(HANDLE hConsoleOutput, WORD wAttributes));
+	WINPORT_DECL(SetConsoleTextAttribute,BOOL,(HANDLE hConsoleOutput, DWORD64 qAttributes));
+	WINPORT_DECL(CompositeCharRegister,COMP_CHAR,(const WCHAR *lpSequence));
+	WINPORT_DECL(CompositeCharLookup,const WCHAR *,(COMP_CHAR CompositeChar));
 	WINPORT_DECL(WriteConsole,BOOL,(HANDLE hConsoleOutput, const WCHAR *lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten, LPVOID lpReserved));
 	WINPORT_DECL(WriteConsoleOutput,BOOL,(HANDLE hConsoleOutput,const CHAR_INFO *lpBuffer,COORD dwBufferSize,COORD dwBufferCoord,PSMALL_RECT lpScreenRegion));
 	WINPORT_DECL(WriteConsoleOutputCharacter,BOOL,(HANDLE hConsoleOutput, const WCHAR *lpCharacter, DWORD nLength, COORD dwWriteCoord, LPDWORD lpNumberOfCharsWritten));
+	WINPORT_DECL(WaitConsoleInput, BOOL,(DWORD dwTimeout));
 	WINPORT_DECL(ReadConsoleOutput, BOOL, (HANDLE hConsoleOutput, CHAR_INFO *lpBuffer, COORD dwBufferSize, COORD dwBufferCoord, PSMALL_RECT lpScreenRegion));
-	WINPORT_DECL(FillConsoleOutputAttribute, BOOL, (HANDLE hConsoleOutput, WORD wAttribute, DWORD nLength, COORD dwWriteCoord, LPDWORD lpNumberOfAttrsWritten));
+	WINPORT_DECL(FillConsoleOutputAttribute, BOOL, (HANDLE hConsoleOutput, DWORD64 qAttributes, DWORD nLength, COORD dwWriteCoord, LPDWORD lpNumberOfAttrsWritten));
 	WINPORT_DECL(FillConsoleOutputCharacter, BOOL, (HANDLE hConsoleOutput, WCHAR cCharacter, DWORD nLength, COORD dwWriteCoord, LPDWORD lpNumberOfCharsWritten));
 	WINPORT_DECL(SetConsoleActiveScreenBuffer, BOOL,(HANDLE hConsoleOutput));
 
@@ -49,15 +50,13 @@ extern "C" {
 	WINPORT_DECL(GetNumberOfConsoleInputEvents,BOOL,(HANDLE hConsoleInput, LPDWORD lpcNumberOfEvents));
 	WINPORT_DECL(PeekConsoleInput,BOOL,(HANDLE hConsoleInput, PINPUT_RECORD lpBuffer, DWORD nLength, LPDWORD lpNumberOfEventsRead));
 	WINPORT_DECL(ReadConsoleInput,BOOL,(HANDLE hConsoleInput, PINPUT_RECORD lpBuffer, DWORD nLength, LPDWORD lpNumberOfEventsRead));
-	WINPORT_DECL(ReadConsole,BOOL,(HANDLE hConsoleInput, WCHAR *lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID pInputControl));
 	WINPORT_DECL(WriteConsoleInput,BOOL,(HANDLE hConsoleInput, const INPUT_RECORD *lpBuffer, DWORD nLength, LPDWORD lpNumberOfEventsWritten));
 	
 	WINPORT_DECL(SetConsoleDisplayMode,BOOL,(DWORD ModeFlags));
 	WINPORT_DECL(GetConsoleDisplayMode,BOOL,(LPDWORD lpModeFlags));
 	WINPORT_DECL(SetConsoleWindowMaximized,VOID,(BOOL Maximized));
+	WINPORT_DECL(GetConsoleColorPalette,BYTE,()); // Returns current color resolution: 4, 8, 24
 
-	//WINPORT_DECL(AddConsoleAlias, BOOL,( LPCWSTR Source, LPCWSTR Target, LPCWSTR ExeName));
-	WINPORT_DECL(GetConsoleAlias, DWORD,(LPWSTR lpSource, LPWSTR lpTargetBuffer, DWORD TargetBufferLength, LPWSTR lpExeName));
 	WINPORT_DECL(GenerateConsoleCtrlEvent, BOOL, (DWORD dwCtrlEvent, DWORD dwProcessGroupId ));
 	WINPORT_DECL(SetConsoleCtrlHandler, BOOL, (PHANDLER_ROUTINE HandlerRoutine, BOOL Add ));
 	
@@ -66,22 +65,33 @@ extern "C" {
 
 	WINPORT_DECL(SetConsoleScrollCallback, VOID, (HANDLE hConsoleOutput, PCONSOLE_SCROLL_CALLBACK pCallback, PVOID pContext));
 	WINPORT_DECL(BeginConsoleAdhocQuickEdit, BOOL, ());	
-	WINPORT_DECL(SetConsoleTweaks, DWORD, (DWORD tweaks));
+	WINPORT_DECL(SetConsoleTweaks, DWORD64, (DWORD64 tweaks));
 #define EXCLUSIVE_CTRL_LEFT			0x00000001
 #define EXCLUSIVE_CTRL_RIGHT		0x00000002
 #define EXCLUSIVE_ALT_LEFT			0x00000004
 #define EXCLUSIVE_ALT_RIGHT			0x00000008
 #define EXCLUSIVE_WIN_LEFT			0x00000010
 #define EXCLUSIVE_WIN_RIGHT			0x00000020
-#define CONSOLE_PAINT_SHARP			0x00010000
-#define TWEAK_STATUS_SUPPORT_EXCLUSIVE_KEYS	0x1
-#define TWEAK_STATUS_SUPPORT_PAINT_SHARP	0x2
 
+#define CONSOLE_PAINT_SHARP			0x00010000
+#define CONSOLE_OSC52CLIP_SET		0x00020000
+
+#define CONSOLE_TTY_PALETTE_OVERRIDE	0x00040000
+
+#define TWEAK_STATUS_SUPPORT_EXCLUSIVE_KEYS	0x01
+#define TWEAK_STATUS_SUPPORT_PAINT_SHARP	0x02
+#define TWEAK_STATUS_SUPPORT_OSC52CLIP_SET	0x04
+#define TWEAK_STATUS_SUPPORT_CHANGE_FONT	0x08
+#define TWEAK_STATUS_SUPPORT_TTY_PALETTE	0x10
+
+	WINPORT_DECL(SaveConsoleWindowState,VOID,());
 	WINPORT_DECL(ConsoleChangeFont, VOID, ());
 	WINPORT_DECL(IsConsoleActive, BOOL, ());
 	WINPORT_DECL(ConsoleDisplayNotification, VOID, (const WCHAR *title, const WCHAR *text));
 	WINPORT_DECL(ConsoleBackgroundMode, BOOL, (BOOL TryEnterBackgroundMode));
 	WINPORT_DECL(SetConsoleFKeyTitles, BOOL, (const CHAR **titles));
+	WINPORT_DECL(OverrideConsoleColor, VOID, (DWORD Index, DWORD *ColorFG, DWORD *ColorBK)); // 0xffffffff - to apply default color
+	WINPORT_DECL(SetConsoleRepaintsDefer, VOID, (BOOL Deferring));
 
 #ifdef WINPORT_REGISTRY
 	///Registry API
@@ -116,9 +126,6 @@ extern "C" {
 	WINPORT_DECL(SetLastError, VOID, (DWORD code));
 	WINPORT_DECL(GetCurrentProcessId, DWORD, ());
 	WINPORT_DECL(GetDoubleClickTime, DWORD, ());
-	WINPORT_DECL(GetComputerName, BOOL, (LPWSTR lpBuffer, LPDWORD nSize));
-	WINPORT_DECL(GetUserName, BOOL, (LPWSTR lpBuffer, LPDWORD nSize));
-	
 
 //files
 
@@ -209,7 +216,6 @@ extern "C" {
 	WINPORT_DECL(IsCharAlphaNumeric, BOOL, (WCHAR ch));
 	WINPORT_DECL(CompareString, int, ( LCID Locale, DWORD dwCmpFlags, LPCWSTR lpString1, int cchCount1, LPCWSTR lpString2, int cchCount2));
 	WINPORT_DECL(CompareStringA, int, ( LCID Locale, DWORD dwCmpFlags, LPCSTR lpString1, int cchCount1, LPCSTR lpString2, int cchCount2));
-	WINPORT_DECL(IsTextUnicode, BOOL, (CONST VOID* lpv, int iSize, LPINT lpiResult));
 	WINPORT_DECL(WideCharToMultiByte, int, ( UINT CodePage, DWORD dwFlags, LPCWSTR lpWideCharStr, 
 		int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte, LPCSTR lpDefaultChar, LPBOOL lpUsedDefaultChar));
 	WINPORT_DECL(MultiByteToWideChar, int, ( UINT CodePage, DWORD dwFlags, 
@@ -309,7 +315,17 @@ template <class CHAR_T>
 	return out;
 }
 
-
+struct ConsoleRepaintsDeferScope
+{
+	ConsoleRepaintsDeferScope()
+	{
+		WINPORT(SetConsoleRepaintsDefer)(TRUE);
+	}
+	~ConsoleRepaintsDeferScope()
+	{
+		WINPORT(SetConsoleRepaintsDefer)(FALSE);
+	}
+};
 
 #endif
 #endif /* FAR_PYTHON_GEN */

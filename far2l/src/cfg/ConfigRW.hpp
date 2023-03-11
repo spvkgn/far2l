@@ -4,6 +4,10 @@
 
 #include "FARString.hpp"
 
+#define CONFIG_INI "settings/config.ini"
+
+void ConfigLegacyUpgrade();
+
 class ConfigSection
 {
 protected:
@@ -24,7 +28,7 @@ class ConfigReader : public ConfigSection
 	std::unique_ptr<KeyFileValues> _empty_values;
 	KeyFileReadHelper *_selected_kfh = nullptr;
 	const KeyFileValues *_selected_section_values = nullptr;
-	bool _has_section;
+	bool _has_section = false;
 
 	virtual void OnSectionSelected();
 
@@ -36,7 +40,7 @@ public:
 	inline const struct stat &LoadedSectionStat() const { return _selected_kfh->LoadedFileStat(); }
 
 	std::vector<std::string> EnumKeys();
-	std::vector<std::string> EnumSectionsAt();
+	std::vector<std::string> EnumSectionsAt(bool recursed = false);
 	inline bool HasSection() const { return _has_section; };
 	bool HasKey(const std::string &name) const;
 	FARString GetString(const std::string &name, const wchar_t *def = L"") const;
@@ -83,8 +87,6 @@ public:
 		{ SetBytes(name, (const unsigned char *)&pod, sizeof(pod)); }
 	void RemoveKey(const std::string &name);
 };
-
-void CheckForConfigUpgrade();
 
 class ConfigReaderScope
 {

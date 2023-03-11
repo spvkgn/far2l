@@ -80,6 +80,8 @@ FARString& WINAPI QuoteSpaceOnly(FARString &strStr);
 FARString &RemoveChar(FARString &strStr,wchar_t Target,BOOL Dup=TRUE);
 wchar_t *InsertString(wchar_t *Str,int Pos,const wchar_t *InsStr,int InsSize=0);
 int ReplaceStrings(FARString &strStr,const wchar_t *FindStr,const wchar_t *ReplStr,int Count=-1,BOOL IgnoreCase=FALSE);
+int ReplaceChars(FARString &strStr, wchar_t FindCh, wchar_t ReplCh);
+int ReplaceTabsBySpaces(FARString &strStr, size_t TabSize = 1);
 
 const wchar_t *GetCommaWord(const wchar_t *Src,FARString &strWord,wchar_t Separator=L',');
 
@@ -92,11 +94,11 @@ uint64_t ConvertFileSizeString(const wchar_t *FileSizeStr);
 FARString &FormatNumber(const wchar_t *Src, FARString &strDest, int NumDigits=0);
 FARString &InsertCommas(uint64_t li, FARString &strDest);
 
-inline bool IsWordDiv(const wchar_t *WordDiv, wchar_t Chr)
+inline bool IsWordDiv(const wchar_t *WordDiv, wchar_t Chr) noexcept
 	{ return wcschr(WordDiv, Chr) != nullptr; }
 
-inline bool IsWordDivSTNR(const wchar_t *WordDiv, wchar_t Chr)
-	{ return wcschr(WordDiv, Chr) != nullptr || wcschr(L" \t\n\r", Chr) != nullptr; }
+inline bool IsWordDivSTNR(const wchar_t *WordDiv, wchar_t Chr) noexcept
+	{ return wcschr(WordDiv, Chr) != nullptr || IsSpace(Chr) || IsEol(Chr); }
 
 //   WordDiv  - набор разделителей слова в кодировке OEM
 // возвращает указатель на начало слова
@@ -115,7 +117,7 @@ BOOL IsCaseMixed(const FARString &strStr);
 BOOL IsCaseLower(const FARString &strStr);
 
 FARString& CenterStr(const wchar_t *Src, FARString &strDest,int Length);
-FARString FixedSizeStr(FARString str, size_t Length, bool RAlign);
+FARString FixedSizeStr(FARString str, size_t Cells, bool RAlign, bool TruncateCenter);
 
 void Transform(FARString &strBuffer,const wchar_t *ConvStr,wchar_t TransformType);
 

@@ -43,6 +43,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "InterThreadCall.hpp"
 
 Modal::Modal():
+	ReadKey(-1),
 	WriteKey(-1),
 	ExitCode(-1),
 	EndLoop(0)
@@ -150,5 +151,5 @@ void Modal::SetHelp(const wchar_t *Topic)
 void Modal::ShowHelp()
 {
 	if (!strHelpTopic.IsEmpty())
-		Help Hlp(strHelpTopic);
+		Help::Present(strHelpTopic);
 }

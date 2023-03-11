@@ -1,3 +1,4 @@
+
 # Собственно что хотелось добавить
  * [решено] вдруг выяснилось, что far2l не поддерживает запароленные 7z архивы (в целом понятно почему - в исходниках только Си шные файлы для распаковки)
  * SQLite - очень часто нужно при разработке залезть в SQLite db в фаре и что-нибудь быстро просмотреть - плагин SQLite DB Browser не работает в far2l
@@ -12,11 +13,11 @@
  * если перед командой ввести пробел, то такая команда не попадет в историю far2l
 # far2l
 =======
-[![Cirrus Build Status](https://api.cirrus-ci.com/github/elfmz/far2l.svg)](https://cirrus-ci.com/github/elfmz/far2l) [![Coverage Status](https://codecov.io/gh/elfmz/far2l/coverage.svg?branch=master)](https://codecov.io/gh/elfmz/far2l?branch=master) [![Coverity Scan](https://scan.coverity.com/projects/241/badge.svg)](https://scan.coverity.com/projects/far2l) [![Language Grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/elfmz/far2l.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/elfmz/far2l/context:cpp) [![Packages](https://repology.org/badge/tiny-repos/far2l.svg)](https://repology.org/project/far2l)
+[![Cirrus Build Status](https://api.cirrus-ci.com/github/elfmz/far2l.svg)](https://cirrus-ci.com/github/elfmz/far2l) [![Coverage Status](https://codecov.io/gh/elfmz/far2l/coverage.svg?branch=master)](https://codecov.io/gh/elfmz/far2l?branch=master) [![Coverity Scan](https://scan.coverity.com/projects/27038/badge.svg)](https://scan.coverity.com/projects/elfmz-far2l) [![Language Grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/elfmz/far2l.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/elfmz/far2l/context:cpp) [![Packages](https://repology.org/badge/tiny-repos/far2l.svg)](https://repology.org/project/far2l)
 
 # far2l [![tag](https://img.shields.io/github/tag/elfmz/far2l.svg)](https://github.com/elfmz/far2l/tags)
 Linux fork of FAR Manager v2 (http://farmanager.com/)   
-Works also on OSX/MacOS and BSD (but later not tested on regular manner)   
+Works also on OSX/MacOS and BSD (but latter not tested on regular manner)   
 BETA VERSION.   
 **Use on your own risk!**
 
@@ -41,7 +42,7 @@ FreeBSD/MacOS (Cirrus CI): [![Cirrus](https://api.cirrus-ci.com/github/elfmz/far
 
 * gawk
 * m4
-* libwxgtk3.0-gtk3-dev (or in older distributives - libwxgtk3.0-dev)  (needed for GUI backend, not needed with -DUSEWX=no)
+* libwxgtk3.0-gtk3-dev (in new distributives - libwxgtk3.2-dev, in old distributives - libwxgtk3.0-dev)  (needed for GUI backend, not needed with -DUSEWX=no)
 * libx11-dev (optional - needed for X11 extension that provides better UX for TTY backend wherever X11 is available)
 * libxi-dev (optional - needed for X11/Xi extension that provides best UX for TTY backend wherever X11 Xi extension is available)
 * libxerces-c-dev
@@ -53,6 +54,7 @@ FreeBSD/MacOS (Cirrus CI): [![Cirrus](https://api.cirrus-ci.com/github/elfmz/far
 * libnfs-dev (needed for NetRocks/NFS)
 * libneon27-dev (or later, needed for NetRocks/WebDAV)
 * libarchive-dev (needed for better archives support in multiarc)
+* libunrar-dev (optionally needed for RAR archives support in multiarc - see UNRAR command line option)
 * libpcre3-dev (or in older distributives - libpcre2-dev) (needed for custom archives support in multiarc)
 * cmake ( >= 3.2.2 )
 * g++
@@ -61,8 +63,23 @@ FreeBSD/MacOS (Cirrus CI): [![Cirrus](https://api.cirrus-ci.com/github/elfmz/far
 #### Or simply on Debian/Ubuntu:
 ``` sh
 apt-get install gawk m4 libwxgtk3.0-gtk3-dev libx11-dev libxi-dev libpcre3-dev libxerces-c-dev libspdlog-dev libuchardet-dev libssh-dev libssl-dev libsmbclient-dev libnfs-dev libneon27-dev libarchive-dev cmake g++ git
+```
+
+On Debian unstable/sid:
+
+`apt-get install far2l`
+
+A simple sid back port should be as easy as (build your own binary deb from the official source deb package):
 
 ```
+# you will find the latest dsc link at http://packages.debian.org/sid/far2l
+dget http://deb.debian.org/debian/pool/main/f/far2l/far2l_2.5.0~beta+git20230223+ds-2.dsc
+dpkg-source -x *.dsc
+cd far2l-*/
+debuild
+# cd .. and install your self built far2l*.deb
+```
+
 In older distributives: use libpcre2-dev and libwxgtk3.0-dev instead of libpcre3-dev and libwxgtk3.0-gtk3-dev
 
 #### Clone and Build
@@ -78,27 +95,32 @@ cd far2l/_build
 _with make:_
 ``` sh
 cmake -DUSEWX=yes -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc --all)
+cmake --build . -j$(nproc --all)
 ``` 
 _or with ninja (you need **ninja-build** package installed)_
 ``` sh
 cmake -DUSEWX=yes -DCMAKE_BUILD_TYPE=Release -G Ninja ..
-ninja
+cmake --build .
 ```
 
- * If above commands finished without errors - you may also install far2l, _with make:_ `sudo make install` _or with ninja:_ `sudo ninja install`
+ * If above commands finished without errors - you may also install far2l, `sudo cmake --install .`
 
- * Also its possible to create far2l_2.X.X_ARCH.deb or ...tar.gz packages in `_build` directory by running `cpack` command
+ * Also its possible to create far2l_2.X.X_ARCH.deb or ...tar.gz packages in `_build` directory by running `cmake --build . --target package` command.
 
 ##### Additional build configuration options:
 
-To build without WX backend (console version only): change -DUSEWX=yes to -DUSEWX=no also in this case dont need to install libwxgtk\*-dev package
+To build without WX backend (console version only): change `-DUSEWX=yes` to `-DUSEWX=no` also in this case dont need to install libwxgtk\*-dev package
 
-To force-disable TTY|X and TTY|Xi backends: add argument -DTTYX=no; to disable only TTY|Xi - add argument -DTTYXI=no
+To force-disable TTY|X and TTY|Xi backends: add argument `-DTTYX=no`; to disable only TTY|Xi - add argument `-DTTYXI=no`
 
 To eliminate libuchardet requirement to reduce far2l dependencies by cost of losing automatic charset detection functionality: add -DUSEUCD=no
 
-To build with Python plugin: add argument -DPYTHON=yes
+To build with Python plugin: add argument `-DPYTHON=yes`
+
+To control how RAR archives will be handled in multiarc:
+ `-DUNRAR=bundled` (default) use bundled sources found in multiarc/src/formats/rar/unrar
+ `-DUNRAR=lib` use libunrar and unrar utility, also build requires libunrar-dev to be installed
+ `-DUNRAR=NO` dont use special unrar code, rar archives will be handled by libarchive unless its also disabled
 
 There're also options to toggle other plugins build in same way: ALIGN AUTOWRAP CALC COLORER COMPARE DRAWLINE EDITCASE EDITORCOMP FARFTP FILECASE INCSRCH INSIDE MULTIARC NETROCKS SIMPLEINDENT TMPPANEL
 
@@ -127,7 +149,7 @@ brew install --HEAD yurikoles/yurikoles/far2l
 ```sh
 brew install --HEAD yurikoles/yurikoles/far2l --without-wxwidgets
 ```
- * Additionally you can enable python support by adding `--with-python@3.9`
+ * Additionally you can enable python support by adding `--with-python@3.10` to the one of two above commands.
 
 ##### Full OSX/MacOS build from sources (harder):
 Some issues can be caused by conflicting dependencies, like having two versions of wxWidgets, so avoid such situation when installing dependecies.
@@ -151,14 +173,14 @@ _with make:_
 mkdir _build
 cd _build
 cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DUSEWX=yes -DCMAKE_BUILD_TYPE=Release ..
-make -j$(sysctl -n hw.logicalcpu)
+cmake --build . -j$(sysctl -n hw.logicalcpu)
 ``` 
 _or with ninja:_
 ```sh
 mkdir _build
 cd _build
 cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DUSEWX=yes -DCMAKE_BUILD_TYPE=Release -G Ninja ..
-ninja
+cmake --build .
 ```
  * Then you may create .dmg package by running: `cpack` command.
 Note that this step sometimes fails and may succeed from not very first attempt.
@@ -202,66 +224,21 @@ To advance the package to a new Far2l revision, edit the `fetchFromGitHub` set a
 You can import the project into your favourite IDE like QtCreator, CodeLite, or any other, which supports cmake or which cmake is able to generate projects for.
 
  * **QtCreator**: select "Open Project" and point QtCreator to the CMakeLists.txt in far2l root directory
+ * **CLion**: the same as **QtCreator**.
  * **CodeLite**: use this guide to setup a project: https://wiki.codelite.org/pmwiki.php/Main/TheCMakePlugin (to avoid polluting your source tree, don't create your workspace inside of the far2l directory)
 
 ### Useful 3rd-party extras
 
  * A collection of macros for far2l: https://github.com/corporateshark/far2l-macros
  * Fork of Putty (Windows SSH client) with added far2l TTY extensions support (fluent keypresses, clipboard sharing etc): https://github.com/unxed/putty4far2l
- * Similar fork of Kitty: https://github.com/mihmig/KiTTY
+ * Kitty (another fork of Putty) also have far2l TTY extensions support: https://github.com/cyd01/KiTTY
+ * putty-nd, one more putty fork with extensions support: https://sourceforge.net/p/putty-nd/
+ * Turbo Vision, TUI framework supporting far2l terminal extensions: https://github.com/magiblot/tvision
+ * turbo, text editor supporting far2l terminal extensions: https://github.com/magiblot/turbo
  * Tool to import color schemes from windows FAR manager 2 .reg format: https://github.com/unxed/far2l-deb/blob/master/far2l_import.pl
 
-## Notes on porting
-
-I implemented/borrowed from WINE some commonly used WinAPI functions. They are all declared in WinPort/WinPort.h and corresponding defines can be found in WinPort/WinCompat.h (both are included by WinPort/windows.h). Note that this stuff may not be 1-to-1 to corresponding Win32 functionality also doesn't provide full-UNIX functionality, but it simplifies porting and can be considered as temporary scaffold.
-
-However, only the main executable is linked statically to WinPort, although it also _exports_ WinPort functionality, so plugins use it without the neccessity to bring their own copies of this code. This is the reason that each plugin's binary should not statically link to WinPort.
-
-While FAR internally is UTF16 (because WinPort contains UTF16-related stuff), native Linux wchar_t size is 4 bytes (rather than 2 bytes) so potentially Linux FAR may be fully UTF32-capable console interaction in the future, but while it uses Win32-style UTF16 functions it does not. However, programmers need to be aware that wchar_t is not 2 bytes long anymore.
-
-Inspect all printf format strings: unlike Windows, in Linux both wide and multibyte printf-like functions have the same multibyte and wide specifiers. This means that %s is always multibyte while %ls is always wide. So, any %s used in wide-printf-s or %ws used in any printf should be replaced with %ls.
-
-Update from 27aug: now it's possible by defining WINPORT_DIRECT to avoid renaming used Windows API and also to avoid changing format strings as swprintf will be intercepted by a compatibility wrapper.
-
-## Plugin API
-
-Plugins API based on FAR Manager v2 plus following changes:
-
-### Added following entries to FarStandardFunctions:
-
-* `int Execute(const wchar_t *CmdStr, unsigned int ExecFlags);`
-...where ExecFlags - combination of values of EXECUTEFLAGS.
-Executes given command line, if EF_HIDEOUT and EF_NOWAIT are not specified then command will be executed on far2l virtual terminal.
-
-* `int ExecuteLibrary(const wchar_t *Library, const wchar_t *Symbol, const wchar_t *CmdStr, unsigned int ExecFlags)`
-Executes given shared library symbol in separate process (process creation behaviour is the same as for Execute).
-symbol function must be defined as: `int 'Symbol'(int argc, char *argv[])`
-
-* `void DisplayNotification(const wchar_t *action, const wchar_t *object);`
-Shows (depending on settings - always or if far2l in background) system shell-wide notification with given title and text.
-
-* `int DispatchInterThreadCalls();`
-far2l supports calling APIs from different threads by marshalling API calls from non-main threads into main one and dispatching them on main thread at certain known-safe points inside of dialog processing loops. DispatchInterThreadCalls() allows plugin to explicitely dispatch such calls and plugin must use it periodically in case it blocks main thread with some non-UI activity that may wait for other threads.
-
-* `void BackgroundTask(const wchar_t *Info, BOOL Started);`
-If plugin implements tasks running in background it may invoke this function to indicate about pending task in left-top corner.
-Info is a short description of task or just its owner and must be same string when invoked with Started TRUE or FALSE.
-
-### Added following commands into FILE_CONTROL_COMMANDS:
-* `FCTL_GETPANELPLUGINHANDLE`
-Can be used to interract with plugin that renders other panel.
-`hPlugin` can be set to `PANEL_ACTIVE` or `PANEL_PASSIVE`.
-`Param1` ignored.
-`Param2` points to value of type `HANDLE`, call sets that value to handle of plugin that renders specified panel or `INVALID_HANDLE_VALUE`.
-
-### Added following plugin-exported functions:
-* `int MayExitFARW();`
-far2l asks plugin if it can exit now. If plugin has some background tasks pending it may block exiting of far2l, however it highly recommended to give user choice using UI prompt.
-
-### Added following dialog messages:
-* `DM_GETCOLOR` - retrieves get current color attributes of selected dialog item
-* `DM_SETCOLOR` - changes current color attributes of selected dialog item
+## Notes on porting and FAR Plugin API changes
+ * See HACKING.md
 
 ## Known issues:
-* Only valid translations are English, Russian and Ukrainian, all other languages require deep correction.
-* Characters that occupy more than single cell or diacritic-like characters are rendered buggy, that means Chinees and Japaneese texts are hardly readable in some cases.
+* Only valid translations are English, Russian, Ukrainian and Belarussian (interface only), all other languages require deep correction.

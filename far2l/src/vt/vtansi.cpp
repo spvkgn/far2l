@@ -168,11 +168,14 @@ jadoxa@yahoo.com.au
 
 #include <mutex>
 #include <atomic>
+#include <map>
 #include "vtansi.h"
 #include "AnsiEsc.hpp"
 #include "UtfConvert.hpp"
 
 #define is_digit(c) ('0' <= (c) && (c) <= '9')
+
+#define BGR2RGB(COLOR) ((((COLOR) & 0xff0000) >> 16) | ((COLOR) & 0x00ff00) | (((COLOR) & 0x0000ff) << 16))
 
 // ========== Global variables and constants
 
@@ -230,6 +233,7 @@ static std::mutex g_vt_ansi_mutex;
 IVTShell *g_vt_shell = nullptr;
 static std::string g_title;
 static std::atomic<bool> g_output_disabled{false};
+static std::map<DWORD, std::pair<DWORD, DWORD> > g_orig_palette;
 
 static HANDLE	  hConOut = NULL;		// handle to CONOUT$
 
@@ -239,7 +243,7 @@ static HANDLE	  hConOut = NULL;		// handle to CONOUT$
 #define SI	'\x0F'          // Shift In
 #define ST	'\x9c'
 
-#define MAX_ARG 16		// max number of args in an escape sequence
+#define MAX_ARG 32		// max number of args in an escape sequence
 static int   state;			// automata state
 static char  prefix;			// escape sequence prefix ( '[', ']' or '(' );
 static char  prefix2;			// secondary prefix ( '?' or '>' );
@@ -460,8 +464,7 @@ void PushBuffer( WCHAR c )
 					r.Right = s.X - 1;
 					r.Top = r.Bottom = csbi.dwCursorPosition.Y;
 					WINPORT(ReadConsoleOutput)( hConOut, row, s, c, &r );
-					blank.Char.UnicodeChar = blank_character;
-					blank.Attributes = csbi.wAttributes;
+					CI_SET_WCATTR(blank, blank_character, csbi.wAttributes);
 					while (*(PDWORD)&row[c.X] == *(PDWORD)&blank)
 						if (++c.X == s.X) {
 							nl = (csbi.dwCursorPosition.X == 0) ? NULL : L"\r";
@@ -648,10 +651,43 @@ static void LimitByScrollRegion(SMALL_RECT &rect)
 // suffix = 'm'
 //-----------------------------------------------------------------------------
 
+static void ParseOSCPalette(int cmd, const char *args, size_t args_size)
+{
+	size_t pos = 0;
+	unsigned int index = DecToULong(args, args_size, &pos);
+	// Win <-> TTY color index adjustement
+	index = (((index) & 0b001) << 2 | ((index) & 0b100) >> 2 | ((index) & 0b1010));
+
+	DWORD fg = 0xffffffff, bk = 0xffffffff;
+	if (cmd == 4) {
+		if (pos + 2 >= args_size || args[pos] != ';' || args[pos + 1] != '#') {
+			fprintf(stderr, "%s: bad args='%s'\n", __FUNCTION__, args);
+			return;
+		}
+		pos+= 2;
+		size_t saved_pos = pos;
+		fg = HexToULong(args, args_size, &pos);
+		if (pos == saved_pos) {
+			return;
+		}
+		fg = bk = BGR2RGB(fg);
+		if (pos + 2 < args_size && args[pos] == ';' && args[pos + 1] == '#') {
+			pos+= 2;
+			saved_pos = pos;
+			bk = HexToULong(args, args_size, &pos);
+			bk = (pos == saved_pos) ? fg : BGR2RGB(bk);
+		}
+	}
+
+	WINPORT(OverrideConsoleColor)(index, &fg, &bk);
+	// remember very first original...
+	g_orig_palette.emplace(index, std::make_pair(fg, bk));
+}
+
 void InterpretEscSeq( void )
 {
 	int  i;
-	WORD attribut;
+	DWORD64 attribut;
 	CONSOLE_SCREEN_BUFFER_INFO Info;
 	CONSOLE_CURSOR_INFO CursInfo;
 	DWORD len, NumberOfCharsWritten;
@@ -669,9 +705,23 @@ void InterpretEscSeq( void )
 		if (prefix2 == '?' && (suffix == 'h' || suffix == 'l')) {
 			for (i = 0; i < es_argc; ++i) {
 				switch (es_argv[i]) {
+				case MEX_X10_MOUSE:
+				case MEX_VT200_MOUSE:
+				case MEX_VT200_HIGHLIGHT_MOUSE:
+				case MEX_BTN_EVENT_MOUSE:
+				case MEX_ANY_EVENT_MOUSE:
+					if (g_vt_shell)
+						g_vt_shell->OnMouseExpectation( (suffix == 'h') ? (MouseExpectation)es_argv[i] : MEX_NONE );
+					break;
+
 //				case 47: case 1047:
 //					g_alternative_screen_buffer.Toggle(suffix == 'h');
 //					break;
+
+				case 2004:
+					if (g_vt_shell)
+						g_vt_shell->OnBracketedPasteExpectation(suffix == 'h');
+					break;
 
 				case 1049:
 					g_alternative_screen_buffer.Toggle(suffix == 'h');
@@ -748,8 +798,7 @@ void InterpretEscSeq( void )
 						Rect.Top = Info.dwCursorPosition.Y - Info.srWindow.Top;
 						Rect.Bottom = Info.dwCursorPosition.Y - 1;
 						Pos.X = Pos.Y = 0;
-						CharInfo.Char.UnicodeChar = blank_character;
-						CharInfo.Attributes = Info.wAttributes;
+						CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 						WINPORT(ScrollConsoleScreenBuffer)(hConOut, &Rect, NULL, Pos, &CharInfo);
 					}
 					WINPORT(SetConsoleWindowInfo)( hConOut, TRUE, &Info.srWindow );
@@ -802,7 +851,7 @@ void InterpretEscSeq( void )
 			if (es_argc == 0) es_argv[es_argc++] = 1; // ESC[L == ESC[1L
 			if (es_argc != 1) return;
 			{
-				LimitByScrollRegion(Info.srWindow);//fprintf(stderr, "!!!scroll 1\n");
+				LimitByScrollRegion(Info.srWindow); //fprintf(stderr, "!!!scroll 1\n");
 
 				Rect.Left   = Info.srWindow.Left	= 0;
 				Rect.Right  = Info.srWindow.Right = (Info.dwSize.X - 1);
@@ -811,8 +860,7 @@ void InterpretEscSeq( void )
 
 				Pos.X = 0;
 				Pos.Y = Info.dwCursorPosition.Y + es_argv[0];
-				CharInfo.Char.UnicodeChar = blank_character;
-				CharInfo.Attributes = Info.wAttributes;
+				CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 				WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Info.srWindow, Pos, &CharInfo );
 				// Technically should home the cursor, but perhaps not expeclted.
 			}
@@ -825,15 +873,14 @@ void InterpretEscSeq( void )
 				Pos.X = 0;
 				Pos.Y = Info.srWindow.Top;
 
-				LimitByScrollRegion(Info.srWindow);//fprintf(stderr, "!!!scroll 2\n");
+				LimitByScrollRegion(Info.srWindow); //fprintf(stderr, "!!!scroll 2\n");
 
 				Rect.Left   = Info.srWindow.Left = 0;
 				Rect.Right  = Info.srWindow.Right = (Info.dwSize.X - 1);
 				Rect.Top    = Pos.Y + es_argv[0];
 				Rect.Bottom = Info.srWindow.Bottom;
 
-				CharInfo.Char.UnicodeChar = blank_character;
-				CharInfo.Attributes = Info.wAttributes;
+				CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 				WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Info.srWindow, Pos, &CharInfo );
 			}
 			return;
@@ -842,7 +889,7 @@ void InterpretEscSeq( void )
 			if (es_argc == 0) es_argv[es_argc++] = 1; // ESC[T == ESC[1T
 			if (es_argc != 1) return;
 			/*while (es_argv[0]--)*/ {
-				LimitByScrollRegion(Info.srWindow);//fprintf(stderr, "!!!scroll 3\n");
+				LimitByScrollRegion(Info.srWindow); //fprintf(stderr, "!!!scroll 3\n");
 
 				Rect.Left   = Info.srWindow.Left = 0;
 				Rect.Right  = Info.srWindow.Right = (Info.dwSize.X - 1);
@@ -852,8 +899,7 @@ void InterpretEscSeq( void )
 				Pos.X = 0;
 				Pos.Y = Rect.Top + es_argv[0];
 
-				CharInfo.Char.UnicodeChar = blank_character;
-				CharInfo.Attributes = Info.wAttributes;
+				CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 				WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Info.srWindow, Pos, &CharInfo );
 			}
 			return;
@@ -863,19 +909,18 @@ void InterpretEscSeq( void )
 			if (es_argc == 0) es_argv[es_argc++] = 1; // ESC[M == ESC[1M
 			if (es_argc != 1) return;
 			{
-				LimitByScrollRegion(Info.srWindow);//fprintf(stderr, "!!!scroll 4\n");
+				LimitByScrollRegion(Info.srWindow);
+				//fprintf(stderr, "!!!scroll 4 srWindow[%d %d %d %d] by %d\n", Info.srWindow.Left, Info.srWindow.Top, Info.srWindow.Right, Info.srWindow.Bottom, es_argv[0]);
 
 				Rect.Left   = Info.srWindow.Left	= 0;
 				Rect.Right  = Info.srWindow.Right = (Info.dwSize.X - 1);
 				Rect.Bottom = Info.srWindow.Bottom;
-				Rect.Top    = Info.dwCursorPosition.Y + es_argv[0];
+				Rect.Top    = Info.dwCursorPosition.Y;
 				Pos.X = 0;
-				Pos.Y = Info.srWindow.Top = Info.dwCursorPosition.Y;
-				CharInfo.Char.UnicodeChar = blank_character;
-				CharInfo.Attributes = Info.wAttributes;
+				Pos.Y = Rect.Top - es_argv[0];
+				CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 
-				Info.srWindow.Bottom-= es_argv[0];
-				WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Info.srWindow, Pos, &CharInfo );
+				WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Rect, Pos, &CharInfo );
 			}
 			// Technically should home the cursor, but perhaps not expected.
 			return;
@@ -889,8 +934,7 @@ void InterpretEscSeq( void )
 			Pos.Y	    =
 			    Rect.Top    =
 			        Rect.Bottom = Info.dwCursorPosition.Y;
-			CharInfo.Char.UnicodeChar = blank_character;
-			CharInfo.Attributes = Info.wAttributes;
+			CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 			WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Info.srWindow, Pos, &CharInfo );
 			return;
 
@@ -903,8 +947,7 @@ void InterpretEscSeq( void )
 			Pos.Y	    =
 			    Rect.Top    =
 			        Rect.Bottom = Info.dwCursorPosition.Y;
-			CharInfo.Char.UnicodeChar = blank_character;
-			CharInfo.Attributes = Info.wAttributes;
+			CI_SET_WCATTR(CharInfo, blank_character, Info.wAttributes);
 			WINPORT(ScrollConsoleScreenBuffer)( hConOut, &Rect, &Info.srWindow, Pos, &CharInfo );
 			return;
 
@@ -1110,10 +1153,16 @@ void InterpretEscSeq( void )
 			return;
 
 		if (es_argc == 1 && (es_argv[0] == 0 || // ESC]0;titleST - icon (ignored) &
-		                     es_argv[0] == 2)) { // ESC]2;titleST - window
+				es_argv[0] == 2)) { // ESC]2;titleST - window
 			g_title.swap(os_cmd_arg);
 			os_cmd_arg.clear();
 			ApplyConsoleTitle();
+
+		} else if (es_argc >= 1 && (es_argv[0] == 4 || es_argv[0] == 104)) {
+			ParseOSCPalette(es_argv[0], os_cmd_arg.c_str(), os_cmd_arg.size());
+
+		} else if (g_vt_shell) {
+			g_vt_shell->OnOSCommand(es_argv[0], os_cmd_arg);
 		}
 	}
 }
@@ -1214,8 +1263,7 @@ static void ReverseIndex()
 	SMALL_RECT Rect = {info.srWindow.Left, scroll_top, info.srWindow.Right, (SHORT)(scroll_bottom - 1) };
 	COORD Pos = {0, (SHORT) (scroll_top + 1) };
 	CHAR_INFO  CharInfo;
-	CharInfo.Char.UnicodeChar = blank_character;
-	CharInfo.Attributes = info.wAttributes;
+	CI_SET_WCATTR(CharInfo, blank_character, info.wAttributes);
 	WINPORT(ScrollConsoleScreenBuffer)(hConOut, &Rect, NULL, Pos, &CharInfo);
 }
 
@@ -1294,7 +1342,7 @@ void ParseAndPrintString( HANDLE hDev,
 			else if (suffix2 != 0)
 				state = 1;
 			else if (*s == '[' ||     // CSI Control Sequence Introducer
-			         *s == ']') {     // OSC Operating System Command
+					*s == ']') {     // OSC Operating System Command
 				FlushBuffer();
 				prefix = *s;
 				prefix2 = 0;
@@ -1302,14 +1350,14 @@ void ParseAndPrintString( HANDLE hDev,
 				// Pt_len = 0; *Pt_arg = '\0';
 				state = 3;
 			} else if (*s == 'P' ||   // DCS Device Control String
-			           *s == 'X' ||     // SOS Start Of String
-			           *s == '^' ||     // PM  Privacy Message
-			           *s == '_') {     // APC Application Program Command
+					*s == 'X' ||     // SOS Start Of String
+					*s == '^' ||     // PM  Privacy Message
+					*s == '_') {     // APC Application Program Command
 				os_cmd_arg.clear();
 				// *Pt_arg = '\0'; Pt_len = 0;
 				prefix = *s;
 				state = 6;
-			} else  {
+			} else {
 				switch (*s) {
 					case 'K': PartialLineDown(); break;
 					case 'L': PartialLineUp(); break;
@@ -1378,7 +1426,7 @@ void ParseAndPrintString( HANDLE hDev,
 				os_cmd_arg.resize(os_cmd_arg.size() - 1);
 				done = true;
 			} else try {
-				os_cmd_arg+= *s;
+				Wide2MB(s, 1, os_cmd_arg, true);
 
 			} catch (std::exception &e) {
 				os_cmd_arg.clear();
@@ -1430,7 +1478,7 @@ void ParseAndPrintString( HANDLE hDev,
 		}
 	}
 	FlushBuffer();
-	assert(i == 0);
+	ASSERT(i == 0);
 }
 
 
@@ -1496,6 +1544,10 @@ void VTAnsi::OnStart()
 
 void VTAnsi::OnStop()
 {
+	for (auto &it : g_orig_palette) { // restore all changed palette colors
+		WINPORT(OverrideConsoleColor)(it.first, &it.second.first, &it.second.second);
+	}
+	g_orig_palette.clear();
 	g_alternative_screen_buffer.Reset();
 	g_saved_state.ApplyToConsole(NULL, false);
 	ResetTerminal();
@@ -1533,6 +1585,7 @@ void VTAnsi::Write(const char *str, size_t len)
 		--len;
 	}
 
+	ConsoleRepaintsDeferScope crds;
 	ParseAndPrintString(NULL, _ws.c_str(), _ws.size());
 }
 

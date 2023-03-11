@@ -66,7 +66,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtshell.h"
 #include "InterThreadCall.hpp"
 #include "ScopeHelpers.h"
-#include <wordexp.h>
 #include <set>
 #include <sys/wait.h>
 #ifdef __FreeBSD__
@@ -163,6 +162,15 @@ public:
 	bool IsExecutable() const {return _executable; }
 };
 
+static std::string GetOpenShVerb(const char *verb)
+{
+	std::string out = GetMyScriptQuoted("open.sh");
+	out+= ' ';
+	out+= verb;
+	out+= ' ';
+	return out;
+}
+
 
 bool IsDirectExecutableFilePath(const char *path)
 {
@@ -184,6 +192,7 @@ static int NotVTExecute(const char *CmdStr, bool NoWait, bool NeedSudo)
 	if (NeedSudo) {
 		return sudo_client_execute(CmdStr, false, NoWait);
 	}
+
 // DEBUG
 //	fdr = open(DEVNULL, O_RDONLY);
 //	if (fdr==-1) perror("stdin error opening " DEVNULL);
@@ -230,6 +239,13 @@ static int farExecuteASynched(const char *CmdStr, unsigned int ExecFlags)
 {
 //	fprintf(stderr, "TODO: Execute('%ls')\n", CmdStr);
 	int r;
+	if (ExecFlags & EF_OPEN) {
+		std::string OpenCmd = GetOpenShVerb("other");
+		OpenCmd+= ' ';
+		OpenCmd+= CmdStr;
+		return farExecuteASynched(OpenCmd.c_str(), ExecFlags & (~EF_OPEN));
+	}
+
 	if (ExecFlags & EF_HIDEOUT) {
 		r = NotVTExecute(CmdStr, (ExecFlags & EF_NOWAIT) != 0, (ExecFlags & EF_SUDO) != 0);
 //		CtrlObject->CmdLine->SetString(L"", TRUE);//otherwise command remain in cmdline
@@ -238,7 +254,7 @@ static int farExecuteASynched(const char *CmdStr, unsigned int ExecFlags)
 		ProcessShowClock++;
 		if (CtrlObject && CtrlObject->CmdLine) {
 			CtrlObject->CmdLine->ShowBackground();
-			CtrlObject->CmdLine->Redraw();
+			CtrlObject->CmdLine->RedrawWithoutComboBoxMark();
 		}
 //		CtrlObject->CmdLine->SetString(L"", TRUE);
 		ScrBuf.Flush();
@@ -288,15 +304,31 @@ int WINAPI farExecuteA(const char *CmdStr, unsigned int ExecFlags)
 
 int WINAPI farExecuteLibraryA(const char *Library, const char *Symbol, const char *CmdStr, unsigned int ExecFlags)
 {
+	char cd_prev[MAX_PATH + 1] = {'.', 0};
+	if (!sdc_getcwd(cd_prev, MAX_PATH)) {
+		cd_prev[0] = 0;
+	}
+	if (sdc_chdir(g_strFarPath.GetMB().c_str()) == -1 ) {
+		perror("chdir farpath");
+	}
+
 	std::string actual_cmd = "\"";
 	actual_cmd+= EscapeCmdStr(g_strFarModuleName.GetMB());
 	actual_cmd+= "\" --libexec \"";
 	actual_cmd+= EscapeCmdStr(Library);
+	actual_cmd+= "\" \"";
+	actual_cmd+= EscapeCmdStr(cd_prev);
 	actual_cmd+= "\" ";
 	actual_cmd+= Symbol;
 	actual_cmd+= " ";
 	actual_cmd+= CmdStr;
-	return farExecuteA(actual_cmd.c_str(), ExecFlags);
+	int r = farExecuteA(actual_cmd.c_str(), ExecFlags);
+
+	if (sdc_chdir(cd_prev) == -1 ) {
+		perror("chdir prev");
+	}
+
+	return r;
 }
 
 
@@ -324,19 +356,10 @@ void QueueDeleteOnClose(const wchar_t *Name)
 	farExecuteA(cmd.c_str(), EF_NOWAIT | EF_HIDEOUT);
 }
 
-static std::string GetOpenShVerb(const char *verb)
+static int ExecuteA(const char *CmdStr, bool SeparateWindow, bool DirectRun, bool WaitForIdle , bool Silent , bool RunAs)
 {
-	std::string out = GetMyScriptQuoted("open.sh");
-	out+= ' ';
-	out+= verb;
-	out+= ' ';
-	return out;
-}
-
-static int ExecuteA(const char *CmdStr, bool SeparateWindow, bool DirectRun, bool FolderRun , bool WaitForIdle , bool Silent , bool RunAs)
-{
-	fprintf(stderr, "ExecuteA: SeparateWindow=%d DirectRun=%d FolderRun=%d WaitForIdle=%d Silent=%d RunAs=%d CmdStr='%s'\n",
-			SeparateWindow, DirectRun, FolderRun, WaitForIdle, Silent, RunAs, CmdStr);
+	fprintf(stderr, "ExecuteA: SeparateWindow=%d DirectRun=%d WaitForIdle=%d Silent=%d RunAs=%d CmdStr='%s'\n",
+			SeparateWindow, DirectRun, WaitForIdle, Silent, RunAs, CmdStr);
 
 	int r = -1;
 	ExecClassifier ec(CmdStr, DirectRun);
@@ -375,9 +398,9 @@ static int ExecuteA(const char *CmdStr, bool SeparateWindow, bool DirectRun, boo
 }
 
 
-int Execute(const wchar_t *CmdStr, bool SeparateWindow, bool DirectRun, bool FolderRun , bool WaitForIdle , bool Silent , bool RunAs)
+int Execute(const wchar_t *CmdStr, bool SeparateWindow, bool DirectRun , bool WaitForIdle , bool Silent , bool RunAs)
 {
-	return ExecuteA(Wide2MB(CmdStr).c_str(), SeparateWindow, DirectRun, FolderRun , WaitForIdle , Silent , RunAs);
+	return ExecuteA(Wide2MB(CmdStr).c_str(), SeparateWindow, DirectRun, WaitForIdle , Silent , RunAs);
 }
 
 int CommandLine::CmdExecute(const wchar_t *CmdLine, bool SeparateWindow, bool DirectRun, bool WaitForIdle, bool Silent, bool RunAs)
@@ -389,7 +412,7 @@ int CommandLine::CmdExecute(const wchar_t *CmdLine, bool SeparateWindow, bool Di
 		{
 			//CmdStr.SetString(L"");
 			GotoXY(X1,Y1);
-			FS<<fmt::Width(X2-X1+1)<<L"";
+			FS << fmt::Cells() << fmt::Expand(X2 - X1 + 1) << L"";
 			Show();
 			ScrBuf.Flush();
 		}
@@ -421,12 +444,13 @@ int CommandLine::CmdExecute(const wchar_t *CmdLine, bool SeparateWindow, bool Di
 		r = -1; 
 	} else {
 		CtrlObject->CmdLine->SetString(L"", TRUE);
+
 		char cd_prev[MAX_PATH + 1] = {'.', 0};
 		if (!sdc_getcwd(cd_prev, MAX_PATH)) {
 			cd_prev[0] = 0;
 		}
 
-		r = Execute(CmdLine, SeparateWindow, DirectRun, false , WaitForIdle , Silent , RunAs);
+		r = Execute(CmdLine, SeparateWindow, DirectRun, WaitForIdle , Silent , RunAs);
 
 		char cd[MAX_PATH + 1] = {'.', 0};
 		if (sdc_getcwd(cd, MAX_PATH)) {
@@ -476,39 +500,5 @@ int CommandLine::CmdExecute(const wchar_t *CmdLine, bool SeparateWindow, bool Di
 const wchar_t *PrepareOSIfExist(const wchar_t *CmdLine)
 {
 	return L"";
-}
-
-bool ProcessOSAliases(FARString &strStr)
-{
-	return false;
-}
-
-bool POpen(std::vector<std::wstring> &result, const char *command)
-{
-	FILE *f = popen(command, "r");
-	if (!f) {
-		perror("POpen: popen");
-		return false;
-	}
-
-	char buf[0x400] = { };
-	while (fgets(buf, sizeof(buf)-1, f)) {
-		size_t l = strlen(buf);
-		while (l && (buf[l-1]=='\r' || buf[l-1]=='\n')) --l;
-		if (l) {
-			buf[l] = 0;
-			std::wstring line = MB2Wide(buf);
-			while (line.size() > 40) {
-				size_t p = line.find(L',' , 30);
-				if (p==std::string::npos) break;
-				result.emplace_back( line.substr(0, p) );
-				line.erase(0, p + 1);
-			}
-
-			if (!line.empty()) result.push_back( line );
-		}
-	}
-	pclose(f);
-	return true;
 }
 

@@ -36,7 +36,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "headers.hpp"
-
+#include <vector>
+#include <algorithm>
 #include "vmenu.hpp"
 #include "keyboard.hpp"
 #include "lang.hpp"
@@ -57,6 +58,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "processname.hpp"
 #include "pathmix.hpp"
 #include "cmdline.hpp"
+#include "UsedChars.hpp"
+
 VMenu::VMenu(const wchar_t *Title,       // заголовок меню
              MenuDataEx *Data, // пункты меню
              int ItemCount,     // количество пунктов меню
@@ -73,7 +76,6 @@ VMenu::VMenu(const wchar_t *Title,       // заголовок меню
 	ParentDialog(ParentDialog),
 	VMenuProc(Proc?Proc:(FARWINDOWPROC)VMenu::DefMenuProc),
 	OldTitle(nullptr),
-	Used(new bool[MAX_VKEY_CODE]),
 	bFilterEnabled(false),
 	bFilterLocked(false),
 	Item(nullptr),
@@ -131,7 +133,6 @@ VMenu::~VMenu()
 	bool WasVisible=Flags.Check(FSCROBJ_VISIBLE)!=0;
 	Hide();
 	DeleteItems();
-	delete[] Used;
 	SetCursorType(PrevCursorVisible,PrevCursorSize);
 
 	if (!CheckFlags(VMENU_LISTBOX))
@@ -477,9 +478,9 @@ int VMenu::AddItem(const MenuItemEx *NewItem,int PosAdd)
 	Item[PosAdd]->ShowPos = 0;
 
 	if (CheckFlags(VMENU_SHOWAMPERSAND))
-		UpdateMaxLength((int)Item[PosAdd]->strName.GetLength());
+		UpdateMaxLength((int)Item[PosAdd]->strName.CellsCount());
 	else
-		UpdateMaxLength(HiStrlen(Item[PosAdd]->strName));
+		UpdateMaxLength(HiStrCellsCount(Item[PosAdd]->strName));
 
 	UpdateItemFlags(PosAdd, NewItem->Flags);
 
@@ -1070,9 +1071,9 @@ int VMenu::ProcessKey(int Key)
 				for (int I=0; I < ItemCount; ++I)
 				{
 					if (CheckFlags(VMENU_SHOWAMPERSAND))
-						_len=static_cast<int>(Item[I]->strName.GetLength());
+						_len=static_cast<int>(Item[I]->strName.CellsCount());
 					else
-						_len=HiStrlen(Item[I]->strName);
+						_len=HiStrCellsCount(Item[I]->strName);
 
 					if (_len >= MaxLineWidth)
 						Item[I]->ShowPos = _len - MaxLineWidth;
@@ -1495,9 +1496,9 @@ bool VMenu::ShiftItemShowPos(int Pos, int Direct)
 	int ItemShowPos = Item[Pos]->ShowPos;
 
 	if (VMFlags.Check(VMENU_SHOWAMPERSAND))
-		_len = (int)Item[Pos]->strName.GetLength();
+		_len = (int)Item[Pos]->strName.CellsCount();
 	else
-		_len = HiStrlen(Item[Pos]->strName);
+		_len = HiStrCellsCount(Item[Pos]->strName);
 
 	if (_len < MaxLineWidth || (Direct < 0 && !ItemShowPos) || (Direct > 0 && ItemShowPos > _len))
 		return false;
@@ -1731,7 +1732,7 @@ void VMenu::DrawTitles()
 		GotoXY(X1+(X2-X1-1-WidthTitle)/2,Y1);
 		SetColor(Colors[VMenuColorTitle]);
 
-		FS << L" " << fmt::Width(WidthTitle) << fmt::Precision(WidthTitle) << strDisplayTitle << L" ";
+		FS << L" " << fmt::Size(WidthTitle) << strDisplayTitle << L" ";
 	}
 
 	if (!strBottomTitle.IsEmpty())
@@ -1744,7 +1745,7 @@ void VMenu::DrawTitles()
 		GotoXY(X1+(X2-X1-1-WidthTitle)/2,Y2);
 		SetColor(Colors[VMenuColorTitle]);
 
-		FS << L" " << fmt::Width(WidthTitle) << fmt::Precision(WidthTitle) << strBottomTitle << L" ";
+		FS << L" " << fmt::Size(WidthTitle) << strBottomTitle << L" ";
 	}
 }
 
@@ -1763,9 +1764,9 @@ void VMenu::ShowMenu(bool IsParent)
 		int ItemLen;
 
 		if (CheckFlags(VMENU_SHOWAMPERSAND))
-			ItemLen = static_cast<int>(Item[i]->strName.GetLength());
+			ItemLen = static_cast<int>(Item[i]->strName.CellsCount());
 		else
-			ItemLen = HiStrlen(Item[i]->strName);
+			ItemLen = HiStrCellsCount(Item[i]->strName);
 
 		if (ItemLen > MaxItemLength)
 			MaxItemLength = ItemLen;
@@ -1947,7 +1948,7 @@ void VMenu::ShowMenu(bool IsParent)
 						ItemWidth = X2-X1-3;
 
 					GotoXY(X1+(X2-X1-1-ItemWidth)/2,Y);
-					FS << L" " << fmt::LeftAlign() << fmt::Width(ItemWidth) << fmt::Precision(ItemWidth) << Item[I]->strName << L" ";
+					FS << L" " << fmt::LeftAlign() << fmt::Size(ItemWidth) << Item[I]->strName << L" ";
 				}
 
 				strTmpStr.ReleaseBuffer();
@@ -1990,9 +1991,9 @@ void VMenu::ShowMenu(bool IsParent)
 				int strMItemPtrLen;
 
 				if (CheckFlags(VMENU_SHOWAMPERSAND))
-					strMItemPtrLen = static_cast<int>(strMItemPtr.GetLength());
+					strMItemPtrLen = static_cast<int>(strMItemPtr.CellsCount());
 				else
-					strMItemPtrLen = HiStrlen(strMItemPtr);
+					strMItemPtrLen = HiStrCellsCount(strMItemPtr);
 
 				// fit menu FARString into available space
 				if (strMItemPtrLen > MaxLineWidth)
@@ -2014,17 +2015,9 @@ void VMenu::ShowMenu(bool IsParent)
 
 				strMenuLine.Append(strMItemPtr);
 
-				{
-					// табуляции меняем только при показе!!!
-					// для сохранение оригинальной строки!!!
-					wchar_t *TabPtr, *TmpStr = strMenuLine.GetBuffer();
-
-					while ((TabPtr = wcschr(TmpStr, L'\t')))
-						*TabPtr = L' ';
-
-					strMenuLine.ReleaseBuffer(strMenuLine.GetLength());
-				}
-
+				// табуляции меняем только при показе!!!
+				// для сохранение оригинальной строки!!!
+				ReplaceTabsBySpaces(strMenuLine, 1);
 				int Col;
 
 				if (!(Item[I]->Flags & LIF_DISABLE))
@@ -2048,7 +2041,7 @@ void VMenu::ShowMenu(bool IsParent)
 				{
 					int Width = X2-WhereX()+(BoxType==NO_BOX?1:0);
 					if (Width > 0)
-						FS << fmt::Width(Width) << L"";
+						FS << fmt::Expand(Width) << L"";
 				}
 
 				if (Item[I]->Flags & MIF_SUBMENU)
@@ -2089,7 +2082,7 @@ void VMenu::ShowMenu(bool IsParent)
 
 			SetColor(Colors[VMenuColorText]);
 			// сделаем добавочку для NO_BOX
-			FS << fmt::Width(((BoxType!=NO_BOX)?X2-X1-1:X2-X1)+((BoxType==NO_BOX)?1:0)) << L"";
+			FS << fmt::Expand(((BoxType!=NO_BOX)?X2-X1-1:X2-X1)+((BoxType==NO_BOX)?1:0)) << L"";
 		}
 	}
 
@@ -2172,8 +2165,6 @@ void VMenu::AssignHighlights(int Reverse)
 {
 	CriticalSectionLock Lock(CS);
 
-	memset(Used,0,MAX_VKEY_CODE);
-
 	/* $ 02.12.2001 KM
 	   + Поелику VMENU_SHOWAMPERSAND сбрасывается для корректной
 	     работы ShowMenu сделаем сохранение энтого флага, в противном
@@ -2187,15 +2178,19 @@ void VMenu::AssignHighlights(int Reverse)
 	if (VMOldFlags.Check(VMENU_SHOWAMPERSAND))
 		SetFlags(VMENU_SHOWAMPERSAND);
 
-	int I, Delta = Reverse ? -1 : 1;
-
+	std::vector<MenuItemEx *> ShuffledItem;
+	ShuffledItem.insert(ShuffledItem.end(), &Item[0], &Item[ItemCount]);
+	if (Reverse)
+		std::reverse(ShuffledItem.begin(), ShuffledItem.end());
+	UsedChars Used;
 	// проверка заданных хоткеев
-	for (I = Reverse ? ItemCount-1 : 0; I>=0 && I<ItemCount; I+=Delta)
+	for (size_t I = 0; I < ShuffledItem.size();)
 	{
+		MenuItemEx *ItemI = ShuffledItem[I];
 		wchar_t Ch = 0;
-		int ShowPos = HiFindRealPos(Item[I]->strName, Item[I]->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
-		const wchar_t *Name = Item[I]->strName.CPtr() + ShowPos;
-		Item[I]->AmpPos = -1;
+		int ShowPos = HiFindRealPos(ItemI->strName, ItemI->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
+		const wchar_t *Name = ItemI->strName.CPtr() + ShowPos;
+		ItemI->AmpPos = -1;
 		// TODO: проверка на LIF_HIDDEN
 		const wchar_t *ChPtr = wcschr(Name, L'&');
 
@@ -2212,40 +2207,65 @@ void VMenu::AssignHighlights(int Reverse)
 			}
 		}
 
-		if (Ch && !Used[Upper(Ch)] && !Used[Lower(Ch)])
+		if (Ch && Used.Set(Ch))
 		{
-			wchar_t ChKey=KeyToKeyLayout(Ch);
-			Used[Upper(ChKey)] = true;
-			Used[Lower(ChKey)] = true;
-			Used[Upper(Ch)] = true;
-			Used[Lower(Ch)] = true;
-			Item[I]->AmpPos = static_cast<short>(ChPtr-Name)+static_cast<short>(ShowPos);
+			ItemI->AmpPos = static_cast<short>(ChPtr-Name)+static_cast<short>(ShowPos);
+			ShuffledItem.erase(ShuffledItem.begin() + I);
 		}
+		else
+			++I;
 	}
 
-	// TODO:  ЭТОТ цикл нужно уточнить - возможно вылезут артефакты (хотя не уверен)
-	for (I = Reverse ? ItemCount-1 : 0; I>=0 && I<ItemCount; I+=Delta)
+	// Two attempts: 1st try to assign hotkeys on list in initial order, but if _few_ items
+	// failed to set hotkeys - then retry with giving them more priority.
+	// This is to resolve problems with assigning hotkeys to items like {"ARC", "ARJ", "RAR"}
+	for (int Attempt = 0; Attempt < 2; ++Attempt)
 	{
-		int ShowPos = HiFindRealPos(Item[I]->strName, Item[I]->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
-		const wchar_t *Name = Item[I]->strName.CPtr() + ShowPos;
-		const wchar_t *ChPtr = wcschr(Name, L'&');
-
-		if (!ChPtr || CheckFlags(VMENU_SHOWAMPERSAND))
+		// TODO:  ЭТОТ цикл нужно уточнить - возможно вылезут артефакты (хотя не уверен)
+		size_t FailedsCount = 0;
+		for (size_t I = 0; I < ShuffledItem.size(); ++I)
 		{
-			// TODO: проверка на LIF_HIDDEN
-			for (int J=0; Name[J]; J++)
-			{
-				wchar_t Ch = Name[J];
+			MenuItemEx *ItemI = ShuffledItem[I];
+			int ShowPos = HiFindRealPos(ItemI->strName, ItemI->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
+			const wchar_t *Name = ItemI->strName.CPtr() + ShowPos;
+			const wchar_t *ChPtr = wcschr(Name, L'&');
 
-				if ((Ch == L'&' || IsAlpha(Ch) || (Ch >= L'0' && Ch <=L'9')) && !Used[Upper(Ch)] && !Used[Lower(Ch)])
+			if (!ChPtr || CheckFlags(VMENU_SHOWAMPERSAND))
+			{
+				// TODO: проверка на LIF_HIDDEN
+				int J;
+				for (J=0; Name[J]; J++)
 				{
-					wchar_t ChKey=KeyToKeyLayout(Ch);
-					Used[Upper(ChKey)] = true;
-					Used[Lower(ChKey)] = true;
-					Used[Upper(Ch)] = true;
-					Used[Lower(Ch)] = true;
-					Item[I]->AmpPos = J + ShowPos;
-					break;
+					wchar_t Ch = Name[J];
+
+					if ((Ch == L'&' || IsAlpha(Ch) || (Ch >= L'0' && Ch <=L'9')) && Used.Set(Ch))
+					{
+						ItemI->AmpPos = J + ShowPos;
+						break;
+					}
+				}
+				if (!Name[J])
+					++FailedsCount;
+			}
+		}
+
+		if (Attempt == 0)
+		{
+			if (FailedsCount == 0 || FailedsCount > 10)
+				break;
+
+			for (size_t I = 0; I < ShuffledItem.size(); ++I) 
+			{
+				MenuItemEx *ItemI = ShuffledItem[I];
+				if (ItemI->AmpPos == -1)
+				{
+					ShuffledItem.erase(ShuffledItem.begin() + I);
+					ShuffledItem.insert(ShuffledItem.begin(), ItemI);
+				}
+				else
+				{
+					Used.Unset(ItemI->strName.CPtr()[ItemI->AmpPos]);
+					ItemI->AmpPos = -1;
 				}
 			}
 		}
@@ -2288,7 +2308,7 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 void VMenu::UpdateMaxLengthFromTitles()
 {
 	//тайтл + 2 пробела вокруг
-	UpdateMaxLength((int)Max(strTitle.GetLength(),strBottomTitle.GetLength())+2);
+	UpdateMaxLength((int)Max(strTitle.CellsCount(),strBottomTitle.CellsCount())+2);
 }
 
 void VMenu::UpdateMaxLength(int Length)
@@ -2337,7 +2357,7 @@ void VMenu::SetBottomTitle(const wchar_t *BottomTitle)
 	else
 		strBottomTitle.Clear();
 
-	UpdateMaxLength((int)strBottomTitle.GetLength() + 2);
+	UpdateMaxLength((int)strBottomTitle.CellsCount() + 2);
 }
 
 void VMenu::SetTitle(const wchar_t *Title)
@@ -2351,7 +2371,7 @@ void VMenu::SetTitle(const wchar_t *Title)
 	else
 		strTitle.Clear();
 
-	UpdateMaxLength((int)strTitle.GetLength() + 2);
+	UpdateMaxLength((int)strTitle.CellsCount() + 2);
 
 	if (CheckFlags(VMENU_CHANGECONSOLETITLE))
 	{

@@ -49,8 +49,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Grabber::Grabber() :
 	CMM(MACRO_OTHER)
 {
-	Frame *pFrame = FrameManager->GetCurrentFrame();
-	pFrame->Lock();
+	LockCurrentFrame LCF;
+	LCF.RefreshOnUnlock();
 	SaveScr=new SaveScreen;
 	memset(&GArea,0,sizeof(GArea));
 	memset(&PrevArea,0,sizeof(PrevArea));
@@ -73,8 +73,6 @@ Grabber::Grabber() :
 	DisplayObject();
 	Process();
 	delete SaveScr;
-	pFrame->Unlock();
-	FrameManager->RefreshFrame();
 }
 
 
@@ -221,7 +219,7 @@ void Grabber::DisplayObject()
 	MoveCursor(GArea.CurX,GArea.CurY);
 
 	if (PrevArea.X1!=GArea.X1 || PrevArea.X2!=GArea.X2 ||
-	        PrevArea.Y1!=GArea.Y1 || PrevArea.Y2!=GArea.Y2)
+		PrevArea.Y1!=GArea.Y1 || PrevArea.Y2!=GArea.Y2)
 	{
 		int X1,Y1,X2,Y2;
 		X1=Min(GArea.X1,GArea.X2);
@@ -230,7 +228,7 @@ void Grabber::DisplayObject()
 		Y2=Max(GArea.Y1,GArea.Y2);
 
 		if (X1>Min(PrevArea.X1,PrevArea.X2) || X2<Max(PrevArea.X1,PrevArea.X2) ||
-		        Y1>Min(PrevArea.Y1,PrevArea.Y2) || Y2<Max(PrevArea.Y1,PrevArea.Y2))
+			Y1>Min(PrevArea.Y1,PrevArea.Y2) || Y2<Max(PrevArea.Y1,PrevArea.Y2))
 			SaveScr->RestoreArea(FALSE);
 
 		if (GArea.X1!=-1)
@@ -442,7 +440,7 @@ int Grabber::ProcessKey(int Key)
 int Grabber::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 {
 	if (MouseEvent->dwEventFlags==DOUBLE_CLICK ||
-	        (!MouseEvent->dwEventFlags && (MouseEvent->dwButtonState & RIGHTMOST_BUTTON_PRESSED)))
+		(!MouseEvent->dwEventFlags && (MouseEvent->dwButtonState & RIGHTMOST_BUTTON_PRESSED)))
 	{
 		ProcessKey(KEY_ENTER);
 		return TRUE;

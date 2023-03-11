@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 const DWORD64 POS_NONE = _UI64_MAX;
 
 // Максимальное количество элементов в кэше
-#define POSCACHE_MAX_ELEMENTS     512
+#define POSCACHE_MAX_ELEMENTS     2048
 
 // Количество закладок в редакторе/вьювере на одну позицию
 #define POSCACHE_BOOKMARK_COUNT   10
@@ -48,24 +48,26 @@ const DWORD64 POS_NONE = _UI64_MAX;
 
 struct PosCache
 {
-    /*
+/*
     Param:
     	Editor:
 			Param[0] = Line
 			Param[1] = ScreenLine
 			Param[2] = LinePos
 			Param[3] = LeftPos
-			Param[4] = CodePage or 0
+			Param[4]:bits{0..15}  = CodePage or 0
+			Param[4]:bits{16..23} = TabSize
+			Param[4]:bits{24..31} = ExpandTabs
 		Viewer:
 			Param[0] = FilePos
 			Param[1] = LeftPos
 			Param[2] = Hex?
 			Param[3] = 0
 			Param[4] = CodePage
-    */
+*/
 	DWORD64 Param[POSCACHE_PARAM_COUNT];
 
-    /*
+/*
     Position
     	Editor:
 			Position[0] = [POSCACHE_BOOKMARK_COUNT] Line
@@ -77,7 +79,7 @@ struct PosCache
 			Position[1] = [POSCACHE_BOOKMARK_COUNT] SavePosLeft
 			Position[2] = [POSCACHE_BOOKMARK_COUNT] 0
 			Position[3] = [POSCACHE_BOOKMARK_COUNT] 0
-    */
+*/
 	DWORD64 *Position[POSCACHE_POSITION_COUNT];
 };
 
@@ -103,4 +105,5 @@ class FilePositionCache
 
 		void AddPosition(const wchar_t *Name, PosCache& poscache);
 		bool GetPosition(const wchar_t *Name, PosCache& poscache);
+		void ResetPosition(const wchar_t *Name);
 };

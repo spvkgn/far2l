@@ -73,6 +73,7 @@ SHORT PrevMouseX=0,PrevMouseY=0,MouseX=0,MouseY=0;
 int PreMouseEventFlags=0,MouseEventFlags=0;
 // только что был ввод Alt-Цифира?
 int ReturnAltValue=0;
+bool BracketedPasteMode = false;
 
 /* end Глобальные переменные */
 
@@ -473,8 +474,9 @@ DWORD IsMouseButtonPressed()
 	{
 		GetInputRecord(&rec);
 	}
-
-	WINPORT(Sleep)(10);
+	// IsMouseButtonPressed used within loops, so lets sleep to avoid CPU hogging in that loops
+	// it would be nicer to sleep inside of that loops instead, but keep to original code for now
+	WINPORT(WaitConsoleInput)(10);
 	return MouseButtonState;
 }
 
@@ -516,7 +518,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 {
 	_KEYMACRO(CleverSysLog Clev(L"GetInputRecord()"));
 	static int LastEventIdle=FALSE;
-	DWORD LoopCount=0,CalcKey;
+	DWORD CalcKey;
 	DWORD ReadKey=0;
 	int NotMacros=FALSE;
 	static int LastMsClickMacroKey=0;
@@ -529,7 +531,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 	CheckForPendingCtrlHandleEvent();
 
-	if (FrameManager && FrameManager->RegularIdleWantersCount())
+	if (LIKELY(FrameManager) && FrameManager->RegularIdleWantersCount())
 	{
 		clock_t now = GetProcessUptimeMSec();
 		if (now - sLastIdleDelivered >= 1000) {
@@ -595,7 +597,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		if (!ExcludeMacro && CtrlObject && CtrlObject->Macro.IsRecording() && (CalcKey == (KEY_ALT|KEY_NUMPAD0) || CalcKey == (KEY_ALT|KEY_INS)))
 		{
 			_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%ls)",__LINE__,_FARKEY_ToName(CalcKey)));
-			FrameManager->SetLastInputRecord(rec);
+			if (LIKELY(FrameManager))
+				FrameManager->SetLastInputRecord(rec);
 			if (CtrlObject->Macro.ProcessKey(CalcKey))
 			{
 				RunGraber();
@@ -609,7 +612,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		if (!NotMacros)
 		{
 			_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%ls)",__LINE__,_FARKEY_ToName(CalcKey)));
-			FrameManager->SetLastInputRecord(rec);
+			if (LIKELY(FrameManager))
+				FrameManager->SetLastInputRecord(rec);
 			if (!ExcludeMacro && CtrlObject && CtrlObject->Macro.ProcessKey(CalcKey))
 			{
 				rec->EventType=0;
@@ -633,27 +637,9 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 	LastEventIdle=FALSE;
 	SetFarConsoleMode();
-	BOOL ZoomedState=Console.IsZoomed();
-	BOOL IconicState=Console.IsIconic();
 
-	bool FullscreenState=IsFullscreen();
-
-	for (;;)
+	for (DWORD LoopCount=0;;)
 	{
-		// "Реакция" на максимизацию/восстановление окна консоли
-		if (ZoomedState!=Console.IsZoomed() && IconicState==Console.IsIconic())
-		{
-			ZoomedState=!ZoomedState;
-			ChangeVideoMode(ZoomedState);
-		}
-
-		bool CurrentFullscreenState=IsFullscreen();
-		if(CurrentFullscreenState && !FullscreenState)
-		{
-			ChangeVideoMode(25,80);
-		}
-		FullscreenState=CurrentFullscreenState;
-
 		/* $ 26.04.2001 VVM
 		   ! Убрал подмену колесика */
 		if (Console.PeekInput(*rec))
@@ -718,7 +704,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		}
 
 		ScrBuf.Flush();
-		WINPORT(Sleep)(10);
+		WINPORT(WaitConsoleInput)(160);
 
 		// Позволяет избежать ситуации блокирования мыши
 		if (Opt.Mouse) // А нужно ли это условие???
@@ -732,77 +718,78 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			   нажатии на F10 в панелях, только не запрашиваем подтверждение закрытия,
 			   если это возможно.
 			*/
-			FrameManager->ExitMainLoop(FALSE);
+			if (LIKELY(FrameManager))
+				FrameManager->ExitMainLoop(FALSE);
 
 			return KEY_NONE;
 		}
 
-		if (!(LoopCount & 15))
+		//if (!(LoopCount & 15))
+		clock_t CurTime=GetProcessUptimeMSec();
+
+		if (EnableShowTime)
+			ShowTime(0);
+
+		if (WaitInMainLoop)
 		{
-			clock_t CurTime=GetProcessUptimeMSec();
+			if (CheckForInactivityExit())
+				return(KEY_NONE);
 
-			if (EnableShowTime)
-				ShowTime(0);
-
-			if (WaitInMainLoop)
+			if (!(LoopCount & 3))
 			{
-				if (CheckForInactivityExit())
-					return(KEY_NONE);
+				static int Reenter=0;
 
-				if (!(LoopCount & 63))
+				if (!Reenter)
 				{
-					static int Reenter=0;
+					Reenter++;
+					SHORT X,Y;
+					GetRealCursorPos(X,Y);
 
-					if (!Reenter)
+					if (!X && Y==ScrY && CtrlObject->CmdLine->IsVisible())
 					{
-						Reenter++;
-						SHORT X,Y;
-						GetRealCursorPos(X,Y);
-
-						if (!X && Y==ScrY && CtrlObject->CmdLine->IsVisible())
+						for (;;)
 						{
-							for (;;)
-							{
-								INPUT_RECORD tmprec;
-								int Key=GetInputRecord(&tmprec);
+							INPUT_RECORD tmprec;
+							int Key=GetInputRecord(&tmprec);
 
-								if ((DWORD)Key==KEY_NONE || ((DWORD)Key!=KEY_SHIFT && tmprec.Event.KeyEvent.bKeyDown))
-									break;
-							}
-
-							CtrlObject->Cp()->SetScreenPosition();
-							ScrBuf.ResetShadow();
-							ScrBuf.Flush();
+							if ((DWORD)Key==KEY_NONE || ((DWORD)Key!=KEY_SHIFT && tmprec.Event.KeyEvent.bKeyDown))
+								break;
 						}
 
-						Reenter--;
+						CtrlObject->Cp()->SetScreenPosition();
+						ScrBuf.ResetShadow();
+						ScrBuf.Flush();
 					}
 
-					static int UpdateReenter=0;
+					Reenter--;
+				}
 
-					if (!UpdateReenter && CurTime-KeyPressedLastTime>700)
-					{
-						UpdateReenter=TRUE;
-						CtrlObject->Cp()->LeftPanel->UpdateIfChanged(UIC_UPDATE_NORMAL);
-						CtrlObject->Cp()->RightPanel->UpdateIfChanged(UIC_UPDATE_NORMAL);
-						UpdateReenter=FALSE;
-					}
+				static int UpdateReenter=0;
+
+				if (!UpdateReenter && CurTime-KeyPressedLastTime>700)
+				{
+					UpdateReenter=TRUE;
+					CtrlObject->Cp()->LeftPanel->UpdateIfChanged(UIC_UPDATE_NORMAL);
+					CtrlObject->Cp()->RightPanel->UpdateIfChanged(UIC_UPDATE_NORMAL);
+					UpdateReenter=FALSE;
 				}
 			}
+		}
 
-			if (Opt.ScreenSaver && Opt.ScreenSaverTime>0 &&
-			        CurTime-StartIdleTime>Opt.ScreenSaverTime*60000)
-				if (!ScreenSaver(WaitInMainLoop))
-					return(KEY_NONE);
+		if (Opt.ScreenSaver && Opt.ScreenSaverTime > 0
+			&& CurTime-StartIdleTime>Opt.ScreenSaverTime*60000)
+		{
+			if (!ScreenSaver(WaitInMainLoop))
+				return(KEY_NONE);
+		}
 
-			if (!WaitInMainLoop && LoopCount==64)
-			{
-				LastEventIdle=TRUE;
-				memset(rec,0,sizeof(*rec));
-				rec->EventType=KEY_EVENT;
-				sLastIdleDelivered=GetProcessUptimeMSec();
-				return(KEY_IDLE);
-			}
+		if (!WaitInMainLoop && LoopCount == 3)
+		{
+			LastEventIdle = TRUE;
+			ZeroFill(*rec);
+			rec->EventType=KEY_EVENT;
+			sLastIdleDelivered=GetProcessUptimeMSec();
+			return(KEY_IDLE);
 		}
 
 		if (PluginSynchroManager.Process())
@@ -813,6 +800,13 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 		LoopCount++;
 	} // while (1)
+
+	if (rec->EventType==BRACKETED_PASTE_EVENT)
+	{
+		Console.ReadInput(*rec);
+		BracketedPasteMode = (rec->Event.BracketedPaste.bStartPaste != FALSE);
+		return KEY_NONE;
+	}
 
 	if (rec->EventType==NOOP_EVENT) {
 		Console.ReadInput(*rec);
@@ -893,9 +887,9 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			  вылазил Shift после отпускания клавиш.
 			*/
 			if ((PrevVKKeyCode2==VK_SHIFT && PrevVKKeyCode==VK_RETURN &&
-			        rec->Event.KeyEvent.bKeyDown) ||
-			        (PrevVKKeyCode2==VK_RETURN && PrevVKKeyCode==VK_SHIFT &&
-			         !rec->Event.KeyEvent.bKeyDown))
+				rec->Event.KeyEvent.bKeyDown) ||
+				(PrevVKKeyCode2==VK_RETURN && PrevVKKeyCode==VK_SHIFT &&
+				!rec->Event.KeyEvent.bKeyDown))
 			{
 				if (PrevVKKeyCode2 != VK_SHIFT)
 				{
@@ -953,7 +947,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 	if (ReturnAltValue && !NotMacros)
 	{
 		_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%ls)",__LINE__,_FARKEY_ToName(CalcKey)));
-		FrameManager->SetLastInputRecord(rec);
+		if (LIKELY(FrameManager))
+			FrameManager->SetLastInputRecord(rec);
 		if (CtrlObject && CtrlObject->Macro.ProcessKey(CalcKey))
 		{
 			rec->EventType=0;
@@ -969,16 +964,6 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		ShowTime(1);
 
 	bool SizeChanged=false;
-	if(Opt.WindowMode)
-	{
-		SMALL_RECT CurConRect;
-		Console.GetWindowRect(CurConRect);
-		if(CurConRect.Bottom-CurConRect.Top!=ScrY || CurConRect.Right-CurConRect.Left!=ScrX)
-		{
-			SizeChanged=true;
-		}
-	}
-
 	/*& 17.05.2001 OT Изменился размер консоли, генерим клавишу*/
 	if (rec->EventType==WINDOW_BUFFER_SIZE_EVENT || SizeChanged)
 	{
@@ -987,23 +972,18 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		//// // _SVS(SysLog(1,"GetInputRecord(WINDOW_BUFFER_SIZE_EVENT)"));
 		WINPORT(Sleep)(10);
 		GetVideoMode(CurSize);
-		bool NotIgnore=Opt.WindowMode && (rec->Event.WindowBufferSizeEvent.dwSize.X!=CurSize.X || rec->Event.WindowBufferSizeEvent.dwSize.Y!=CurSize.Y);
-		if (PScrX+1 == CurSize.X && PScrY+1 == CurSize.Y && !NotIgnore)
+		if (PScrX+1 == CurSize.X && PScrY+1 == CurSize.Y)
 		{
 			return KEY_NONE;
 		}
 		else
 		{
-			if(Opt.WindowMode && (PScrX+1>CurSize.X || PScrY+1>CurSize.Y))
-			{
-				//Console.ClearExtraRegions(FarColorToReal(COL_COMMANDLINEUSERSCREEN));
-			}
 			PrevScrX=PScrX;
 			PrevScrY=PScrY;
 			//// // _SVS(SysLog(-1,"GetInputRecord(WINDOW_BUFFER_SIZE_EVENT); return KEY_CONSOLE_BUFFER_RESIZE"));
 			WINPORT(Sleep)(10);
 
-			if (FrameManager)
+			if (LIKELY(FrameManager))
 			{
 				ScrBuf.ResetShadow();
 				// апдейтим панели (именно они сейчас!)
@@ -1013,7 +993,9 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 					GlobalSaveScrPtr->Discard();
 
 				FrameManager->ResizeAllFrame();
-				FrameManager->GetCurrentFrame()->Show();
+				auto *CurFrame = FrameManager->GetCurrentFrame();
+				if (LIKELY(CurFrame))
+					CurFrame->Show();
 				//// // _SVS(SysLog(L"PreRedrawFunc = %p",PreRedrawFunc));
 				PreRedrawItem preRedrawItem=PreRedraw.Peek();
 
@@ -1038,7 +1020,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 		// Для NumPad!
 		if ((CalcKey&(KEY_CTRL|KEY_SHIFT|KEY_ALT|KEY_RCTRL|KEY_RALT)) == KEY_SHIFT &&
-		        (CalcKey&KEY_MASKF) >= KEY_NUMPAD0 && (CalcKey&KEY_MASKF) <= KEY_NUMPAD9)
+			(CalcKey&KEY_MASKF) >= KEY_NUMPAD0 && (CalcKey&KEY_MASKF) <= KEY_NUMPAD9)
 			ShiftPressed=SHIFT_PRESSED;
 		else
 			ShiftPressed=(CtrlState & SHIFT_PRESSED);
@@ -1047,8 +1029,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			return(KEY_NONE);
 
 		if (!rec->Event.KeyEvent.bKeyDown &&
-		        (KeyCode==VK_SHIFT || KeyCode==VK_CONTROL || KeyCode==VK_MENU) &&
-		        CurClock-PressedLastTime<500)
+			(KeyCode==VK_SHIFT || KeyCode==VK_CONTROL || KeyCode==VK_MENU) &&
+			CurClock-PressedLastTime<500)
 		{
 			uint32_t Key {std::numeric_limits<uint32_t>::max()};
 
@@ -1096,7 +1078,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 			{
 				_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%ls)",__LINE__,_FARKEY_ToName(Key)));
-				if(FrameManager)
+				if (LIKELY(FrameManager))
 				{
 					FrameManager->SetLastInputRecord(rec);
 				}
@@ -1115,7 +1097,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		CtrlPressedLast=RightCtrlPressedLast=FALSE;
 		AltPressedLast=RightAltPressedLast=FALSE;
 		ShiftPressedLast=(KeyCode==VK_SHIFT && rec->Event.KeyEvent.bKeyDown) ||
-		                 (KeyCode==VK_RETURN && ShiftPressed && !rec->Event.KeyEvent.bKeyDown);
+			(KeyCode==VK_RETURN && ShiftPressed && !rec->Event.KeyEvent.bKeyDown);
 
 		if (!ShiftPressedLast)
 			if (KeyCode==VK_CONTROL && rec->Event.KeyEvent.bKeyDown)
@@ -1154,8 +1136,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		if (KeyCode==VK_SHIFT || KeyCode==VK_MENU || KeyCode==VK_CONTROL || KeyCode==VK_NUMLOCK || KeyCode==VK_SCROLL || KeyCode==VK_CAPITAL)
 		{
 			if ((KeyCode==VK_NUMLOCK || KeyCode==VK_SCROLL || KeyCode==VK_CAPITAL) &&
-			        (CtrlState&(LEFT_CTRL_PRESSED|LEFT_ALT_PRESSED|SHIFT_PRESSED|RIGHT_ALT_PRESSED|RIGHT_CTRL_PRESSED))
-			   )
+				(CtrlState&(LEFT_CTRL_PRESSED|LEFT_ALT_PRESSED|SHIFT_PRESSED|RIGHT_ALT_PRESSED|RIGHT_CTRL_PRESSED))
+			)
 			{
 				// TODO:
 				;
@@ -1280,8 +1262,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			short zDelta = HIWORD(rec->Event.MouseEvent.dwButtonState);
 			CalcKey = (zDelta>0)?KEY_MSWHEEL_RIGHT:KEY_MSWHEEL_LEFT;
 			CalcKey |= (CtrlState&SHIFT_PRESSED?KEY_SHIFT:0)|
-			           (CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
-			           (CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
+				(CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
+				(CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
 			memset(rec,0,sizeof(*rec));
 			rec->EventType = KEY_EVENT;
 		}
@@ -1322,8 +1304,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 				if (MsCalcKey)
 				{
 					MsCalcKey |= (CtrlState&SHIFT_PRESSED?KEY_SHIFT:0)|
-					             (CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
-					             (CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
+						(CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
+						(CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
 
 					// для WaitKey()
 					if (ProcessMouse)
@@ -1331,7 +1313,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 					else
 					{
 						_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%ls)",__LINE__,_FARKEY_ToName(MsCalcKey)));
-						FrameManager->SetLastInputRecord(rec);
+						if (LIKELY(FrameManager))
+							FrameManager->SetLastInputRecord(rec);
 						if (CtrlObject->Macro.ProcessKey(MsCalcKey))
 						{
 							memset(rec,0,sizeof(*rec));
@@ -1350,7 +1333,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 	{
 		_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%ls)",__LINE__,_FARKEY_ToName(CalcKey)));
-		if(FrameManager)
+		if (LIKELY(FrameManager))
 		{
 			FrameManager->SetLastInputRecord(rec);
 		}
@@ -1405,7 +1388,7 @@ DWORD WaitKey(DWORD KeyWait,DWORD delayMS,bool ExcludeMacro)
 		SetCursorType(0,10);
 	}
 
-	clock_t CheckTime=GetProcessUptimeMSec()+delayMS;
+	const clock_t CheckTime = GetProcessUptimeMSec() + delayMS;
 	DWORD Key;
 
 	for (;;)
@@ -1431,13 +1414,20 @@ DWORD WaitKey(DWORD KeyWait,DWORD delayMS,bool ExcludeMacro)
 		else if (Key == KeyWait)
 			break;
 
-		if (delayMS && GetProcessUptimeMSec() >= CheckTime)
+		DWORD WaitExpiration = 1000;
+		if (delayMS)
 		{
-			Key=KEY_NONE;
-			break;
+			const clock_t CurTime = GetProcessUptimeMSec();
+			if (CurTime >= CheckTime)
+			{
+				Key = KEY_NONE;
+				break;
+			}
+			if (WaitExpiration > CheckTime - CurTime)
+				WaitExpiration = CheckTime - CurTime;
 		}
 
-		WINPORT(Sleep)(10);
+		WINPORT(WaitConsoleInput)(WaitExpiration);
 	}
 
 	if (KeyWait == KEY_CTRLALTSHIFTRELEASE || KeyWait == KEY_RCTRLALTSHIFTRELEASE)
@@ -1469,7 +1459,7 @@ int WriteInput(int Key,DWORD Flags)
 			if (Key < 0x30 || Key > 0x5A) // 0-9:;<=>?@@ A..Z  //?????
 				Key=0;
 
-			Rec.Event.KeyEvent.uChar.UnicodeChar=Rec.Event.KeyEvent.uChar.AsciiChar=Key;
+			Rec.Event.KeyEvent.uChar.UnicodeChar=/*Rec.Event.KeyEvent.uChar.AsciiChar=*/Key;
 			Rec.Event.KeyEvent.dwControlKeyState=0;
 		}
 
@@ -1608,7 +1598,7 @@ static FARString &GetShiftKeyName(FARString &strName, DWORD Key,int& Len)
    5. "Oem" и 5 десятичных цифр (с ведущими нулями)
    6. только модификаторы (Alt/RAlt/Ctrl/RCtrl/Shift)
 */
-uint32_t WINAPI KeyNameToKey(const wchar_t *Name)
+uint32_t KeyNameToKey(const wchar_t *Name)
 {
 	if (!Name || !*Name)
 		return KEY_INVALID;
@@ -1724,6 +1714,12 @@ uint32_t WINAPI KeyNameToKey(const wchar_t *Name)
 	*/
 	// _SVS(SysLog(L"Key=0x%08X (%c) => '%ls'",Key,(Key?Key:' '),Name));
 	return (!Key || Pos < Len)? KEY_INVALID : Key;
+}
+
+uint32_t KeyNameToKey(const wchar_t *Name, uint32_t Default)
+{
+	const uint32_t Key = KeyNameToKey(Name);
+	return (Key == KEY_INVALID) ? Default : Key;
 }
 
 BOOL WINAPI KeyToText(uint32_t Key0, FARString &strKeyText0)
@@ -1852,11 +1848,11 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 
 		// здесь подход к Shift-клавишам другой, нежели для ControlState
 		Rec->Event.KeyEvent.dwControlKeyState=
-		    (FShift&KEY_SHIFT?SHIFT_PRESSED:0)|
-		    (FShift&KEY_ALT?LEFT_ALT_PRESSED:0)|
-		    (FShift&KEY_CTRL?LEFT_CTRL_PRESSED:0)|
-		    (FShift&KEY_RALT?RIGHT_ALT_PRESSED:0)|
-		    (FShift&KEY_RCTRL?RIGHT_CTRL_PRESSED:0);
+			(FShift&KEY_SHIFT?SHIFT_PRESSED:0)|
+			(FShift&KEY_ALT?LEFT_ALT_PRESSED:0)|
+			(FShift&KEY_CTRL?LEFT_CTRL_PRESSED:0)|
+			(FShift&KEY_RALT?RIGHT_ALT_PRESSED:0)|
+			(FShift&KEY_RCTRL?RIGHT_CTRL_PRESSED:0);
 	}
 
 	return VirtKey;
@@ -1884,7 +1880,7 @@ int IsNavKey(DWORD Key)
 
 	for (int I=0; I < int(ARRAYSIZE(NavKeys)); I++)
 		if ((!NavKeys[I][0] && Key==NavKeys[I][1]) ||
-		        (NavKeys[I][0] && (Key&0x00FFFFFF)==(NavKeys[I][1]&0x00FFFFFF)))
+			(NavKeys[I][0] && (Key&0x00FFFFFF)==(NavKeys[I][1]&0x00FFFFFF)))
 			return TRUE;
 
 	return FALSE;
@@ -2207,9 +2203,9 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros)
 
 		//// // _SVS(SysLog(L"1 AltNumPad -> CalcKeyCode -> KeyCode=%ls  ScanCode=0x%0X AltValue=0x%0X CtrlState=%X GetAsyncKeyState(VK_SHIFT)=%X",_VK_KEY_ToName(KeyCode),ScanCode,AltValue,CtrlState,GetAsyncKeyState(VK_SHIFT)));
 		if (!(CtrlState & ENHANCED_KEY)
-		        //(CtrlState&NUMLOCK_ON) && KeyCode >= VK_NUMPAD0 && KeyCode <= VK_NUMPAD9 ||
-		        // !(CtrlState&NUMLOCK_ON) && KeyCode < VK_NUMPAD0
-		   )
+			//(CtrlState&NUMLOCK_ON) && KeyCode >= VK_NUMPAD0 && KeyCode <= VK_NUMPAD9 ||
+			// !(CtrlState&NUMLOCK_ON) && KeyCode < VK_NUMPAD0
+		)
 		{
 			//// // _SVS(SysLog(L"2 AltNumPad -> CalcKeyCode -> KeyCode=%ls  ScanCode=0x%0X AltValue=0x%0X CtrlState=%X GetAsyncKeyState(VK_SHIFT)=%X",_VK_KEY_ToName(KeyCode),ScanCode,AltValue,CtrlState,GetAsyncKeyState(VK_SHIFT)));
 			static unsigned int ScanCodes[]={82,79,80,81,75,76,77,71,72,73};
@@ -2618,8 +2614,8 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros)
 		if (KeyCode>='0' && KeyCode<='9')
 		{
 			if (WaitInFastFind > 0 &&
-			        CtrlObject->Macro.GetCurRecord(nullptr,nullptr) < MACROMODE_RECORDING &&
-			        CtrlObject->Macro.GetIndex(KEY_ALTSHIFT0+KeyCode-'0',-1) == -1)
+				CtrlObject->Macro.GetCurRecord(nullptr,nullptr) < MACROMODE_RECORDING &&
+				CtrlObject->Macro.GetIndex(KEY_ALTSHIFT0+KeyCode-'0',-1) == -1)
 			{
 				return KEY_ALT|KEY_SHIFT|Char;
 			}

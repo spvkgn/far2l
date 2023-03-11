@@ -1,10 +1,6 @@
 #include "headers.hpp"
 #include "ConfigRW.hpp"
-#include <assert.h>
-#include <errno.h>
 #include <algorithm>
-
-#define CONFIG_INI "settings/config.ini"
 
 static bool IsSectionOrSubsection(const std::string &haystack, const char *needle)
 {
@@ -21,43 +17,37 @@ static bool IsSectionOrSubsection(const std::string &haystack, const char *needl
 	return true;
 }
 
-static const char *Section2Ini(const std::string &section)
+static const struct SectionProps
 {
-	if (IsSectionOrSubsection(section, "KeyMacros"))
-		return "settings/key_macros.ini";
+	const char *name;
+	const char *ini;
+	bool case_insensitive;
+} s_default_section_props = { "", CONFIG_INI, false };
 
-	if (IsSectionOrSubsection(section, "Associations"))
-		return "settings/associations.ini";
+static const SectionProps s_section_props [] = {
+	{"KeyMacros", "settings/key_macros.ini", true},
+	{"Associations", "settings/associations.ini", false},
+	{"Panel", "settings/panel.ini", false},
+	{"CodePages", "settings/codepages.ini", false},
+	{"XLat", "settings/xlat.ini", false},
+	{"Colors", "settings/colors.ini", false},
+	{"SortGroups", "settings/colors.ini", false},
+	{"UserMenu", "settings/user_menu.ini", false},
+	{"SavedDialogHistory", "history/dialogs.hst", false},
+	{"SavedHistory", "history/commands.hst", false},
+	{"SavedFolderHistory", "history/folders.hst", false},
+	{"SavedViewHistory", "history/view.hst", false}
+};
 
-	if (IsSectionOrSubsection(section, "Panel"))
-		return "settings/panel.ini";
+static const SectionProps &GetSectionProps(const std::string &section)
+{
+	for (const auto &sp : s_section_props) {
+		if (IsSectionOrSubsection(section, sp.name)) {
+			return sp;
+		}
+	}
 
-	if (IsSectionOrSubsection(section, "CodePages"))
-		return "settings/codepages.ini";
-
-	if (IsSectionOrSubsection(section, "XLat"))
-		return "settings/xlat.ini";
-
-	if (IsSectionOrSubsection(section, "Colors")
-		|| IsSectionOrSubsection(section, "SortGroups") )
-		return "settings/colors.ini";
-
-	if (IsSectionOrSubsection(section, "UserMenu"))
-		return "settings/user_menu.ini";
-
-	if (IsSectionOrSubsection(section, "SavedDialogHistory"))
-		return "history/dialogs.hst";
-
-	if (IsSectionOrSubsection(section, "SavedHistory"))
-		return "history/commands.hst";
-
-	if (IsSectionOrSubsection(section, "SavedFolderHistory"))
-		return "history/folders.hst";
-
-	if (IsSectionOrSubsection(section, "SavedViewHistory"))
-		return "history/view.hst";
-
-	return CONFIG_INI;
+	return s_default_section_props;
 }
 
 void ConfigSection::SelectSection(const std::string &section)
@@ -96,7 +86,7 @@ ConfigReader::ConfigReader(const std::string &preselect_section)
 struct stat ConfigReader::SavedSectionStat(const std::string &section)
 {
 	struct stat out;
-	if (stat(InMyConfig(Section2Ini(section)).c_str(), &out) == -1) {
+	if (stat(InMyConfig(GetSectionProps(section).ini).c_str(), &out) == -1) {
 		memset(&out, 0, sizeof(out));
 	}
 	return out;
@@ -104,10 +94,10 @@ struct stat ConfigReader::SavedSectionStat(const std::string &section)
 
 void ConfigReader::OnSectionSelected()
 {
-	const char *ini = Section2Ini(_section);
-	auto &selected_kfh = _ini2kfh[ini];
+	const auto &sp = GetSectionProps(_section);
+	auto &selected_kfh = _ini2kfh[sp.ini];
 	if (!selected_kfh) {
-		selected_kfh.reset(new KeyFileReadHelper(InMyConfig(ini)));
+		selected_kfh.reset(new KeyFileReadHelper(InMyConfig(sp.ini), nullptr, sp.case_insensitive));
 	}
 	_selected_kfh = selected_kfh.get();
 	_selected_section_values = _selected_kfh->GetSectionValues(_section);
@@ -126,31 +116,31 @@ void ConfigReader::OnSectionSelected()
 
 std::vector<std::string> ConfigReader::EnumKeys()
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->EnumKeys();
 }
 
-std::vector<std::string> ConfigReader::EnumSectionsAt()
+std::vector<std::string> ConfigReader::EnumSectionsAt(bool recursed)
 {
-	assert(_selected_kfh != nullptr);
-	return _selected_kfh->EnumSectionsAt(_section);
+	ASSERT(_selected_kfh != nullptr);
+	return _selected_kfh->EnumSectionsAt(_section, recursed);
 }
 
 bool ConfigReader::HasKey(const std::string &name) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->HasKey(name);
 }
 
 FARString ConfigReader::GetString(const std::string &name, const wchar_t *def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->GetString(name, def);
 }
 
 bool ConfigReader::GetString(FARString &out, const std::string &name, const wchar_t *def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	if (!_selected_section_values->HasKey(name)) {
 		return false;
 	}
@@ -160,7 +150,7 @@ bool ConfigReader::GetString(FARString &out, const std::string &name, const wcha
 
 bool ConfigReader::GetString(std::string &out, const std::string &name, const char *def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	if (!_selected_section_values->HasKey(name)) {
 		return false;
 	}
@@ -170,31 +160,31 @@ bool ConfigReader::GetString(std::string &out, const std::string &name, const ch
 
 int ConfigReader::GetInt(const std::string &name, int def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->GetInt(name, def);
 }
 
 unsigned int ConfigReader::GetUInt(const std::string &name, unsigned int def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->GetUInt(name, def);
 }
 
 unsigned long long ConfigReader::GetULL(const std::string &name, unsigned long long def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->GetULL(name, def);
 }
 
 size_t ConfigReader::GetBytes(unsigned char *out, size_t len, const std::string &name, const unsigned char *def) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->GetBytes(out, len, name, def);
 }
 
 bool ConfigReader::GetBytes(std::vector<unsigned char> &out, const std::string &name) const
 {
-	assert(_selected_section_values != nullptr);
+	ASSERT(_selected_section_values != nullptr);
 	return _selected_section_values->GetBytes(out, name);
 }
 
@@ -223,10 +213,10 @@ bool ConfigWriter::Save()
 
 void ConfigWriter::OnSectionSelected()
 {
-	const char *ini = Section2Ini(_section);
-	auto &selected_kfh = _ini2kfh[ini];
+	const auto &sp = GetSectionProps(_section);
+	auto &selected_kfh = _ini2kfh[sp.ini];
 	if (!selected_kfh) {
-		selected_kfh.reset(new KeyFileHelper(InMyConfig(ini)));
+		selected_kfh.reset(new KeyFileHelper(InMyConfig(sp.ini), true, sp.case_insensitive));
 	}
 	_selected_kfh =	selected_kfh.get();
 
@@ -394,210 +384,3 @@ void ConfigWriter::RemoveKey(const std::string &name)
 {
 	_selected_kfh->RemoveKey(_section, name);
 }
-
-//////////////////////////////////////////////////////////////////////////////////////
-#ifdef WINPORT_REGISTRY
-static bool ShouldImportRegSettings(const std::string &virtual_path)
-{
-	
-	return (
-		// dont care about legacy Plugins settings
-		virtual_path != "Plugins"
-
-		// skip stuff that goes to plugins/state.ini
-		&& virtual_path != "PluginHotkeys"
-		&& virtual_path != "PluginsCache"
-
-		// skip abandoned poscache entires
-		&& virtual_path != "Viewer/LastPositions"
-		&& virtual_path != "Editor/LastPositions"
-
-		// separately handled by BookmarksLegacy.cpp
-		&& virtual_path != "FolderShortcuts"
-		);
-}
-
-static void ConfigUgrade_RegKey(FILE *lf, ConfigWriter &cfg_writer, HKEY root, const wchar_t *subpath, const std::string &virtual_path)
-{
-	HKEY key = 0;
-	LONG r = WINPORT(RegOpenKeyEx)(root, subpath, 0, GENERIC_READ, &key);
-	std::string virtual_subpath;
-	if (r == ERROR_SUCCESS) {
-		std::vector<wchar_t> namebuf(0x400);
-		for (DWORD i = 0; ;++i) {
-			r = WINPORT(RegEnumKey)(key, i, &namebuf[0], namebuf.size() - 1);
-			if (r != ERROR_SUCCESS) break;
-			virtual_subpath = virtual_path;
-			if (!virtual_subpath.empty()) {
-				virtual_subpath+= '/';
-			}
-			virtual_subpath+= Wide2MB(&namebuf[0]);
-			if (ShouldImportRegSettings(virtual_subpath)) {
-				fprintf(lf, "%s: RECURSE '%s'\n", __FUNCTION__, virtual_subpath.c_str());
-				ConfigUgrade_RegKey(lf, cfg_writer, key, &namebuf[0], virtual_subpath);
-			} else {
-				fprintf(lf, "%s: SKIP '%s'\n", __FUNCTION__, virtual_subpath.c_str());
-			}
-		}
-
-		fprintf(lf, "%s: ENUM '%s'\n", __FUNCTION__, virtual_path.c_str());
-		cfg_writer.SelectSection(virtual_path);
-		const bool macro_type_prefix =
-			(virtual_path == "KeyMacros/Vars" || virtual_path == "KeyMacros/Consts");
-
-		std::vector<BYTE> databuf(0x400);
-		for (DWORD i = 0; ;) {
-			DWORD namelen = namebuf.size() - 1;
-			DWORD datalen = databuf.size();
-			DWORD tip = 0;
-			r = WINPORT(RegEnumValue)(key, i,
-				&namebuf[0], &namelen, NULL, &tip, &databuf[0], &datalen);
-			if (r != ERROR_SUCCESS) {
-				if (r != ERROR_MORE_DATA) {
-					break;
-				}
-				namebuf.resize(namebuf.size() + 0x400);
-				databuf.resize(databuf.size() + 0x400);			
-
-			} else {
-				fprintf(lf, "%s: SET [%s] '%ls' TYPE=%u DATA={",
-					__FUNCTION__, virtual_path.c_str(), &namebuf[0], tip);
-				for (size_t j = 0; j < datalen; ++j) {
-					fprintf(lf, "%02x ", (unsigned int)databuf[j]);
-				}
-				fprintf(lf, "}\n");
-
-				std::string name(Wide2MB(&namebuf[0]));
-				FARString tmp_str;
-				switch (tip) {
-					case REG_DWORD: {
-						if (macro_type_prefix) {
-							tmp_str.Format(L"INT:%ld", (long)*(int32_t *)&databuf[0]);
-							cfg_writer.SetString(name, tmp_str);
-						} else {
-							cfg_writer.SetUInt(name, (unsigned int)*(uint32_t *)&databuf[0]);
-						}
-					} break;
-					case REG_QWORD: {
-						if (macro_type_prefix) {
-							tmp_str.Format(L"INT:%lld", (long long)*(int64_t *)&databuf[0]);
-							cfg_writer.SetString(name, tmp_str);
-						} else {
-							cfg_writer.SetULL(name, *(uint64_t *)&databuf[0]);
-						}
-					} break;
-					case REG_SZ: case REG_EXPAND_SZ: case REG_MULTI_SZ: {
-							if (macro_type_prefix) {
-								tmp_str = L"STR:";
-							}
-							for (size_t i = 0; i + sizeof(WCHAR) <= datalen ; i+= sizeof(WCHAR)) {
-								WCHAR wc = *(const WCHAR *)&databuf[i];
-								if (!wc) {
-									if (i + sizeof(WCHAR) >= datalen) {
-										break;
-									}
-									// REG_MULTI_SZ was used only in macroses and history.
-									// Macroses did inter-strings zeroes translated to \n.
-									// Now macroses code doesn't do that translation, just need
-									// to one time translate data imported from legacy registry.
-									// History code now also uses '\n' chars as string separators.
-									if (tip == REG_MULTI_SZ) {
-										if (i + 2 * sizeof(WCHAR) >= datalen) {
-											// skip last string terminator translation
-											break;
-										}
-										tmp_str+= L'\n';
-									} else {
-										tmp_str.Append(wc);
-									}
-								} else {
-									tmp_str.Append(wc);
-								}
-							}
-							cfg_writer.SetString(name, tmp_str);
-					} break;
-
-					default:
-						cfg_writer.SetBytes(name, &databuf[0], datalen);
-				}
-				++i;
-			}
-		}
-		WINPORT(RegCloseKey)(key);
-	}
-}
-
-static void Upgrade_MoveFile(FILE *lf, const char *src, const char *dst)
-{
-	const std::string &str_src = InMyConfig(src);
-	const std::string &str_dst = InMyConfig(dst);
-	int r = rename(str_src.c_str(), str_dst.c_str());
-	if (r == 0) {
-		fprintf(lf, "%s('%s', '%s') - DONE\n", __FUNCTION__, str_src.c_str(), str_dst.c_str());
-	} else {
-		fprintf(lf, "%s('%s', '%s') - ERROR=%d\n", __FUNCTION__, str_src.c_str(), str_dst.c_str(), errno);
-	}
-}
-
-void CheckForConfigUpgrade()
-{
-	const std::string &cfg_ini = InMyConfig(CONFIG_INI);
-	struct stat s{};
-	if (stat(cfg_ini.c_str(), &s) == -1) {
-		FILE *lf = fopen(InMyCache("upgrade.log").c_str(), "a");
-		if (!lf) {
-			lf = stderr;
-		}
-		try {
-			const std::string sh_log = InMyCache("upgrade.sh.log");
-			int r = system(StrPrintf("date >>\"%s\" 2>&1", sh_log.c_str()).c_str());
-			if (r != 0) {
-				perror("system(date)");
-			}
-
-			time_t now = time(NULL);
-			fprintf(lf, "---- Upgrade started on %s\n", ctime(&now));
-			ConfigWriter cfg_writer;
-			ConfigUgrade_RegKey(lf, cfg_writer, HKEY_CURRENT_USER, L"Software/Far2", "");
-			Upgrade_MoveFile(lf, "bookmarks.ini", "settings/bookmarks.ini");
-			Upgrade_MoveFile(lf, "plugins.ini", "plugins/state.ini");
-			Upgrade_MoveFile(lf, "viewer.pos", "history/viewer.pos");
-			Upgrade_MoveFile(lf, "editor.pos", "history/editor.pos");
-
-			const std::string &cmd = StrPrintf(
-				"mv -f \"%s\" \"%s\" >>\"%s\" 2>&1 || cp -f -r \"%s\" \"%s\" >>\"%s\" 2>&1",
-				InMyConfig("NetRocks").c_str(),
-				InMyConfig("plugins/").c_str(),
-				sh_log.c_str(),
-				InMyConfig("NetRocks").c_str(),
-				InMyConfig("plugins/").c_str(),
-				sh_log.c_str() );
-
-			r = system(cmd.c_str());
-			if (r != 0) {
-				fprintf(stderr, "%s: ERROR=%d CMD='%s'\n", __FUNCTION__, r, cmd.c_str());
-				fprintf(lf, "%s: ERROR=%d CMD='%s'\n", __FUNCTION__, r, cmd.c_str());
-			} else {
-				fprintf(lf, "%s: DONE CMD='%s'\n", __FUNCTION__, cmd.c_str());
-			}
-
-			now = time(NULL);
-			cfg_writer.SelectSection("Upgrade");
-			cfg_writer.SetULL("UpgradedOn", (unsigned long long)now);
-			fprintf(lf, "---- Upgrade finished on %s\n", ctime(&now));
-
-		} catch (std::exception &e) {
-			fprintf(stderr, "%s: EXCEPTION: %s\n", __FUNCTION__, e.what());
-			fprintf(lf, "%s: EXCEPTION: %s\n", __FUNCTION__, e.what());
-		}
-		if (lf != stderr) {
-			fclose(lf);
-		}
-	}
-}
-
-#else // WINPORT_REGISTRY
-
-void CheckForConfigUpgrade() { }
-
-#endif // WINPORT_REGISTRY

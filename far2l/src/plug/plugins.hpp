@@ -165,10 +165,15 @@ class PluginManager
 
 		Plugin **PluginsData;
 		int PluginsCount;
-		int OemPluginsCount;
 		struct BackgroundTasks : std::map<std::wstring, unsigned int>, std::mutex {} BgTasks;
 
 	public:
+		enum HotKeyKind
+		{
+			HKK_CONFIG,
+			HKK_MENU,
+			HKK_DRIVEMENU
+		};
 
 		BitFlags Flags;        // флаги манагера плагинов
 
@@ -178,15 +183,15 @@ class PluginManager
 		Viewer *CurViewer;     // 27.09.2000 SVS: Указатель на текущий Viewer
 
 	private:
-
 		void LoadIfCacheAbsent();
 		void ReadUserBackgound(SaveScreen *SaveScr);
 
-		void GetPluginHotKey(Plugin *pPlugin, int ItemNumber, const char *HotKeyType, FARString &strHotKey);
+		void GetPluginHotKey(Plugin *pPlugin, int ItemNumber, HotKeyKind Kind, FARString &strHotKey);
 
 		bool TestPluginInfo(Plugin *Item,PluginInfo *Info);
 		bool TestOpenPluginInfo(Plugin *Item,OpenPluginInfo *Info);
-		bool CheckIfHotkeyPresent(const char *HotKeyType);
+
+		bool CheckIfHotkeyPresent(HotKeyKind Kind);
 
 		bool LoadPlugin(const FARString &strModuleName, bool LoadUncached);
 
@@ -217,7 +222,6 @@ class PluginManager
 		Plugin *GetPlugin(int PluginNumber);
 
 		int GetPluginsCount() { return PluginsCount; }
-		int GetOemPluginsCount() { return OemPluginsCount; }
 
 		BOOL IsPluginsLoaded() { return Flags.Check(PSIF_PLUGINSLOADDED); }
 
@@ -234,7 +238,7 @@ class PluginManager
 		int ProcessCommandLine(const wchar_t *Command,Panel *Target=nullptr);
 
 		bool SetHotKeyDialog(const wchar_t *DlgPluginTitle, const std::string &SettingName);
-		std::string GetHotKeySettingName(Plugin *pPlugin, int ItemNumber, const char *HotKeyType);
+		std::string GetHotKeySettingName(Plugin *pPlugin, int ItemNumber, HotKeyKind Kind);
 
 		// $ .09.2000 SVS - Функция CallPlugin - найти плагин по ID и запустить OpenFrom = OPEN_*
 		int CallPlugin(DWORD SysID,int OpenFrom, void *Data, int *Ret=nullptr);

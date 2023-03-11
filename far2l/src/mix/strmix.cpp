@@ -223,22 +223,15 @@ FARString& WINAPI TruncStrFromEnd(FARString &strStr, int MaxLength)
 
 wchar_t* WINAPI TruncStrFromEnd(wchar_t *Str,int MaxLength)
 {
-	assert(MaxLength >= 0);
+	ASSERT(MaxLength >= 0);
 
-	MaxLength=Max(0, MaxLength);
+	MaxLength = Max(0, MaxLength);
 
-	if (Str)
-	{
-		int Length = StrLength(Str);
-
-		if (Length > MaxLength)
-		{
-			if (MaxLength>3)
-				wmemcpy(Str+MaxLength-3, L"...", 3);
-
-			Str[MaxLength]=0;
-		}
-	}
+	const size_t Len = StrLength(Str);
+	size_t n = Len;
+	StrCellsTruncateRight(Str, n, MaxLength);
+	ASSERT(n <= Len);
+	Str[n] = 0;
 
 	return Str;
 }
@@ -246,29 +239,15 @@ wchar_t* WINAPI TruncStrFromEnd(wchar_t *Str,int MaxLength)
 
 wchar_t* WINAPI TruncStr(wchar_t *Str,int MaxLength)
 {
-	assert(MaxLength >= 0);
+	ASSERT(MaxLength >= 0);
 
-	MaxLength=Max(0, MaxLength);
+	MaxLength = Max(0, MaxLength);
 
-	if (Str)
-	{
-		int Length=StrLength(Str);
-
-		if (MaxLength<0)
-			MaxLength=0;
-
-		if (Length > MaxLength)
-		{
-			if (MaxLength>3)
-			{
-				wchar_t *MovePos = Str+Length-MaxLength+3;
-				wmemmove(Str+3, MovePos, StrLength(MovePos)+1);
-				wmemcpy(Str,L"...",3);
-			}
-
-			Str[MaxLength]=0;
-		}
-	}
+	const size_t Len = StrLength(Str);
+	size_t n = Len;
+	StrCellsTruncateLeft(Str, n, MaxLength);
+	ASSERT(n <= Len);
+	Str[n] = 0;
 
 	return Str;
 }
@@ -284,33 +263,14 @@ FARString& WINAPI TruncStr(FARString &strStr, int MaxLength)
 
 wchar_t* TruncStrFromCenter(wchar_t *Str, int MaxLength)
 {
-	assert(MaxLength >= 0);
+	//ASSERT(MaxLength >= 0);
+	MaxLength = Max(0, MaxLength);
 
-	MaxLength=Max(0, MaxLength);
-
-	if (Str)
-	{
-		int Length = StrLength(Str);
-
-		if (MaxLength < 0)
-			MaxLength=0;
-
-		if (Length > MaxLength)
-		{
-			const int DotsLen = 3;
-
-			if (MaxLength > DotsLen)
-			{
-				int Len1 = (MaxLength - DotsLen) / 2;
-				int Len2 = MaxLength - DotsLen - Len1;
-				wmemcpy(Str + Len1, L"...", DotsLen);
-				wmemmove(Str + Len1 + DotsLen, Str + Length - Len2, Len2);
-			}
-
-			Str[MaxLength] = 0;
-		}
-	}
-
+	const size_t Len = StrLength(Str);
+	size_t n = Len;
+	StrCellsTruncateCenter(Str, n, MaxLength);
+	ASSERT(n <= Len);
+	Str[n] = 0;
 	return Str;
 }
 
@@ -324,44 +284,8 @@ FARString& TruncStrFromCenter(FARString &strStr, int MaxLength)
 
 wchar_t* WINAPI TruncPathStr(wchar_t *Str, int MaxLength)
 {
-	assert(MaxLength >= 0);
-
-	MaxLength=Max(0, MaxLength);
-
-	if (Str)
-	{
-		int nLength = (int)wcslen(Str);
-
-		if ((MaxLength > 0) && (nLength > MaxLength) && (nLength >= 2))
-		{
-			wchar_t *lpStart = nullptr;
-
-/*			if (*Str && (Str[1] == L':') && IsSlash(Str[2]))
-				lpStart = Str+3;
-			else*/
-			{
-				if ((Str[0] == GOOD_SLASH) && (Str[1] == GOOD_SLASH))
-				{
-					if ((lpStart = const_cast<wchar_t*>(FirstSlash(Str+2))) )
-					{
-						wchar_t *lpStart2=lpStart;
-
-						if ((lpStart-Str < nLength) && ((lpStart=const_cast<wchar_t*>(FirstSlash(lpStart2+1)))))
-							lpStart++;
-					}
-				}
-			}
-
-			if (!lpStart || (lpStart-Str > MaxLength-5))
-				return TruncStr(Str, MaxLength);
-
-			wchar_t *lpInPos = lpStart+3+(nLength-MaxLength);
-			wmemmove(lpStart+3, lpInPos, (wcslen(lpInPos)+1));
-			wmemcpy(lpStart, L"...", 3);
-		}
-	}
-
-	return Str;
+	//  TODO
+	return TruncStr(Str, MaxLength);
 }
 
 
@@ -515,32 +439,29 @@ FARString& CenterStr(const wchar_t *Src, FARString &strDest, int Length)
 	{
 		int Space = (Length - SrcLength) / 2;
 		FormatString FString;
-		FString << fmt::Width(Space) << L"" << strTempStr << fmt::Width(Length - Space - SrcLength) << L"";
+		FString << fmt::Expand(Space) << L"" << strTempStr << fmt::Expand(Length - Space - SrcLength) << L"";
 		strDest = std::move(FString.strValue());
 	}
 
 	return strDest;
 }
 
-FARString FixedSizeStr(FARString str, size_t Length, bool RAlign)
+FARString FixedSizeStr(FARString str, size_t Cells, bool RAlign, bool TruncateCenter)
 {
-	if (str.GetLength() > Length)
+	const size_t InitialStrCells = str.CellsCount();
+	if (InitialStrCells > Cells)
 	{
-		if (str.GetLength() > 2)
-		{
-			size_t RmLen = (str.GetLength() - Length) + 1;
-			size_t RmPos = (str.GetLength() - RmLen) / 2;
-			str.Replace(RmPos, RmLen, L"…", 1);
-		}
+		if (TruncateCenter)
+			TruncStrFromCenter(str, Cells);
 		else
-			str = L"…";
+			TruncStr(str, Cells);
 	}
-	else while (str.GetLength() < Length)
+	else if (InitialStrCells < Cells)
 	{
 		if (RAlign)
-			str.Insert(0, L" ", 1);
+			str.Insert(0, L' ', Cells - InitialStrCells);
 		else
-			str.Append(L" ", 1);
+			str.Append(L' ', Cells - InitialStrCells);
 	}
 	return str;
 }
@@ -743,8 +664,8 @@ FARString & WINAPI FileSizeToStr(FARString &strDestStr, uint64_t Size, int Width
 				Sz++;
 			}
 
-			strStr.Format(L"%d.%02d", (DWORD)Sz,Decimal);
-			FormatNumber(strStr,strStr,2);
+			strStr.Format(L"%d.%02d", (DWORD)Sz, Decimal);
+			FormatNumber(strStr, strStr, (Economic && Sz > 9) ? 1 : 2);
 		}
 
 		if (IndexB>0 || ShowBytesIndex)
@@ -752,7 +673,7 @@ FARString & WINAPI FileSizeToStr(FARString &strDestStr, uint64_t Size, int Width
 			Width-=(Economic?1:2);
 
 			if (Width<0)
-				Width=0;
+				Width=strStr.GetLength();
 
 			if (Economic)
 				strDestStr.Format(L"%*.*ls%1.1ls",Width,Width,strStr.CPtr(),UnitStr[IndexB][IndexDiv]);
@@ -763,6 +684,7 @@ FARString & WINAPI FileSizeToStr(FARString &strDestStr, uint64_t Size, int Width
 			strDestStr.Format(L"%*.*ls",Width,Width,strStr.CPtr());
 
 		return strDestStr;
+
 	}
 
 	if (Commas)
@@ -777,7 +699,7 @@ FARString & WINAPI FileSizeToStr(FARString &strDestStr, uint64_t Size, int Width
 			Width-=(Economic?1:2);
 
 			if (Width<0)
-				Width=0;
+				Width=strStr.GetLength();
 
 			if (Economic)
 				strDestStr.Format(L"%*.*ls%1.1ls",Width,Width,strStr.CPtr(),UnitStr[0][IndexDiv]);
@@ -868,6 +790,42 @@ int ReplaceStrings(FARString &strStr,const wchar_t *FindStr,const wchar_t *ReplS
 	return ReplacedCount;
 }
 
+int ReplaceChars(FARString &strStr, wchar_t FindCh, wchar_t ReplCh)
+{
+	int ReplacedCount = 0;
+	size_t Pos, StartPos = 0;
+	while (strStr.Pos(Pos, FindCh, StartPos))
+	{
+		strStr.ReplaceChar(Pos, ReplCh);
+		++ReplacedCount;
+		StartPos = Pos + 1;
+	}
+	return ReplacedCount;
+}
+
+int ReplaceTabsBySpaces(FARString &strStr, size_t TabSize)
+{
+	int ReplacedCount = 0;
+	ssize_t Adjust = 0;
+	size_t Pos, StartPos = 0;
+	while (strStr.Pos(Pos, L'\t', StartPos))
+	{
+		if (TabSize > 1)
+		{
+			const size_t SpacesCount = TabSize - ((Pos + Adjust) % TabSize);
+			strStr.Replace(Pos, 1, L' ', SpacesCount);
+			Adjust+= SpacesCount;
+			Adjust--;
+		}
+		else
+			strStr.ReplaceChar(Pos, L' ');
+		++ReplacedCount;
+		StartPos = Pos + 1;
+	}
+	return ReplacedCount;
+}
+
+
 /*
 From PHP 4.x.x
 Форматирует исходный текст по заданной ширине, используя
@@ -916,10 +874,10 @@ enum FFTMODE
 };
 
 FARString& WINAPI FarFormatText(const wchar_t *SrcText,     // источник
-                             int Width,               // заданная ширина
-                             FARString &strDestText,          // приемник
-                             const wchar_t* Break,       // брик, если = nullptr, то принимается '\n'
-                             DWORD Flags)             // один из FFTM_*
+	int Width,               // заданная ширина
+	FARString &strDestText,          // приемник
+	const wchar_t* Break,       // брик, если = nullptr, то принимается '\n'
+	DWORD Flags)             // один из FFTM_*
 {
 	const wchar_t *breakchar;
 	breakchar = Break?Break:L"\n";

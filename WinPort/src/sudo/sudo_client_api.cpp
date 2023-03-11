@@ -7,6 +7,12 @@
 #include <string.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__CYGWIN__)
+# include <sys/mount.h>
+#elif !defined(__HAIKU__)
+# include <sys/statfs.h>
+#endif
 #include <sys/time.h>
 #include <sys/types.h>
 #ifndef __FreeBSD__
@@ -14,10 +20,11 @@
 #endif
 #include <map>
 #include <mutex>
+#include <utimens_compat.h>
 #include "sudo_private.h"
 #include "sudo.h"
 
-#if !defined(__APPLE__) and !defined(__FreeBSD__) && !defined(__CYGWIN__)
+#if !defined(__APPLE__) and !defined(__FreeBSD__) && !defined(__CYGWIN__) && !defined(__HAIKU__)
 # include <sys/ioctl.h>
 # include <linux/fs.h>
 #endif
@@ -268,7 +275,6 @@ template <class STAT_STRUCT>
 		return -1;
 	}
 }
-#if !defined(__FreeBSD__) && !defined(__CYGWIN__)
 extern "C"  __attribute__ ((visibility("default"))) int sdc_statfs(const char *path, struct statfs *buf)
 {
 	int saved_errno = errno;
@@ -282,7 +288,6 @@ extern "C"  __attribute__ ((visibility("default"))) int sdc_statfs(const char *p
 
 	return r;
 }
-#endif
 extern "C"  __attribute__ ((visibility("default"))) int sdc_statvfs(const char *path, struct statvfs *buf)
 {
 	int saved_errno = errno;
@@ -581,14 +586,14 @@ extern "C" __attribute__ ((visibility("default"))) int sdc_chown(const char *pat
 	return r;	
 }
 
-extern "C" __attribute__ ((visibility("default"))) int sdc_utimes(const char *filename, const struct timeval times[2])
+extern "C" __attribute__ ((visibility("default"))) int sdc_utimens(const char *filename, const struct timespec times[2])
 {
 	int saved_errno = errno;
 	ClientReconstructCurDir crcd(filename);
-	int r = utimes(filename, times);
+	int r = utimens(filename, times);
 	if (r==-1 && IsAccessDeniedErrno() && TouchClientConnection(true)) {
 		try {
-			ClientTransaction ct(SUDO_CMD_UTIMES);
+			ClientTransaction ct(SUDO_CMD_UTIMENS);
 			ct.SendStr(filename);
 			ct.SendPOD(times[0]);
 			ct.SendPOD(times[1]);
@@ -598,16 +603,17 @@ extern "C" __attribute__ ((visibility("default"))) int sdc_utimes(const char *fi
 			else
 				errno = saved_errno;
 		} catch(std::exception &e) {
-			fprintf(stderr, "sudo_client: sdc_utimes('%s') - error %s\n", filename, e.what());
+			fprintf(stderr, "sudo_client: sdc_utimens('%s') - error %s\n", filename, e.what());
 			r = -1;
 		}
 	}
 	return r;	
 }
 
-extern "C" __attribute__ ((visibility("default"))) int sdc_futimes(int fd, const struct timeval tv[2])
+
+extern "C" __attribute__ ((visibility("default"))) int sdc_futimens(int fd, const struct timespec times[2])
 {
-	return futimes(fd, tv);
+	return futimens(fd, times);
 }
 
 static int common_two_pathes(SudoCommand cmd, 
@@ -757,7 +763,7 @@ extern "C" __attribute__ ((visibility("default"))) int sdc_fsetxattr(int fd, con
  {
 	ClientReconstructCurDir crcd(path);
 
-#if defined(__CYGWIN__)
+#if defined(__CYGWIN__) || defined(__HAIKU__)
 	//TODO
 	*flags = 0;
 	return 0;
@@ -800,7 +806,7 @@ extern "C" __attribute__ ((visibility("default"))) int sdc_fsetxattr(int fd, con
  
  extern "C" __attribute__ ((visibility("default"))) int sdc_fs_flags_set(const char *path, unsigned long flags)
  {
-#if defined(__CYGWIN__)
+#if defined(__CYGWIN__) || defined(__HAIKU__)
 	//TODO
 	return 0;
 

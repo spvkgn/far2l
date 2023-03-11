@@ -41,7 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "locale.hpp"
 #include "lang.hpp"
 
-#define NullToEmpty(s) (s?s:L"")
+inline const wchar_t *NullToEmpty(const wchar_t *s) { return s ? s : L""; }
 
 /***********************************************************************************************************
  * This is a FARString - homegrew reference-counted string widely used in this project.
@@ -135,11 +135,17 @@ public:
 	// Returns copy of *this string but that copy uses OWN, not shared with *this, content.
 	inline FARString Clone() const { return FARString(CPtr(), GetLength()); }
 
+	// Use to avoid reallocations if final length of string is known
+	void Reserve(size_t DesiredCapacity);
+
 	wchar_t *GetBuffer(size_t nLength = (size_t)-1);
 	void ReleaseBuffer(size_t nLength = (size_t)-1);
 
 	inline size_t GetLength() const { return m_pContent->GetLength(); }
 	size_t Truncate(size_t nLength);
+
+	size_t CellsCount() const;
+	size_t TruncateByCells(size_t nCount);
 
 	inline wchar_t At(size_t nIndex) const { return m_pContent->GetData()[nIndex]; }
 
@@ -155,24 +161,34 @@ public:
 	FARString& Replace(size_t Pos, size_t Len, const wchar_t* Data, size_t DataLen);
 	FARString& Replace(size_t Pos, size_t Len, const FARString& Str) { return Replace(Pos, Len, Str.CPtr(), Str.GetLength()); }
 	FARString& Replace(size_t Pos, size_t Len, const wchar_t* Str) { return Replace(Pos, Len, Str, StrLength(NullToEmpty(Str))); }
-	FARString& Replace(size_t Pos, size_t Len, wchar_t Ch) { return Replace(Pos, Len, &Ch, 1); }
+	FARString& Replace(size_t Pos, size_t Len, wchar_t Ch, size_t Count = 1);
+
+	wchar_t ReplaceChar(size_t Pos, wchar_t Ch);
 
 	FARString& Append(const wchar_t* Str, size_t StrLen) { return Replace(GetLength(), 0, Str, StrLen); }
 	FARString& Append(const FARString& Str) { return Append(Str.CPtr(), Str.GetLength()); }
 	FARString& Append(const wchar_t* Str) { return Append(Str, StrLength(NullToEmpty(Str))); }
-	FARString& Append(wchar_t Ch) { return Append(&Ch, 1); }
+	FARString& Append(wchar_t Ch, size_t Count = 1) { return Replace(GetLength(), 0, Ch, Count); } 
 	FARString& Append(const char *lpszAdd, UINT CodePage=CP_UTF8);
 
 	FARString& Insert(size_t Pos, const wchar_t* Str, size_t StrLen) { return Replace(Pos, 0, Str, StrLen); }
 	FARString& Insert(size_t Pos, const FARString& Str) { return Insert(Pos, Str.CPtr(), Str.GetLength()); }
 	FARString& Insert(size_t Pos, const wchar_t* Str) { return Insert(Pos, Str, StrLength(NullToEmpty(Str))); }
-	FARString& Insert(size_t Pos, wchar_t Ch) { return Insert(Pos, &Ch, 1); }
+	FARString& Insert(size_t Pos, wchar_t Ch, size_t Count = 1) { return Replace(Pos, 0, Ch, Count); } 
 
 	FARString& Copy(const wchar_t *Str, size_t StrLen) { return Replace(0, GetLength(), Str, StrLen); }
 	FARString& Copy(const wchar_t *Str) { return Copy(Str, StrLength(NullToEmpty(Str))); }
 	FARString& Copy(wchar_t Ch) { return Copy(&Ch, 1); }
 	FARString& Copy(const FARString &Str);
 	FARString& Copy(const char *lpszData, UINT CodePage=CP_UTF8);
+
+	template <typename ARRAY_T>
+		FARString& CopyArray(const ARRAY_T &a)
+	{
+		static_assert ( sizeof(a) != sizeof(void *), "CopyArray should be used with arrays but not pointers");
+		return Copy(a, tnzlen(a, ARRAYSIZE(a)));
+	}
+
 
 	FARString& Remove(size_t Pos, size_t Len = 1) { return Replace(Pos, Len, nullptr, 0); }
 	FARString& LShift(size_t nShiftCount, size_t nStartPos=0) { return Remove(nStartPos, nShiftCount); }
@@ -221,17 +237,20 @@ public:
 	bool PosI(size_t &nPos, const wchar_t *lpwszFind, size_t nStartPos=0) const;
 	bool RPos(size_t &nPos, wchar_t Ch, size_t nStartPos=0) const;
 
-	bool Contains(wchar_t Ch, size_t nStartPos=0) const { return !wcschr(m_pContent->GetData()+nStartPos,Ch) ? false : true; }
-	bool Contains(const wchar_t *lpwszFind, size_t nStartPos=0) const { return !wcsstr(m_pContent->GetData()+nStartPos,lpwszFind) ? false : true; }
+	bool Contains(wchar_t Ch, size_t nStartPos = 0) const;
+	bool Contains(const wchar_t *lpwszFind, size_t nStartPos = 0) const;
 
 	inline bool Begins(wchar_t Ch) const
 		{ return m_pContent->GetLength() > 0 && *m_pContent->GetData() == Ch; }
 
-	inline bool Begins(const FARString &strFind) const
-		{ return m_pContent->GetLength() >= strFind.m_pContent->GetLength() && wmemcmp(m_pContent->GetData(), strFind.m_pContent->GetData(), strFind.m_pContent->GetLength()) == 0; }
+	bool Begins(const FARString &strFind) const;
+	bool Begins(const wchar_t *lpwszFind) const;
 
-	inline bool Begins(const wchar_t *lpwszFind) const
-		{ return m_pContent->GetLength() > 0 && wcsncmp(m_pContent->GetData(), lpwszFind, wcslen(lpwszFind)) == 0; }
+	inline bool Ends(wchar_t Ch) const
+		{ return m_pContent->GetLength() > 0 && m_pContent->GetData()[m_pContent->GetLength() - 1] == Ch; }
+
+	inline bool Ends(const FARString &strFind) const;
+	inline bool Ends(const wchar_t *lpwszFind) const;
 
 	template <typename CharT>
 		bool ContainsAnyOf(const CharT *needles)

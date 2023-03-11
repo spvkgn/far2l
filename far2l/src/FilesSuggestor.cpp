@@ -76,13 +76,8 @@ void FilesSuggestor::Suggest(const std::string &filter, std::vector<Suggestion> 
 		std::lock_guard<std::mutex> lock(_mtx);
 		need_reenumerate = (dir_path != _dir_path
 			  || dir_st.st_dev != _dir_st.st_dev || dir_st.st_ino != _dir_st.st_ino
-#ifdef __APPLE__
-			  || memcmp(&dir_st.st_mtimespec, &_dir_st.st_mtimespec, sizeof(dir_st.st_mtimespec)) != 0
-			  || memcmp(&dir_st.st_ctimespec, &_dir_st.st_ctimespec, sizeof(dir_st.st_ctimespec)) != 0
-#else
 			  || memcmp(&dir_st.st_mtim, &_dir_st.st_mtim, sizeof(dir_st.st_mtim)) != 0
 			  || memcmp(&dir_st.st_ctim, &_dir_st.st_ctim, sizeof(dir_st.st_ctim)) != 0
-#endif
 			);
 
 		if (need_reenumerate) {
@@ -133,7 +128,8 @@ void *FilesSuggestor::ThreadProc()
 				}
 				if (de->d_name[0] && strcmp(de->d_name, ".") && strcmp(de->d_name, "..")) {
 					bool dir = false;
-					switch (de->d_type) {
+#ifndef __HAIKU__
+                    switch (de->d_type) {
 						case DT_DIR:
 							dir = true;
 							break;
@@ -147,10 +143,16 @@ void *FilesSuggestor::ThreadProc()
 							break;
 
 						default:
+#endif
 							stat_path.resize(stat_path_len);
 							stat_path+= de->d_name;
 							dir = (sdc_stat(stat_path.c_str(), &s) == 0 && S_ISDIR(s.st_mode));
-					}
+#ifndef __HAIKU__
+                    }
+#endif
+                    stat_path.resize(stat_path_len);
+                    stat_path+= de->d_name;
+                    dir = (sdc_stat(stat_path.c_str(), &s) == 0 && S_ISDIR(s.st_mode));
 
 					std::lock_guard<std::mutex> lock(_mtx);
 					_suggestions.emplace_back(Suggestion{de->d_name, dir});

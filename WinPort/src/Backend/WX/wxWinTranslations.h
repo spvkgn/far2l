@@ -1,6 +1,7 @@
 #pragma once
 
 #include "WinCompat.h"
+#include "../WinPortRGB.h"
 
 #include <set>
 
@@ -45,37 +46,11 @@ struct wx2INPUT_RECORD : INPUT_RECORD
 	wx2INPUT_RECORD(BOOL KeyDown, const wxKeyEvent& event, const KeyTracker &key_tracker);
 };
 
-struct WinPortRGB
-{
-	unsigned char r;
-	unsigned char g;
-	unsigned char b;
+extern WinPortPalette g_wx_palette;
 
-	inline WinPortRGB(unsigned char r_ = 0, unsigned char g_ = 0, unsigned char b_ = 0) : r(r_), g(g_), b(b_) {}
+WinPortRGB ConsoleForeground2RGB(DWORD64 attributes);
+WinPortRGB ConsoleBackground2RGB(DWORD64 attributes);
 
-	inline bool operator == (const WinPortRGB &rgb) const
-	{
-		return r == rgb.r && g == rgb.g && b == rgb.b;
-	}
+DWORD WxKeyboardLedsState();
 
-	inline bool operator != (const WinPortRGB &rgb) const
-	{
-		return r != rgb.r || g != rgb.g || b != rgb.b;
-	}
-
-	inline bool operator < (const WinPortRGB &rgb) const
-	{
-		if (r < rgb.r) return true;
-		if (r > rgb.r) return false;
-		if (g < rgb.g) return true;
-		if (g > rgb.g) return false;
-		if (b < rgb.b) return true;
-
-		return false;
-	}
-};
-
-WinPortRGB ConsoleForeground2RGB(USHORT attributes);
-WinPortRGB ConsoleBackground2RGB(USHORT attributes);
-
-bool InitPalettes();
+void WinPortWxAssertHandler(const wxString& file, int line, const wxString& func, const wxString& cond, const wxString& msg);

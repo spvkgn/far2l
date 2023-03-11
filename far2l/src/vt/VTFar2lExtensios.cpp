@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <base64.h>
 #include <crc64.h>
 #include <utils.h>
@@ -9,6 +8,7 @@
 
 #include "VTFar2lExtensios.h"
 #include "headers.hpp"
+#include "scrbuf.hpp"
 #include "lang.hpp"
 #include "dialog.hpp"
 #include "message.hpp"
@@ -67,7 +67,10 @@ static void ListFileAppend(const std::string &filename, std::string line)
 
 static uint64_t CalculateDataID(UINT fmt, const void *data, uint32_t len)
 {
-	if (fmt == CF_UNICODETEXT) {
+	if (!data) {
+		len = 0;
+
+	} else if (fmt == CF_UNICODETEXT) {
 		len = wcsnlen((const wchar_t *)data, len / sizeof(wchar_t)) * sizeof(wchar_t);
 
 	} else if (fmt == CF_TEXT) {
@@ -85,9 +88,20 @@ static uint64_t CalculateDataID(UINT fmt, const void *data, uint32_t len)
 
 ///
 
-VTFar2lExtensios::VTFar2lExtensios(IVTShell *vt_shell)
-	: _vt_shell(vt_shell)
+VTFar2lExtensios::VTFar2lExtensios(IVTShell *vt_shell, const std::string &host_id)
+	: _vt_shell(vt_shell), _client_id_prefix(host_id)
 {
+	// host_id pased by NetRocks representing client identity (user@host) and
+	// used together with clipboard client_id to guard against spoofed client_id
+	// in case malicious client was somehow able to steal id of some other client
+	if (!_client_id_prefix.empty()) {
+		for (auto &c : _client_id_prefix) {
+			if (((unsigned char)c) < 32) {
+				c = 32;
+			}
+		}
+		_client_id_prefix+= ':';
+	}
 }
 
 VTFar2lExtensios::~VTFar2lExtensios()
@@ -139,25 +153,25 @@ bool VTFar2lExtensios::OnInputMouse(const MOUSE_EVENT_RECORD &MouseEvent)
 	}
 
 	StackSerializer stk_ser;
-	stk_ser.PushPOD(MouseEvent.dwMousePosition.X);
-	stk_ser.PushPOD(MouseEvent.dwMousePosition.Y);
+	stk_ser.PushNum(MouseEvent.dwMousePosition.X);
+	stk_ser.PushNum(MouseEvent.dwMousePosition.Y);
 	if ( (_xfeatures & FARTTY_FEAT_COMPACT_INPUT) != 0
-	  && (MouseEvent.dwButtonState & 0xff00ff00) == 0
-	  && MouseEvent.dwControlKeyState < 0x100
-	  && MouseEvent.dwEventFlags < 0x100) {
+			&& (MouseEvent.dwButtonState & 0xff00ff00) == 0
+			&& MouseEvent.dwControlKeyState < 0x100
+			&& MouseEvent.dwEventFlags < 0x100) {
 		const uint16_t btn_state_encoded = ((MouseEvent.dwButtonState & 0xff)
 			| ((MouseEvent.dwButtonState >> 8) & 0xff00));
-		stk_ser.PushPOD(btn_state_encoded);
-		stk_ser.PushPOD(uint8_t(MouseEvent.dwControlKeyState));
-		stk_ser.PushPOD(uint8_t(MouseEvent.dwEventFlags));
-		stk_ser.PushPOD(FARTTY_INPUT_MOUSE_COMPACT);
+		stk_ser.PushNum(btn_state_encoded);
+		stk_ser.PushNum(uint8_t(MouseEvent.dwControlKeyState));
+		stk_ser.PushNum(uint8_t(MouseEvent.dwEventFlags));
+		stk_ser.PushNum(FARTTY_INPUT_MOUSE_COMPACT);
 		//fprintf(stderr, "VTFar2lExtensios::OnInputMouse: compact\n");
 
 	} else {
-		stk_ser.PushPOD(MouseEvent.dwButtonState);
-		stk_ser.PushPOD(MouseEvent.dwControlKeyState);
-		stk_ser.PushPOD(MouseEvent.dwEventFlags);
-		stk_ser.PushPOD(FARTTY_INPUT_MOUSE);
+		stk_ser.PushNum(MouseEvent.dwButtonState);
+		stk_ser.PushNum(MouseEvent.dwControlKeyState);
+		stk_ser.PushNum(MouseEvent.dwEventFlags);
+		stk_ser.PushNum(FARTTY_INPUT_MOUSE);
 		//fprintf(stderr, "VTFar2lExtensios::OnInputMouse: normal\n");
 	}
 	WriteInputEvent(stk_ser);
@@ -192,23 +206,23 @@ bool VTFar2lExtensios::OnInputKey(const KEY_EVENT_RECORD &KeyEvent)
 
 	StackSerializer stk_ser;
 	if ((_xfeatures & FARTTY_FEAT_COMPACT_INPUT) != 0
-	  && KeyEvent.wRepeatCount <= 1 && KeyEvent.wVirtualScanCode == 0
-	  && ((uint32_t)KeyEvent.uChar.UnicodeChar) < 0x10000
-	  && KeyEvent.dwControlKeyState < 0x10000
-	  && KeyEvent.wVirtualKeyCode < 0x100) {
-		stk_ser.PushPOD((uint8_t)KeyEvent.wVirtualKeyCode);
-		stk_ser.PushPOD((uint16_t)KeyEvent.dwControlKeyState);
-		stk_ser.PushPOD((uint16_t)(uint32_t)KeyEvent.uChar.UnicodeChar);
-		stk_ser.PushPOD((KeyEvent.bKeyDown ? FARTTY_INPUT_KEYDOWN_COMPACT: FARTTY_INPUT_KEYUP_COMPACT));
+			&& KeyEvent.wRepeatCount <= 1 && KeyEvent.wVirtualScanCode == 0
+			&& ((uint32_t)KeyEvent.uChar.UnicodeChar) < 0x10000
+			&& KeyEvent.dwControlKeyState < 0x10000
+			&& KeyEvent.wVirtualKeyCode < 0x100) {
+		stk_ser.PushNum((uint8_t)KeyEvent.wVirtualKeyCode);
+		stk_ser.PushNum((uint16_t)KeyEvent.dwControlKeyState);
+		stk_ser.PushNum((uint16_t)(uint32_t)KeyEvent.uChar.UnicodeChar);
+		stk_ser.PushNum((KeyEvent.bKeyDown ? FARTTY_INPUT_KEYDOWN_COMPACT: FARTTY_INPUT_KEYUP_COMPACT));
 		//fprintf(stderr, "VTFar2lExtensios::OnInputKey: compact\n");
 
 	} else {
-		stk_ser.PushPOD(KeyEvent.wRepeatCount);
-		stk_ser.PushPOD(KeyEvent.wVirtualKeyCode);
-		stk_ser.PushPOD(KeyEvent.wVirtualScanCode);
-		stk_ser.PushPOD(KeyEvent.dwControlKeyState);
-		stk_ser.PushPOD((uint32_t)KeyEvent.uChar.UnicodeChar);
-		stk_ser.PushPOD((KeyEvent.bKeyDown ? FARTTY_INPUT_KEYDOWN : FARTTY_INPUT_KEYUP));
+		stk_ser.PushNum(KeyEvent.wRepeatCount);
+		stk_ser.PushNum(KeyEvent.wVirtualKeyCode);
+		stk_ser.PushNum(KeyEvent.wVirtualScanCode);
+		stk_ser.PushNum(KeyEvent.dwControlKeyState);
+		stk_ser.PushNum((uint32_t)KeyEvent.uChar.UnicodeChar);
+		stk_ser.PushNum((KeyEvent.bKeyDown ? FARTTY_INPUT_KEYDOWN : FARTTY_INPUT_KEYUP));
 		//fprintf(stderr, "VTFar2lExtensios::OnInputKey: normal\n");
 	}
 
@@ -217,7 +231,7 @@ bool VTFar2lExtensios::OnInputKey(const KEY_EVENT_RECORD &KeyEvent)
 	return true;
 }
 
-char VTFar2lExtensios::ClipboardAuthorize(const std::string &client_id)
+char VTFar2lExtensios::ClipboardAuthorize(std::string client_id)
 {
 	if (client_id.size() < 0x20 || client_id.size() > 0x100)
 		return 0;
@@ -226,6 +240,8 @@ char VTFar2lExtensios::ClipboardAuthorize(const std::string &client_id)
 		if ( (c < '0' || c > '9') && (c < 'a' || c > 'z') && c != '-' && c != '_')
 			return 0;
 	}
+
+	client_id.insert(0, _client_id_prefix);
 
 	if (_autheds.find(client_id) != _autheds.end())
 		return 1;
@@ -240,6 +256,7 @@ char VTFar2lExtensios::ClipboardAuthorize(const std::string &client_id)
 
 	{
 		SavedScreen saved_scr;
+		ScrBuf.FillBuf();
 		choice = Message(MSG_KEEPBACKGROUND, 4,
 			Msg::TerminalClipboardAccessTitle,
 			Msg::TerminalClipboardAccessText,
@@ -281,8 +298,8 @@ void VTFar2lExtensios::OnInterract_ClipboardOpen(StackSerializer &stk_ser)
 
 	stk_ser.Clear();
 	// report supported features
-	stk_ser.PushPOD(uint64_t(FARTTY_FEATCLIP_DATA_ID | FARTTY_FEATCLIP_CHUNKED_SET));
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(uint64_t(FARTTY_FEATCLIP_DATA_ID | FARTTY_FEATCLIP_CHUNKED_SET));
+	stk_ser.PushNum(out);
 }
 
 void VTFar2lExtensios::OnInterract_ClipboardClose(StackSerializer &stk_ser)
@@ -298,7 +315,7 @@ void VTFar2lExtensios::OnInterract_ClipboardClose(StackSerializer &stk_ser)
 	}
 
 	stk_ser.Clear();
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(out);
 
 	_clipboard_read_allowance_prolongs = 0;
 }
@@ -310,23 +327,23 @@ void VTFar2lExtensios::OnInterract_ClipboardEmpty(StackSerializer &stk_ser)
 		out = WINPORT(EmptyClipboard)() ? 1 : 0;
 	}
 	stk_ser.Clear();
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(out);
 }
 
 void VTFar2lExtensios::OnInterract_ClipboardIsFormatAvailable(StackSerializer &stk_ser)
 {
 	UINT fmt;
-	stk_ser.PopPOD(fmt);
+	stk_ser.PopNum(fmt);
 	char out = WINPORT(IsClipboardFormatAvailable)(fmt) ? 1 : 0;
 	stk_ser.Clear();
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(out);
 }
 
 void VTFar2lExtensios::OnInterract_ClipboardSetDataChunk(StackSerializer &stk_ser)
 {
 	if (_clipboard_opens > 0) {
 		uint16_t encoded_chunk_size = 0;
-		stk_ser.PopPOD(encoded_chunk_size);
+		stk_ser.PopNum(encoded_chunk_size);
 		if (encoded_chunk_size) {
 			const size_t chunk_size = size_t(encoded_chunk_size) << 8;
 			const size_t prev_size = _clipboard_chunks.size();
@@ -352,23 +369,25 @@ void VTFar2lExtensios::OnInterract_ClipboardSetData(StackSerializer &stk_ser)
 		uint32_t len;
 		unsigned char *data;
 
-		stk_ser.PopPOD(fmt);
-		stk_ser.PopPOD(len);
+		stk_ser.PopNum(fmt);
+		stk_ser.PopNum(len);
 		if (len && len + uint32_t(_clipboard_chunks.size()) >= len) {
 			data = (unsigned char *)WINPORT(ClipboardAlloc)(len + uint32_t(_clipboard_chunks.size()));
-			memcpy(data, _clipboard_chunks.data(), uint32_t(_clipboard_chunks.size()));
-			stk_ser.Pop(data + uint32_t(_clipboard_chunks.size()), len);
-			len+= uint32_t(_clipboard_chunks.size());
+			if (data) {
+				memcpy(data, _clipboard_chunks.data(), uint32_t(_clipboard_chunks.size()));
+				stk_ser.Pop(data + uint32_t(_clipboard_chunks.size()), len);
+				len+= uint32_t(_clipboard_chunks.size());
 #if (__WCHAR_MAX__ <= 0xffff)
-			if (fmt == CF_UNICODETEXT) { // UTF32 -> UTF16
-				UtfConverter<uint32_t, uint16_t> cvt((const uint32_t *)data, len / sizeof(uint32_t));
-				void *new_data = ClipboardAllocFromVector(cvt, len);
-				if (new_data) {
-					WINPORT(ClipboardFree)(data);
-					data = new_data;
+				if (fmt == CF_UNICODETEXT) { // UTF32 -> UTF16
+					UtfConverter<uint32_t, uint16_t> cvt((const uint32_t *)data, len / sizeof(uint32_t));
+					void *new_data = ClipboardAllocFromVector(cvt, len);
+					if (new_data) {
+						WINPORT(ClipboardFree)(data);
+						data = new_data;
+					}
 				}
-			}
 #endif
+			}
 		} else
 			data = nullptr;
 
@@ -379,9 +398,9 @@ void VTFar2lExtensios::OnInterract_ClipboardSetData(StackSerializer &stk_ser)
 	}
 	stk_ser.Clear();
 	if (out == 1) {
-		stk_ser.PushPOD(id);
+		stk_ser.PushNum(id);
 	}
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(out);
 	_clipboard_chunks.clear();
 }
 
@@ -391,7 +410,7 @@ void VTFar2lExtensios::OnInterract_ClipboardGetData(StackSerializer &stk_ser)
 		bool allowed = IsAllowedClipboardRead();
 
 		UINT fmt;
-		stk_ser.PopPOD(fmt);
+		stk_ser.PopNum(fmt);
 		stk_ser.Clear();
 		void *data = allowed ? WINPORT(GetClipboardData)(fmt) : nullptr;
 		uint64_t id = 0;
@@ -400,7 +419,7 @@ void VTFar2lExtensios::OnInterract_ClipboardGetData(StackSerializer &stk_ser)
 			len = WINPORT(ClipboardSize)(data);
 			id = CalculateDataID(fmt, data, len);
 		}
-		stk_ser.PushPOD(id);
+		stk_ser.PushNum(id);
 		if (len) {
 #if (__WCHAR_MAX__ <= 0xffff)
 			void *new_data = nullptr;
@@ -414,13 +433,13 @@ void VTFar2lExtensios::OnInterract_ClipboardGetData(StackSerializer &stk_ser)
 			stk_ser.Push(data, len);
 #endif
 		}
-		stk_ser.PushPOD(len);
+		stk_ser.PushNum(len);
 
 		if (allowed) { // prolong allowance
 			AllowClipboardRead(true);
 		}
 	} else {
-		stk_ser.PushPOD((uint32_t)-1);
+		stk_ser.PushNum((uint32_t)-1);
 	}
 }
 
@@ -429,7 +448,7 @@ void VTFar2lExtensios::OnInterract_ClipboardGetDataID(StackSerializer &stk_ser)
 	uint64_t id = 0;
 	if (_clipboard_opens > 0 && IsAllowedClipboardRead()) {
 		UINT fmt = 0;
-		stk_ser.PopPOD(fmt);
+		stk_ser.PopNum(fmt);
 		void *data = WINPORT(GetClipboardData)(fmt);
 		if (data) {
 			id = CalculateDataID(fmt, data, WINPORT(ClipboardSize)(data));
@@ -437,7 +456,7 @@ void VTFar2lExtensios::OnInterract_ClipboardGetDataID(StackSerializer &stk_ser)
 	}
 
 	stk_ser.Clear();
-	stk_ser.PushPOD(id);
+	stk_ser.PushNum(id);
 }
 
 void VTFar2lExtensios::OnInterract_ClipboardRegisterFormat(StackSerializer &stk_ser)
@@ -445,7 +464,7 @@ void VTFar2lExtensios::OnInterract_ClipboardRegisterFormat(StackSerializer &stk_
 	const std::wstring &fmt_name = StrMB2Wide(stk_ser.PopStr());
 	UINT out = WINPORT(RegisterClipboardFormat)(fmt_name.c_str());
 	stk_ser.Clear();
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(out);
 }
 
 ///////////
@@ -473,7 +492,7 @@ void VTFar2lExtensios::OnInterract_Clipboard(StackSerializer &stk_ser)
 void VTFar2lExtensios::OnInterract_ChangeCursorHeigth(StackSerializer &stk_ser)
 {
 	UCHAR h;
-	stk_ser.PopPOD(h);
+	stk_ser.PopNum(h);
 	CONSOLE_CURSOR_INFO cci;
 	if (WINPORT(GetConsoleCursorInfo)(NULL, &cci)) {
 		cci.dwSize = h;
@@ -485,7 +504,8 @@ void VTFar2lExtensios::OnInterract_GetLargestWindowSize(StackSerializer &stk_ser
 {
 	COORD sz = WINPORT(GetLargestConsoleWindowSize)(NULL);
 	stk_ser.Clear();
-	stk_ser.PushPOD(sz);
+	stk_ser.PushNum(sz.X);
+	stk_ser.PushNum(sz.Y);
 }
 
 void VTFar2lExtensios::OnInterract_DisplayNotification(StackSerializer &stk_ser)
@@ -503,7 +523,7 @@ void VTFar2lExtensios::OnInterract_SetFKeyTitles(StackSerializer &stk_ser)
 
 	for (unsigned int i = 0; i < ARRAYSIZE(titles_str) && !stk_ser.IsEmpty(); ++i) {
 		unsigned char state = 0;
-		stk_ser.PopPOD(state);
+		stk_ser.PopNum(state);
 		if (state != 0) {
 			stk_ser.PopStr(titles_str[i]);
 			titles[i] = titles_str[i].c_str();
@@ -513,7 +533,16 @@ void VTFar2lExtensios::OnInterract_SetFKeyTitles(StackSerializer &stk_ser)
 	bool out = WINPORT(SetConsoleFKeyTitles)(titles) != FALSE;
 
 	stk_ser.Clear();
-	stk_ser.PushPOD(out);
+	stk_ser.PushNum(out);
+}
+
+void VTFar2lExtensios::OnInterract_GetColorPalette(StackSerializer &stk_ser)
+{
+	stk_ser.Clear();
+	const uint8_t bits = WINPORT(GetConsoleColorPalette)();
+	const uint8_t reserved = 0;
+	stk_ser.PushNum(reserved);
+	stk_ser.PushNum(bits);
 }
 
 void VTFar2lExtensios::OnInterract(StackSerializer &stk_ser)
@@ -523,7 +552,7 @@ void VTFar2lExtensios::OnInterract(StackSerializer &stk_ser)
 	switch (code) {
 		case FARTTY_INTERRACT_CHOOSE_EXTRA_FEATURES:
 			_xfeatures = 0;
-			stk_ser.PopPOD(_xfeatures);
+			stk_ser.PopNum(_xfeatures);
 			stk_ser.Clear();
 		break;
 
@@ -560,6 +589,10 @@ void VTFar2lExtensios::OnInterract(StackSerializer &stk_ser)
 
 		case FARTTY_INTERRACT_SET_FKEY_TITLES:
 			OnInterract_SetFKeyTitles(stk_ser);
+		break;
+
+		case FARTTY_INTERRACT_GET_COLOR_PALETTE:
+			OnInterract_GetColorPalette(stk_ser);
 		break;
 
 		default:

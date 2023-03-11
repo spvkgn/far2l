@@ -11,6 +11,12 @@ extern const char *FAR_BUILD;
 # define FAR_PLATFORM "arm64"
 #elif defined(__arm__)
 # define FAR_PLATFORM "arm"
+#elif defined(__mips__)
+# ifdef __MIPSEL__
+#  define FAR_PLATFORM "mipsel"
+# else
+#  define FAR_PLATFORM "mips"
+# endif
 #elif defined(__e2k__)
 # define FAR_PLATFORM "e2k"
 #elif defined(__riscv)
@@ -19,7 +25,9 @@ extern const char *FAR_BUILD;
 # else
 # define FAR_PLATFORM "rv32"
 # endif
-#else
+#elif defined(__i386__)
 # define FAR_PLATFORM "x86"
+#else
+# define FAR_PLATFORM "unknown"
 #endif
 

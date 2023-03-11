@@ -4,15 +4,24 @@
 #include <cstdarg>
 #include <sys/types.h>
 #include "cctweaks.h"
+#include "BitTwiddle.hpp"
 #include "MatchWildcard.hpp"
 #include "WideMB.h"
 #include "Escaping.h"
 #include "Environment.h"
 #include "ErrnoSaver.hpp"
 #include "PlatformConstants.h"
+#include "debug.h"
+#include "IntStrConv.h"
 
 #define MAKE_STR(x) _MAKE_STR(x)
 #define _MAKE_STR(x) #x
+
+#ifdef __APPLE__
+# define st_mtim st_mtimespec
+# define st_ctim st_ctimespec
+# define st_atim st_atimespec
+#endif
 
 template <class C> static size_t tzlen(const C *ptz)
 {
@@ -21,9 +30,12 @@ template <class C> static size_t tzlen(const C *ptz)
 	return (etz - ptz);
 }
 
-
-unsigned long htoul(const char *str, size_t maxlen = (size_t)-1);
-unsigned long atoul(const char *str, size_t maxlen = (size_t)-1);
+template <class C> static size_t tnzlen(const C *ptz, size_t n)
+{
+	size_t i;
+	for (i = 0; i < n && ptz[i]; ++i);
+	return i;
+}
 
 // converts given hex digit to value between 0x0 and 0xf
 // in case of error returns 0xff
@@ -99,6 +111,7 @@ template <class StrT>
 
 const std::string &GetMyHome();
 
+void InMyPathChanged(); // NOT thread safe, can be called only before any concurrent use of InMy...
 std::string InMyConfig(const char *subpath = NULL, bool create_path = true);
 std::string InMyCache(const char *subpath = NULL, bool create_path = true);
 std::string InMyTemp(const char *subpath = NULL);
@@ -122,10 +135,17 @@ void FilePathHashSuffix(std::string &pathname);
 void CheckedCloseFD(int &fd);
 void CheckedCloseFDPair(int *fd);
 
+void MakeFDBlocking(int fd);
+void MakeFDNonBlocking(int fd);
+void MakeFDCloexec(int fd);
+void MakeFDNonCloexec(int fd);
+void HintFDSequentialAccess(int fd);
+
 size_t WriteAll(int fd, const void *data, size_t len, size_t chunk = (size_t)-1);
 size_t ReadAll(int fd, void *data, size_t len);
 ssize_t ReadWritePiece(int fd_src, int fd_dst);
 
+bool ReadWholeFile(const char *path, std::string &result, size_t limit = (size_t)-1);
 
 int pipe_cloexec(int pipedes[2]);
 
@@ -226,22 +246,22 @@ template <class CharT>
 }
 
 template <class CharT>
-	void StrTrimRight(std::basic_string<CharT> &str, const CharT *spaces = " \t")
+	void StrTrimRight(std::basic_string<CharT> &str, const char *spaces = " \t")
 {
-	while (!str.empty() && strchr(spaces, str[str.size() - 1]) != NULL) {
-		str.resize(str.size() - 1);
+	while (!str.empty() && unsigned(str.back()) <= 0x7f && strchr(spaces, str.back()) != NULL) {
+		str.pop_back();
 	}
 }
 template <class CharT>
-	void StrTrimLeft(std::basic_string<CharT> &str, const CharT *spaces = " \t")
+	void StrTrimLeft(std::basic_string<CharT> &str, const char *spaces = " \t")
 {
-	while (!str.empty() && strchr(spaces, str[0]) != NULL) {
+	while (!str.empty() && unsigned(str[0]) <= 0x7f && strchr(spaces, str[0]) != NULL) {
 		str.erase(0, 1);
 	}
 }
 
 template <class CharT>
-	void StrTrim(std::basic_string<CharT> &str, const CharT *spaces = " \t")
+	void StrTrim(std::basic_string<CharT> &str, const char *spaces = " \t")
 {
 	StrTrimRight(str, spaces);
 	StrTrimLeft(str, spaces);
@@ -276,8 +296,54 @@ template <typename HaystackIT, typename NeedlesT>
 	return nullptr;
 }
 
+bool CaseIgnoreEngStrMatch(const std::string &str1, const std::string &str2);
 bool CaseIgnoreEngStrMatch(const char *str1, const char *str2, size_t len);
 const char *CaseIgnoreEngStrChr(const char c, const char *str, size_t len);
 
+template <class STRING_T, typename ARRAY_T>
+	void StrAssignArray(STRING_T &s, const ARRAY_T &a)
+{
+	static_assert ( sizeof(a) != sizeof(void *), "StrAssignArray should be used with arrays but not pointers");
+	s.assign(a, tnzlen(a, ARRAYSIZE(a)));
+}
+
+template <class STRING_T, typename ARRAY_T>
+	void StrAppendArray(STRING_T &s, const ARRAY_T &a)
+{
+	static_assert ( sizeof(a) != sizeof(void *), "StrAppendArray should be used with arrays but not pointers");
+	s.append(a, tnzlen(a, ARRAYSIZE(a)));
+}
+
+
+template <class STRING_T, typename ARRAY_T>
+	bool StrMatchArray(STRING_T &s, const ARRAY_T &a)
+{
+	static_assert ( sizeof(a) != sizeof(void *), "StrMatchArray should be used with arrays but not pointers");
+	const size_t l = tnzlen(a, ARRAYSIZE(a));
+	return s.size() == l && s.compare(0, std::string::npos, a, l) == 0;
+}
+
+template <typename ARRAY_T, class CHAR_T>
+	void ArrayCpyZ(ARRAY_T &dst, const CHAR_T *src)
+{
+	static_assert ( sizeof(dst) != sizeof(void *), "ArrayCpyZ should be used with arrays but not pointers");
+	size_t i;
+	for (i = 0; src[i] && i + 1 < ARRAYSIZE(dst); ++i) {
+		dst[i] = src[i];
+	}
+	dst[i] = 0;
+}
+
+
+bool POpen(std::string &result, const char *command);
+bool POpen(std::vector<std::wstring> &result, const char *command);
 
 #define DBGLINE fprintf(stderr, "%d %d @%s\n", getpid(), __LINE__, __FILE__)
+
+bool IsCharFullWidth(wchar_t c);
+bool IsCharPrefix(wchar_t c);
+bool IsCharSuffix(wchar_t c);
+bool IsCharXxxfix(wchar_t c);
+
+void FN_NORETURN FN_PRINTF_ARGS(1) ThrowPrintf(const char *format, ...); // throws std::runtime_error with formatted .what()
+

@@ -174,7 +174,7 @@ void OpXfer::Process()
 		}
 	} else {
 		if (_enumer) {
-			if (_on_site_move)  {
+			if (_on_site_move) {
 				std::string path_dst;
 				auto &items = _enumer->Items();
 				for (auto i = items.begin(); i != items.end();) {
@@ -292,7 +292,7 @@ void OpXfer::Transfer()
 		path_dst = _dst_dir;
 		path_dst+= subpath;
 		{
-			std::unique_lock<std::mutex> lock(_state.mtx);
+			std::lock_guard<std::mutex> lock(_state.mtx);
 			_state.path = subpath;
 			_state.stats.file_complete = 0;
 			_state.stats.file_total = S_ISDIR(e.second.mode) ? 0 : e.second.size;
@@ -332,7 +332,7 @@ void OpXfer::Transfer()
 
 			if (S_ISREG(e.second.mode)) {
 				// symlinks are not counted in all_total, need to add size for symlink's target if gonna file-copy it
-				std::unique_lock<std::mutex> lock(_state.mtx);
+				std::lock_guard<std::mutex> lock(_state.mtx);
 				_state.stats.all_total+= e.second.size;
 			}
 		}
@@ -363,6 +363,7 @@ void OpXfer::Transfer()
 				}
 				if (xoa == XOA_RESUME) {
 					if (existing_file_info.size < e.second.size) {
+						std::lock_guard<std::mutex> lock(_state.mtx);
 						_state.stats.all_complete+= existing_file_info.size;
 						_state.stats.file_complete = existing_file_info.size;
 					} else {
@@ -374,7 +375,7 @@ void OpXfer::Transfer()
 				}
 
 				if (xoa == XOA_SKIP) {
-					std::unique_lock<std::mutex> lock(_state.mtx);
+					std::lock_guard<std::mutex> lock(_state.mtx);
 					_state.stats.all_complete+= e.second.size;
 					_state.stats.file_complete+= e.second.size;
 					_state.stats.count_complete++;
@@ -384,7 +385,7 @@ void OpXfer::Transfer()
 
 			if (_on_site_move) try {
 				_base_host->Rename(e.first, path_dst);
-				std::unique_lock<std::mutex> lock(_state.mtx);
+				std::lock_guard<std::mutex> lock(_state.mtx);
 				_state.stats.all_complete+= e.second.size;
 				_state.stats.file_complete+= e.second.size;
 				_state.stats.count_complete++;
@@ -544,7 +545,7 @@ bool OpXfer::FileCopyLoop(const std::string &path_src, const std::string &path_d
 
 			transfer_msec+= (TimeMSNow() - msec).count();
 			if (transfer_msec > 100) {
-				unsigned long rate_avg = (unsigned long)(( (file_complete - initial_complete) * 1000 ) /  transfer_msec);
+				unsigned long rate_avg = (unsigned long)(( (file_complete - initial_complete) * 1000 ) / transfer_msec);
 				unsigned long bufsize_optimal = (rate_avg / 2);
 				unsigned long bufsize_align = bufsize_optimal % BUFFER_SIZE_GRANULARITY;
 				if (bufsize_align) {
@@ -634,7 +635,7 @@ bool OpXfer::SymlinkCopy(const std::string &path_src, const std::string &path_ds
 		;
 
 	} else if (symlink_target[0] == '/') {
-		if (_entries.find(symlink_target) ==  _entries.end()) {
+		if (_entries.find(symlink_target) == _entries.end()) {
 			fprintf(stderr, "NetRocks: SymlinkCopy dismiss '%s' [%s]\n",
 				path_src.c_str(), orig_symlink_target.c_str());
 			return false;
@@ -674,7 +675,7 @@ bool OpXfer::SymlinkCopy(const std::string &path_src, const std::string &path_ds
 			}
 		}
 
-		if (_entries.find(refined) ==  _entries.end()) {
+		if (_entries.find(refined) == _entries.end()) {
 			fprintf(stderr, "NetRocks: SymlinkCopy dismiss '%s' [%s] refined='%s;\n",
 				path_src.c_str(), orig_symlink_target.c_str(), refined.c_str());
 			return false;

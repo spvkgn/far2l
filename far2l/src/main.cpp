@@ -73,6 +73,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "InterThreadCall.hpp"
 #include "SafeMMap.hpp"
 #include "ConfigRW.hpp"
+#include "ConfigSaveLoad.hpp"
 
 #ifdef DIRECT_RT
 int DirectRT=0;
@@ -408,7 +409,7 @@ int FarAppMain(int argc, char **argv)
 	//  иначе - смотря что указал юзвер.
 
 	Opt.strRegRoot = L"Software/Far2";
-	CheckForConfigUpgrade();
+	ConfigLegacyUpgrade();
 
 	// По умолчанию - брать плагины из основного каталога
 	Opt.LoadPlug.MainPluginDir=TRUE;
@@ -574,9 +575,9 @@ int FarAppMain(int argc, char **argv)
 
 					break;
 
-				case L'W':
-					{
-						Opt.WindowMode=TRUE;
+				case L'U':
+					{ // skip 2 args as this case is processed in SetCustomSettings()
+						I++;
 					}
 					break;
 			}
@@ -632,7 +633,7 @@ int FarAppMain(int argc, char **argv)
 		Opt.LoadPlug.PluginsPersonal=FALSE;
 	}
 
-	ReadConfig();
+	LoadConfig();
 	InitConsole();
 	static_assert(!IsPtr(Msg::NewFileName._id),
 		"Too many language messages. Need to refactor code to eliminate use of IsPtr.");
@@ -697,7 +698,7 @@ void SudoTest()
 }
 */
 
-static int libexec(const char *lib, const char *symbol, int argc, char *argv[])
+static int libexec(const char *lib, const char *cd, const char *symbol, int argc, char *argv[])
 {
 	void *dl = dlopen(lib, RTLD_LOCAL|RTLD_LAZY);
 	if (!dl) {
@@ -710,6 +711,10 @@ static int libexec(const char *lib, const char *symbol, int argc, char *argv[])
 	if (!libexec_main) {
 		fprintf(stderr, "libexec('%s', '%s', %u) - dlsym error %u\n", lib, symbol, argc, errno);
 		return -1;
+	}
+
+	if (cd && *cd && chdir(cd) == -1) {
+		fprintf(stderr, "libexec('%s', '%s', %u) - chdir('%s') error %u\n", lib, symbol, argc, cd, errno);
 	}
 
 	return libexec_main(argc, argv);
@@ -780,6 +785,7 @@ static void SetCustomSettings(const char *arg)
 	if (!refined.empty()) {
 		// could use FARPROFILE/FARLOCALPROFILE for that but it would be abusing
 		setenv("FARSETTINGS", refined.c_str(), 1);
+		InMyPathChanged();
 	}
 }
 
@@ -793,8 +799,9 @@ int _cdecl main(int argc, char *argv[])
 		if (strcmp(name, "far2l_sudoapp")==0)
 			return sudo_main_dispatcher(argc - 1, argv + 1);
 		if (argc >= 4) {
-			if (strcmp(argv[1], "--libexec")==0)
-				return libexec(argv[2], argv[3], argc - 4, argv + 4);
+			if (strcmp(argv[1], "--libexec")==0) {
+				return libexec(argv[2], argv[3], argv[4], argc - 5, argv + 5);
+			}
 		}
 		if (argc > 1 &&
 		(strncasecmp(argv[1], "--h", 3) == 0
@@ -812,6 +819,9 @@ int _cdecl main(int argc, char *argv[])
 			SetCustomSettings(argv[i + 1]);
 		}
 	}
+
+	g_umask = umask(0077);
+	umask(g_umask);
 
 	setlocale(LC_ALL, "");//otherwise non-latin keys missing with XIM input method
 

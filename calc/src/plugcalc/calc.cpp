@@ -29,19 +29,18 @@
 #include "config.h"
 #include "messages.h"
 
+static wchar_t *coreReturn = NULL;
 
-int regAlign, regEdit, regCheck;
-
-wchar_t *coreReturn = NULL;
-
-FarDialogItem *cur_dlg_items = NULL;
-int cur_dlg_items_num = 0, cur_dlg_id = 0, cur_dlg_items_numedits = 0;
-int cur_dlg_need_recalc = 0;
-CalcCoord cur_dlg_dlg_size;
+static FarDialogItem *cur_dlg_items = NULL;
+static int cur_dlg_items_num = 0, cur_dlg_id = 0, cur_dlg_items_numedits = 0;
+static int cur_dlg_need_recalc = 0;
+static CalcCoord cur_dlg_dlg_size;
 
 // XXX:
-int calc_cx = 55, calc_cy = 8, calc_edit_length = calc_cx - 23;
-int cx_column_width[10] = { 0 };
+static int calc_cx = 55, calc_cy = 8;
+static int cx_column_width[10] = { 0 };
+
+int calc_edit_length = calc_cx - 23; // extern-referenced
 
 static struct Addons
 {
@@ -51,7 +50,7 @@ static struct Addons
 	int edit_id1, edit_id2;
 } addons_info;
 
-const FarDialogItem dialog_template[] = 
+static const FarDialogItem dialog_template[] =
 {
 	{ DI_DOUBLEBOX,    3,  1, 52, 11, 0, {}, 0, 0, L"" },
 	{ DI_TEXT,         5,  3,  0,  0, 0, {}, 0, 0, L"&expr:" },
@@ -81,7 +80,6 @@ static int curRadio = 4;
 void CalcStartup()
 {
 	srand((unsigned)time(0));
-	InitConfig();
 }
 
 void CalcOpenFromEditor()
@@ -103,7 +101,6 @@ bool CalcConfig()
 	LoadConfig();
 	CheckConfig();
 	SaveConfig();
-
 	if (ConfigDialog())
 	{
 		CheckConfig();
@@ -242,7 +239,7 @@ void EditorDialog()
 
 		SArg Res = parser->Parse(Text, props.case_sensitive != 0);
 		free(Text);
-  
+
 		Text = convertToString(Res, i - 1, 0, false, props.pad_zeroes != 0, false, NULL);
 		if (Text)
 		{
@@ -507,7 +504,7 @@ public:
 		SArg res = parser->Parse(Item->PtrData, props.case_sensitive != 0);
 		if (parser->GetError())
 			was_error = true;
-        
+
 		int id = 1;
 		PDialogElem de;
 		for (de = dd->Elem;  de;  de = de->Next, id++)
@@ -554,14 +551,16 @@ public:
 						tmp = de->scale != 0 ? val / de->scale : 0;
 					}
 					
-					CALC_ERROR errcode = ERR_OK;
-					wchar_t *ret = convertToString(tmp, idx, cx_column_width[de->column_idx] - 4, false, props.pad_zeroes != 0, true, &errcode);
-					if (errcode != ERR_OK)
-						str.clear();
+					wchar_t *pwz = convertToString(tmp, idx, cx_column_width[de->column_idx] - 4, false, props.pad_zeroes != 0, true, nullptr);
+					if (pwz)
+					{
+						str = pwz;
+						free(pwz);
+					}
 					else
-						str = ret;
+						str.clear();
 				}
-        
+
 				if (id != param1)
 				{
 					//XXX:
@@ -574,10 +573,10 @@ public:
 				}
 			}
 		}
-        EnableRedraw(true);
+		EnableRedraw(true);
 		return TRUE;
 	}
-  
+
 	virtual CALC_INT_PTR OnKey(int param1, void *param2)
 	{
 		DWORD key = (DWORD)(DWORD_PTR)param2;
@@ -597,19 +596,22 @@ public:
 				Close(CALC_EDIT_ID);
 				return TRUE;
 			}
-  
+
 			SArg res = parser->Parse(str.c_str(), props.case_sensitive != 0);
 
-			str = convertToString(res, CALC_CONV_ENTER, props.result_length, false, props.pad_zeroes != 0, false, NULL);
-
-			if (!props.auto_update)
+			wchar_t *pwz = convertToString(res, CALC_CONV_ENTER, props.result_length, false, props.pad_zeroes != 0, false, NULL);
+			if (pwz)
 			{
-				FarDialogItem Item;
-				Item.PtrData = str.c_str();
-				OnEditChangeInternal(param1, (void *)&Item);
-			}
+				if (!props.auto_update)
+				{
+					FarDialogItem Item;
+					Item.PtrData = pwz;
+					OnEditChangeInternal(param1, (void *)&Item);
+				}
 
-			SetText(param1, str);
+				SetText(param1, pwz);
+				free(pwz);
+			}
 			OnGotFocus(param1, NULL);
 
 			return TRUE;
@@ -679,7 +681,7 @@ void ShowUnitsDialog(int no)
 	cur_dlg_items = NULL;
 
 	for (i = 0;  i < dsize; i++)
-  		free((void *)dialog[i].PtrData);
+		free((void *)dialog[i].PtrData);
 	delete [] dialog;
 }
 
@@ -864,7 +866,7 @@ public:
 				
 				curRadio = param1;
 			}
-      
+
 			int loc_Radio = curRadio;
 			if (param1 >= addons_info.radio_id1 && param1 <= addons_info.radio_id2)
 				loc_Radio = param1;
@@ -978,15 +980,15 @@ public:
 					}
 					tmp += L"        ";
 					SetText(CALC_TYPE_ID, tmp);
-		      
+
 					for (unsigned i = 0; i < parser->main_addons_num; i++)
 					{
 						CALC_ERROR error_code = ERR_OK;
-						wchar_t *text = convertToString(res, i, 0, false, props.pad_zeroes != 0, true, &error_code);
-						if (text)
+						wchar_t *pwz = convertToString(res, i, 0, false, props.pad_zeroes != 0, true, &error_code);
+						if (pwz)
 						{
-							SetText(addons_info.edit_id1 + i, text);
-							free(text);
+							SetText(addons_info.edit_id1 + i, pwz);
+							free(pwz);
 						}
 						else if (error_code != ERR_OK)
 						{

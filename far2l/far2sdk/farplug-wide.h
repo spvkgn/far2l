@@ -44,7 +44,7 @@ other possible license with no implications from the above license on them.
 */
 
 #define FARMANAGERVERSION_MAJOR 2
-#define FARMANAGERVERSION_MINOR 4
+#define FARMANAGERVERSION_MINOR 5
 
 #ifndef RC_INVOKED
 
@@ -165,12 +165,12 @@ enum FARMESSAGEFLAGS
 };
 
 typedef int ( *FARAPIMESSAGE)(
-    INT_PTR PluginNumber,
-    DWORD Flags,
-    const wchar_t *HelpTopic,
-    const wchar_t * const *Items,
-    int ItemsNumber,
-    int ButtonsNumber
+	INT_PTR PluginNumber,
+	DWORD Flags,
+	const wchar_t *HelpTopic,
+	const wchar_t * const *Items,
+	int ItemsNumber,
+	int ButtonsNumber
 );
 
 
@@ -616,47 +616,47 @@ enum FARDIALOGFLAGS
 };
 
 typedef LONG_PTR(WINAPI *FARWINDOWPROC)(
-    HANDLE   hDlg,
-    int      Msg,
-    int      Param1,
-    LONG_PTR Param2
+	HANDLE   hDlg,
+	int      Msg,
+	int      Param1,
+	LONG_PTR Param2
 );
 
 typedef LONG_PTR(WINAPI *FARAPISENDDLGMESSAGE)(
-    HANDLE   hDlg,
-    int      Msg,
-    int      Param1,
-    LONG_PTR Param2
+	HANDLE   hDlg,
+	int      Msg,
+	int      Param1,
+	LONG_PTR Param2
 );
 
 typedef LONG_PTR(WINAPI *FARAPIDEFDLGPROC)(
-    HANDLE   hDlg,
-    int      Msg,
-    int      Param1,
-    LONG_PTR Param2
+	HANDLE   hDlg,
+	int      Msg,
+	int      Param1,
+	LONG_PTR Param2
 );
 
 typedef HANDLE(WINAPI *FARAPIDIALOGINIT)(
-    INT_PTR               PluginNumber,
-    int                   X1,
-    int                   Y1,
-    int                   X2,
-    int                   Y2,
-    const wchar_t        *HelpTopic,
-    struct FarDialogItem *Item,
-    unsigned int          ItemsNumber,
-    DWORD                 Reserved,
-    DWORD                 Flags,
-    FARWINDOWPROC         DlgProc,
-    LONG_PTR              Param
+	INT_PTR               PluginNumber,
+	int                   X1,
+	int                   Y1,
+	int                   X2,
+	int                   Y2,
+	const wchar_t        *HelpTopic,
+	struct FarDialogItem *Item,
+	unsigned int          ItemsNumber,
+	DWORD                 Reserved,
+	DWORD                 Flags,
+	FARWINDOWPROC         DlgProc,
+	LONG_PTR              Param
 );
 
 typedef int (WINAPI *FARAPIDIALOGRUN)(
-    HANDLE hDlg
+	HANDLE hDlg
 );
 
 typedef void (WINAPI *FARAPIDIALOGFREE)(
-    HANDLE hDlg
+	HANDLE hDlg
 );
 
 struct FarMenuItem
@@ -704,18 +704,18 @@ enum FARMENUFLAGS
 };
 
 typedef int (WINAPI *FARAPIMENU)(
-    INT_PTR             PluginNumber,
-    int                 X,
-    int                 Y,
-    int                 MaxHeight,
-    DWORD               Flags,
-    const wchar_t      *Title,
-    const wchar_t      *Bottom,
-    const wchar_t      *HelpTopic,
-    const int          *BreakKeys,
-    int                *BreakCode,
-    const struct FarMenuItem *Item,
-    int                 ItemsNumber
+	INT_PTR             PluginNumber,
+	int                 X,
+	int                 Y,
+	int                 MaxHeight,
+	DWORD               Flags,
+	const wchar_t      *Title,
+	const wchar_t      *Bottom,
+	const wchar_t      *HelpTopic,
+	const int          *BreakKeys,
+	int                *BreakCode,
+	const struct FarMenuItem *Item,
+	int                 ItemsNumber
 );
 
 
@@ -864,17 +864,17 @@ enum FILE_CONTROL_COMMANDS
 };
 
 typedef int (WINAPI *FARAPICONTROL)(
-    HANDLE hPlugin,
-    int Command,
-    int Param1,
-    LONG_PTR Param2
+	HANDLE hPlugin,
+	int Command,
+	int Param1,
+	LONG_PTR Param2
 );
 
 typedef void (WINAPI *FARAPITEXT)(
-    int X,
-    int Y,
-    int Color,
-    const wchar_t *Str
+	int X,
+	int Y,
+	int Color,
+	const wchar_t *Str
 );
 
 typedef HANDLE(WINAPI *FARAPISAVESCREEN)(int X1, int Y1, int X2, int Y2);
@@ -883,17 +883,17 @@ typedef void (WINAPI *FARAPIRESTORESCREEN)(HANDLE hScreen);
 
 
 typedef int (WINAPI *FARAPIGETDIRLIST)(
-    const wchar_t *Dir,
-    struct FAR_FIND_DATA **pPanelItem,
-    int *pItemsNumber
+	const wchar_t *Dir,
+	struct FAR_FIND_DATA **pPanelItem,
+	int *pItemsNumber
 );
 
 typedef int (WINAPI *FARAPIGETPLUGINDIRLIST)(
-    INT_PTR PluginNumber,
-    HANDLE hPlugin,
-    const wchar_t *Dir,
-    struct PluginPanelItem **pPanelItem,
-    int *pItemsNumber
+	INT_PTR PluginNumber,
+	HANDLE hPlugin,
+	const wchar_t *Dir,
+	struct PluginPanelItem **pPanelItem,
+	int *pItemsNumber
 );
 
 typedef void (WINAPI *FARAPIFREEDIRLIST)(struct FAR_FIND_DATA *PanelItem, int nItemsNumber);
@@ -910,14 +910,14 @@ enum VIEWER_FLAGS
 };
 
 typedef int (WINAPI *FARAPIVIEWER)(
-    const wchar_t *FileName,
-    const wchar_t *Title,
-    int X1,
-    int Y1,
-    int X2,
-    int Y2,
-    DWORD Flags,
-    UINT CodePage
+	const wchar_t *FileName,
+	const wchar_t *Title,
+	int X1,
+	int Y1,
+	int X2,
+	int Y2,
+	DWORD Flags,
+	UINT CodePage
 );
 
 enum EDITOR_FLAGS
@@ -958,28 +958,28 @@ enum EDITOR_EXITCODE
 };
 
 typedef int (WINAPI *FARAPIEDITOR)(
-    const wchar_t *FileName,
-    const wchar_t *Title,
-    int X1,
-    int Y1,
-    int X2,
-    int Y2,
-    DWORD Flags,
-    int StartLine,
-    int StartChar,
-    UINT CodePage
+	const wchar_t *FileName,
+	const wchar_t *Title,
+	int X1,
+	int Y1,
+	int X2,
+	int Y2,
+	DWORD Flags,
+	int StartLine,
+	int StartChar,
+	UINT CodePage
 );
 
 typedef int (WINAPI *FARAPICMPNAME)(
-    const wchar_t *Pattern,
-    const wchar_t *String,
-    int SkipPath
+	const wchar_t *Pattern,
+	const wchar_t *String,
+	int SkipPath
 );
 
 
 typedef const wchar_t*(WINAPI *FARAPIGETMSG)(
-    INT_PTR PluginNumber,
-    FarLangMsgID MsgId
+	INT_PTR PluginNumber,
+	FarLangMsgID MsgId
 );
 
 
@@ -994,9 +994,9 @@ enum FarHelpFlags
 };
 
 typedef BOOL (WINAPI *FARAPISHOWHELP)(
-    const wchar_t *ModuleName,
-    const wchar_t *Topic,
-    DWORD Flags
+	const wchar_t *ModuleName,
+	const wchar_t *Topic,
+	DWORD Flags
 );
 
 enum ADVANCED_CONTROL_COMMANDS
@@ -1397,9 +1397,9 @@ struct PROGRESSVALUE
 };
 
 typedef INT_PTR(WINAPI *FARAPIADVCONTROL)(
-    INT_PTR ModuleNumber,
-    int Command,
-    void *Param
+	INT_PTR ModuleNumber,
+	int Command,
+	void *Param
 );
 
 
@@ -1491,8 +1491,8 @@ struct ViewerInfo
 };
 
 typedef int (WINAPI *FARAPIVIEWERCONTROL)(
-    int Command,
-    void *Param
+	int Command,
+	void *Param
 );
 
 enum VIEWER_EVENTS
@@ -1568,10 +1568,12 @@ enum EDITOR_CONTROL_COMMANDS
 	ECTL_GETSTACKBOOKMARKS,
 	ECTL_UNDOREDO,
 	ECTL_GETFILENAME,
-#ifdef FAR_USE_INTERNALS
-	ECTL_SERVICEREGION,
-#endif // END FAR_USE_INTERNALS
+	ECTL_ADDTRUECOLOR,
+	ECTL_GETTRUECOLOR,
 };
+//#ifdef FAR_USE_INTERNALS
+//	ECTL_SERVICEREGION, // WTF
+//#endif // END FAR_USE_INTERNALS
 
 enum EDITOR_SETPARAMETER_TYPES
 {
@@ -1763,6 +1765,21 @@ struct EditorColor
 	int Color;
 };
 
+struct FarTrueColor
+{
+	unsigned char R;
+	unsigned char G;
+	unsigned char B;
+	unsigned char Flags; // bit one - 'active' flag, others - ignored and must be set to zero
+};
+
+struct EditorTrueColor
+{
+	struct EditorColor Base;
+	struct FarTrueColor TrueFore;
+	struct FarTrueColor TrueBack;
+};
+
 struct EditorSaveFile
 {
 	const wchar_t *FileName;
@@ -1771,8 +1788,8 @@ struct EditorSaveFile
 };
 
 typedef int (WINAPI *FARAPIEDITORCONTROL)(
-    int Command,
-    void *Param
+	int Command,
+	void *Param
 );
 
 enum INPUTBOXFLAGS
@@ -1790,34 +1807,34 @@ enum INPUTBOXFLAGS
 };
 
 typedef int (WINAPI *FARAPIINPUTBOX)(
-    const wchar_t *Title,
-    const wchar_t *SubTitle,
-    const wchar_t *HistoryName,
-    const wchar_t *SrcText,
-    wchar_t *DestText,
-    int   DestLength,
-    const wchar_t *HelpTopic,
-    DWORD Flags
+	const wchar_t *Title,
+	const wchar_t *SubTitle,
+	const wchar_t *HistoryName,
+	const wchar_t *SrcText,
+	wchar_t *DestText,
+	int   DestLength,
+	const wchar_t *HelpTopic,
+	DWORD Flags
 );
 
 typedef int (WINAPI *FARAPIPLUGINSCONTROL)(
-    HANDLE hHandle,
-    int Command,
-    int Param1,
-    LONG_PTR Param2
+	HANDLE hHandle,
+	int Command,
+	int Param1,
+	LONG_PTR Param2
 );
 
 typedef int (WINAPI *FARAPIFILEFILTERCONTROL)(
-    HANDLE hHandle,
-    int Command,
-    int Param1,
-    LONG_PTR Param2
+	HANDLE hHandle,
+	int Command,
+	int Param1,
+	LONG_PTR Param2
 );
 
 typedef int (WINAPI *FARAPIREGEXPCONTROL)(
-    HANDLE hHandle,
-    int Command,
-    LONG_PTR Param
+	HANDLE hHandle,
+	int Command,
+	LONG_PTR Param
 );
 
 // <C&C++>
@@ -1836,8 +1853,9 @@ typedef wchar_t   *(WINAPI *FARSTDITOA)(int value, wchar_t *string, int radix);
 typedef wchar_t   *(WINAPI *FARSTDLTRIM)(wchar_t *Str);
 typedef wchar_t   *(WINAPI *FARSTDRTRIM)(wchar_t *Str);
 typedef wchar_t   *(WINAPI *FARSTDTRIM)(wchar_t *Str);
-typedef wchar_t   *(WINAPI *FARSTDTRUNCSTR)(wchar_t *Str,int MaxLength);
-typedef wchar_t   *(WINAPI *FARSTDTRUNCPATHSTR)(wchar_t *Str,int MaxLength);
+// truncation functions below uses console cells count as limiting unit
+typedef wchar_t   *(WINAPI *FARSTDTRUNCSTR)(wchar_t *Str,int MaxCells);
+typedef wchar_t   *(WINAPI *FARSTDTRUNCPATHSTR)(wchar_t *Str,int MaxCells);
 typedef wchar_t   *(WINAPI *FARSTDQUOTESPACEONLY)(wchar_t *Str);
 typedef const wchar_t*(WINAPI *FARSTDPOINTTONAME)(const wchar_t *Path);
 typedef int (WINAPI *FARSTDGETPATHROOT)(const wchar_t *Path,wchar_t *Root, int DestSize);
@@ -1885,9 +1903,9 @@ typedef wchar_t*(WINAPI *FARSTDXLAT)(wchar_t *Line,int StartPos,int EndPos,DWORD
 typedef int (WINAPI *FARSTDKEYNAMETOKEY)(const wchar_t *Name);
 
 typedef int (WINAPI *FRSUSERFUNC)(
-    const struct FAR_FIND_DATA *FData,
-    const wchar_t *FullName,
-    void *Param
+	const struct FAR_FIND_DATA *FData,
+	const wchar_t *FullName,
+	void *Param
 );
 
 enum FRSMODE
@@ -1930,18 +1948,33 @@ typedef DWORD (WINAPI *FARGETCURRENTDIRECTORY)(DWORD Size,wchar_t* Buffer);
 
 enum EXECUTEFLAGS
 {
-	EF_HIDEOUT = 0x01,
-	EF_NOWAIT = 0x02,
-	EF_SUDO = 0x04,
-	EF_NOTIFY = 0x08,
-	EF_NOCMDPRINT = 0x10
+	EF_HIDEOUT = 0x01,    // dont display output of the command
+	EF_NOWAIT = 0x02,     // dont wait for command completion
+	EF_SUDO = 0x04,       // command must be run with root priviledges
+	EF_NOTIFY = 0x08,     // notify when command completed (if such notifications enabled in settings)
+	EF_NOCMDPRINT = 0x10, // dont print command in command line nor include it to history
+	EF_OPEN = 0x20        // use desktop shell (if present) to open command (e.g. URLs, documents..)
 };
 
 typedef int (WINAPI *FAREXECUTE)(const wchar_t *CmdStr, unsigned int ExecFlags);
 typedef int (WINAPI *FAREXECUTE_LIBRARY)(const wchar_t *Library, const wchar_t *Symbol, const wchar_t *CmdStr, unsigned int ExecFlags);
 typedef void (WINAPI *FARDISPLAYNOTIFICATION)(const wchar_t *action, const wchar_t *object);
 typedef int (WINAPI *FARDISPATCHNTRTHRDCALLS)();
+// If plugin implements tasks running in background it may invoke this function to indicate about
+// pending task in left-top corner. Info is a short description of task or just its owner and must
+// be same string when invoked with Started TRUE or FALSE.
 typedef void (WINAPI *FARBACKGROUNDTASK)(const wchar_t *Info, BOOL Started);
+// Returns count of console cells which will be used to display given string of CharsCount characters.
+typedef size_t (WINAPI *FARSTRCELLSCOUNT)(const wchar_t *Str, size_t CharsCount);
+// Returns count of characters which will be used for fill up to *CellsCount cells from given string
+// of CharsCount characters.
+// RoundUp argument tells what to do with full-width characters that crossed by *CellsCount.
+// On return *CellsCount contains cells count that will be filled by returned characters count, that:
+//  Can be smaller than initial value if string has too few characters to fill all *CellsCount cells
+//  or if RoundUp was set to FALSE and last character would then overflow wanted amount.
+//  Can be larger by one than initial value if RoundUp was set to TRUE and last full-width character
+//  crossed initial value specified in *CellsCount.
+typedef size_t (WINAPI *FARSTRSIZEOFCELLS)(const wchar_t *Str, size_t CharsCount, size_t *CellsCount, BOOL RoundUp);
 
 enum BOX_DEF_SYMBOLS
 {
@@ -2061,6 +2094,8 @@ typedef struct FarStandardFunctions
 	FARDISPLAYNOTIFICATION     DisplayNotification;
 	FARDISPATCHNTRTHRDCALLS    DispatchInterThreadCalls;
 	FARBACKGROUNDTASK          BackgroundTask;
+	FARSTRCELLSCOUNT           StrCellsCount;
+	FARSTRSIZEOFCELLS          StrSizeOfCells;
 } FARSTANDARDFUNCTIONS;
 
 struct PluginStartupInfo

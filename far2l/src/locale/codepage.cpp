@@ -118,39 +118,41 @@ static const char *levelNames[] = {"QUIET", "ERROR", "WARN", "TRACE", "INFO"};
 
 static FILE *cplog = 0;
 
-static void file_logger(int level, const char *cname, const char *msg, va_list v){
+static void file_logger(int level, const char *cname, const char *msg, va_list v)
+{
 
-  int idx = 0;
+	int idx = 0;
 
-  while (cplog == 0 && idx < 10){
-    char log_name[30];
+	while (cplog == 0 && idx < 10) {
+		char log_name[30];
 #ifdef __unix__
-    sprintf(log_name, "/tmp/cp-trace%d.log", idx);
+		sprintf(log_name, "/tmp/cp-trace%d.log", idx);
 #else
-    sprintf(log_name, "c:/cp-trace%d.log", idx);
+		sprintf(log_name, "c:/cp-trace%d.log", idx);
 #endif
-    cplog = fopen(log_name, "ab+");
-    idx++;
-  }
+		cplog = fopen(log_name, "ab+");
+		idx++;
+	}
 
-  fprintf(cplog, "[%s][%s] ", levelNames[level], cname);
+	fprintf(cplog, "[%s][%s] ", levelNames[level], cname);
 
-  vfprintf(cplog, msg, v);
+	vfprintf(cplog, msg, v);
 
-  //fprintf(cplog, "\n");
+	//fprintf(cplog, "\n");
 
-  fflush(cplog);
+	fflush(cplog);
 }
 #endif //CP_DBG
 
-void cp_logger(int level, const char *cname, const char *msg, ...){
+void cp_logger(int level, const char *cname, const char *msg, ...)
+{
 #ifdef CP_DBG
-  va_list v;
-  va_start(v, msg);
-  file_logger(level, cname, msg, v);
-  va_end (v);
+	va_list v;
+	va_start(v, msg);
+	file_logger(level, cname, msg, v);
+	va_end (v);
 #endif //CP_DBG
-  return;
+	return;
 }
 
 // Получаем кодовую страницу для элемента в меню
@@ -188,9 +190,18 @@ static void FormatCodePageString(UINT CodePage, const wchar_t *CodePageName, For
 {
 	if (CodePage!=CP_AUTODETECT)
 	{
-		CodePageNameString<<fmt::Width(5)<<CodePage<<BoxSymbols[BS_V1]<<(!IsCodePageNameCustom||CallbackCallSource==CodePagesFill?L' ':L'*');
+		CodePageNameString<<fmt::Expand(5)<<CodePage<<BoxSymbols[BS_V1]<<(!IsCodePageNameCustom||CallbackCallSource==CodePagesFill?L' ':L'*');
 	}
 	CodePageNameString<<CodePageName;
+}
+
+static int GetCodePageSelectType(UINT codePage) //selectedCodePages, (selectType & CPST_FIND) != 0
+{
+	if (codePage == CP_AUTODETECT)
+		return 0;
+	// Получаем признак выбранности таблицы символов
+	s_cfg_reader->SelectSection(FavoriteCodePagesKey);
+	return s_cfg_reader->GetInt(StrPrintf("%u", codePage), 0);
 }
 
 // Добавляем таблицу символов
@@ -267,17 +278,7 @@ static void AddCodePage(const wchar_t *codePageName, UINT codePage, int position
 // Добавляем стандартную таблицу символов
 static void AddStandardCodePage(const wchar_t *codePageName, UINT codePage, int position = -1, bool enabled = true)
 {
-	bool checked = false;
-
-	if (selectedCodePages && codePage!=CP_AUTODETECT)
-	{
-		s_cfg_reader->SelectSection(FavoriteCodePagesKey);
-		int selectType = s_cfg_reader->GetInt(StrPrintf("%u", codePage), 0);
-
-		if (selectType & CPST_FIND)
-			checked = true;
-	}
-
+	bool checked = selectedCodePages && (GetCodePageSelectType(codePage) & CPST_FIND) != 0;
 	AddCodePage(codePageName, codePage, position, enabled, checked, false);
 }
 
@@ -389,10 +390,9 @@ static BOOL __stdcall EnumCodePagesProc(const wchar_t *lpwszCodePage)
 	// Формируем имя таблиц символов
 	bool IsCodePageNameCustom = false;
 	wchar_t *codePageName = FormatCodePageName(_wtoi(lpwszCodePage), cpiex.CodePageName, sizeof(cpiex.CodePageName)/sizeof(wchar_t), IsCodePageNameCustom);
-	// Получаем признак выбранности таблицы символов
-	s_cfg_reader->SelectSection(FavoriteCodePagesKey);
-	int selectType = s_cfg_reader->GetInt(Wide2MB(lpwszCodePage), 0);
 
+	int selectType = GetCodePageSelectType(codePage);
+	bool checked = selectedCodePages && (selectType & CPST_FIND) != 0;
 	// Добавляем таблицу символов либо в нормальные, либо в выбранные таблицы символов
 	if (selectType & CPST_FAVORITE)
 	{
@@ -402,15 +402,15 @@ static BOOL __stdcall EnumCodePagesProc(const wchar_t *lpwszCodePage)
 
 		// Добавляем таблицу символов в выбранные
 		AddCodePage(
-		    codePageName,
-		    codePage,
-		    GetCodePageInsertPosition(
-		        codePage,
-		        GetItemsCount()-normalCodePages-favoriteCodePages-(normalCodePages?1:0),
-		        favoriteCodePages
-		    ),
-		    true,
-		    selectType & CPST_FIND ? true : false,
+			codePageName,
+			codePage,
+			GetCodePageInsertPosition(
+				codePage,
+				GetItemsCount()-normalCodePages-favoriteCodePages-(normalCodePages?1:0),
+				favoriteCodePages
+			),
+			true,
+			checked,
 			IsCodePageNameCustom
 		);
 		// Увеличиваем счётчик выбранных таблиц символов
@@ -424,15 +424,15 @@ static BOOL __stdcall EnumCodePagesProc(const wchar_t *lpwszCodePage)
 
 		// Добавляем таблицу символов в нормальные
 		AddCodePage(
-		    codePageName,
-		    codePage,
-		    GetCodePageInsertPosition(
-		        codePage,
-		        GetItemsCount()-normalCodePages,
-		        normalCodePages
-		    ),
+			codePageName,
+			codePage,
+			GetCodePageInsertPosition(
+				codePage,
+				GetItemsCount()-normalCodePages,
+				normalCodePages
+			),
 			true,
-			false,
+			checked,
 			IsCodePageNameCustom
 		);
 		// Увеличиваем счётчик выбранных таблиц символов
@@ -447,19 +447,20 @@ static void AddCodePages(DWORD codePages)
 {
 	// Добавляем стандартные таблицы символов
 	AddStandardCodePage((codePages & ::SearchAll) ? Msg::FindFileAllCodePages : Msg::EditOpenAutoDetect, CP_AUTODETECT, -1, (codePages & ::SearchAll) || (codePages & ::Auto));
-	AddSeparator(Msg::GetCodePageSystem);
-	AddStandardCodePage(L"UTF-8", CP_UTF8, -1, true);
-	AddStandardCodePage(L"ANSI", WINPORT(GetACP)(), -1, true);
-	AddStandardCodePage(L"KOI8", CP_KOI8R, -1, true);
 	AddSeparator(Msg::GetCodePageUnicode);
+
+	AddStandardCodePage(L"UTF-8", CP_UTF8, -1, true);
 	AddStandardCodePage(L"UTF-7", CP_UTF7, -1, true);
 	AddStandardCodePage(L"UTF-16 (Little endian)", CP_UTF16LE, -1, true);
 	AddStandardCodePage(L"UTF-16 (Big endian)", CP_UTF16BE, -1, true);
-	AddStandardCodePage(L"DOS", WINPORT(GetOEMCP)(), -1, true);
 	if (sizeof(wchar_t)==4) {
 		AddStandardCodePage(L"UTF-32 (Little endian)", CP_UTF32LE, -1, true);
 		AddStandardCodePage(L"UTF-32 (Big endian)", CP_UTF32BE, -1, true);
 	}
+	AddSeparator(Msg::GetCodePageSystem);
+	AddStandardCodePage(L"ANSI", WINPORT(GetACP)(), -1, true);
+	AddStandardCodePage(L"KOI8", CP_KOI8R, -1, true);
+	AddStandardCodePage(L"OEM", WINPORT(GetOEMCP)(), -1, true);
 	// Получаем таблицы символов установленные в системе
 	WINPORT(EnumSystemCodePages)((CODEPAGE_ENUMPROCW)EnumCodePagesProc, 0);//CP_INSTALLED
 }
@@ -488,7 +489,7 @@ static void ProcessSelected(bool select)
 			ConfigWriter cfg_writer;
 			cfg_writer.SelectSection(FavoriteCodePagesKey);
 			if (select)
-				cfg_writer.SetInt(strCPName, CPST_FAVORITE | (selectType & CPST_FIND ? CPST_FIND : 0));
+				cfg_writer.SetInt(strCPName, CPST_FAVORITE | (selectType & CPST_FIND));
 			else if (selectType & CPST_FIND)
 				cfg_writer.SetInt(strCPName, CPST_FIND);
 			else
@@ -518,10 +519,10 @@ static void ProcessSelected(bool select)
 
 			// Ищем позицию, куда добавить элемент
 			int newPosition = GetCodePageInsertPosition(
-			                      codePage,
-			                      CodePages->GetItemCount()-normalCodePages-favoriteCodePages,
-			                      favoriteCodePages
-			                  );
+				codePage,
+				CodePages->GetItemCount()-normalCodePages-favoriteCodePages,
+				favoriteCodePages
+			);
 			// Добавляем кодовую страницу в выбранные
 			CodePages->AddItem(&newItem, newPosition);
 
@@ -550,12 +551,12 @@ static void ProcessSelected(bool select)
 
 				// Добавляем кодовою страницу в нормальные
 				CodePages->AddItem(
-				    &newItem,
-				    GetCodePageInsertPosition(
-				        codePage,
-				        CodePages->GetItemCount()-normalCodePages,
-				        normalCodePages
-				    )
+					&newItem,
+					GetCodePageInsertPosition(
+						codePage,
+						CodePages->GetItemCount()-normalCodePages,
+						normalCodePages
+					)
 				);
 				normalCodePages++;
 			}

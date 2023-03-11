@@ -47,7 +47,7 @@ static std::string QuotedArg(const std::string &s)
 	return out;
 }
 
-static void SCPRequestDeleter(ssh_scp  res)
+static void SCPRequestDeleter(ssh_scp res)
 {
 	if (res) {
 		ssh_scp_close(res);
@@ -152,7 +152,7 @@ private:
 	FDScope _fd_out;
 	FDScope _fd_in;
 	FDScope _fd_ctl;
-	bool _alive_out, _alive_err;
+	bool _alive_out{false}, _alive_err{false};
 
 	fd_set _fdr, _fde;
 	char _buf[0x10000];
@@ -199,6 +199,7 @@ public:
 
 		cmd.Execute();
 		while (cmd.FetchOutput()) {
+			; // nothing
 		}
 		_output.swap(cmd.output);
 		_error.swap(cmd.error);
@@ -272,8 +273,8 @@ public:
 				_finished = true;
 				return false;
 			}
-        }
-  	}
+		}
+	}
 
 	std::string FilteredError() const
 	{
@@ -348,7 +349,7 @@ class SCPDirectoryEnumer_stat : public SCPDirectoryEnumer
 			file_info.access_time.tv_sec = atol(str_access.c_str());
 			file_info.modification_time.tv_sec = atol(str_modify.c_str());
 			file_info.status_change_time.tv_sec = atol(str_change.c_str());
-			file_info.mode = htoul(str_mode.c_str());
+			file_info.mode = HexToULong(str_mode.c_str(), str_mode.size());
 			file_info.size = atol(str_size.c_str());
 
 			owner = str_owner;
@@ -531,7 +532,7 @@ drwx------    2 root     root         12288 Sep 25  2021 lost+found
 				t = *tnow;
 
 			if (str_yt.find(':') == std::string::npos) {
-				t.tm_year = atoul(str_yt.c_str()) - 1900;
+				t.tm_year = DecToULong(str_yt.c_str(), str_yt.length()) - 1900;
 			} else {
 				if (sscanf(str_yt.c_str(), "%d:%d", &t.tm_hour, &t.tm_min) <= -1) {
 					perror("scanf(str_yt)");
@@ -618,27 +619,66 @@ ProtocolSCP::ProtocolSCP(const std::string &host, unsigned int port,
 {
 	_quirks.use_ls = false;
 	_quirks.ls_supports_dash_f = true;
+	_quirks.rm_file = "unlink";
+	_quirks.rm_dir = "rmdir";
 
 	StringConfig protocol_options(options);
 	_conn = std::make_shared<SSHConnection>(host, port, username, password, protocol_options);
 	_now.tv_sec = time(nullptr);
 
-	int rc = SimpleCommand(_conn).Execute("%s", "stat --format=\"%n %f %s %X %Y %Z %U %G\" -L .");
+	SimpleCommand cmd(_conn);
+	int rc = cmd.Execute("%s", "stat --format=\"%n %f %s %X %Y %Z %U %G\" -L .");
 	if (rc != 0) {
 		_quirks.use_ls = true;
 		fprintf(stderr, "ProtocolSCP::ProtocolSCP: <stat .> result %d -> fallback to ls\n", rc);
 	}
 
-	if (_quirks.use_ls) {
-		SimpleCommand ls_cmd(_conn);
-		ls_cmd.Execute("%s", "ls --help");
-		if (ls_cmd.Output().find("BusyBox") != std::string::npos
-		  || ls_cmd.Error().find("BusyBox") != std::string::npos) {
-			fprintf(stderr, "ProtocolSCP::ProtocolSCP: BusyBox detected -> disable -f argument for ls\n");
-			_quirks.ls_supports_dash_f = false;
+	bool busybox = false;
+	bool applets_list = false;
+	if (cmd.Execute("readlink /bin/sh") == 0) {
+		if (cmd.Output().find("busybox") != std::string::npos && cmd.Execute("busybox") == 0) {
+			fprintf(stderr, "ProtocolSCP: BusyBox detected\n");
+			busybox = true;
+		}
+	} else {
+		int busybox_return_code = cmd.Execute("busybox 2>&1");
+		if (busybox_return_code == 0 || // busybox found and returns list of available applets OR
+			// busybox found and returns "busybox: applet not found"
+			(busybox_return_code == 127 && cmd.Output().find("applet not found") != std::string::npos))
+		{
+			// readlink not exists or /bin/sh not exists and also busybox exists?
+			// Its enough arguments to assume that ls will be handled by busybox.
+			fprintf(stderr, "ProtocolSCP: BusyBox assumed\n");
+			busybox = true;
+			applets_list = (busybox_return_code == 0);
 		}
 	}
 
+	if (busybox) {
+		if (applets_list) {
+			// some busybox systems may miss very usual things, analyze busybox command output
+			// where it printed lit of supported commands
+			std::vector<std::string> words;
+			StrExplode(words, cmd.Output(), "\t ,");
+			if (std::find(words.begin(), words.end(), _quirks.rm_file) == words.end()) {
+				fprintf(stderr, "ProtocolSCP: '%s' unsupported\n", _quirks.rm_file);
+				_quirks.rm_file = "rm -f";
+			}
+			if (std::find(words.begin(), words.end(), _quirks.rm_dir) == words.end()) {
+				fprintf(stderr, "ProtocolSCP: '%s' unsupported\n", _quirks.rm_dir);
+				_quirks.rm_dir = "rm -f -d";
+			}
+		} else {
+			// some routers have rmdir, but have no unlink (and also no applets list from busybox w/o args)
+			std::string probe_command = "ls /bin/"; probe_command += _quirks.rm_file;
+			if (cmd.Execute(probe_command.c_str()) != 0) {
+				fprintf(stderr, "ProtocolSCP: '%s' unsupported\n", _quirks.rm_file);
+				_quirks.rm_file = "rm -f";
+			}
+		}
+
+		_quirks.ls_supports_dash_f = false;
+	}
 }
 
 ProtocolSCP::~ProtocolSCP()
@@ -705,7 +745,7 @@ mode_t ProtocolSCP::GetMode(const std::string &path, bool follow_symlink)
 	SCPRequest scp (ssh_scp_new(_conn->ssh, SSH_SCP_READ | SSH_SCP_RECURSIVE, path.c_str()));// |
 	int rc = ssh_scp_init(scp);
 	if (rc != SSH_OK) {
-		throw ProtocolError("SCP init error",  ssh_get_error(_conn->ssh), rc);
+		throw ProtocolError("SCP init error", ssh_get_error(_conn->ssh), rc);
 	}
 
 	rc = ssh_scp_pull_request(scp);
@@ -731,11 +771,11 @@ mode_t ProtocolSCP::GetMode(const std::string &path, bool follow_symlink)
 		}
 		case SSH_ERROR: {
 			fprintf(stderr, "SSH_ERROR\n");
-			throw ProtocolError("Query mode error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("Query mode error", ssh_get_error(_conn->ssh), rc);
 		}
 	}
 
-	throw ProtocolError("Query mode fault",  ssh_get_error(_conn->ssh), rc);
+	throw ProtocolError("Query mode fault", ssh_get_error(_conn->ssh), rc);
 #endif
 }
 
@@ -754,7 +794,7 @@ unsigned long long ProtocolSCP::GetSize(const std::string &path, bool follow_sym
 	SCPRequest scp(ssh_scp_new(_conn->ssh, SSH_SCP_READ | SSH_SCP_RECURSIVE, path.c_str()));// | SSH_SCP_RECURSIVE
 	int rc = ssh_scp_init(scp);
 	if (rc != SSH_OK) {
-		throw ProtocolError("SCP init error",  ssh_get_error(_conn->ssh), rc);
+		throw ProtocolError("SCP init error", ssh_get_error(_conn->ssh), rc);
 	}
 
 	rc = ssh_scp_pull_request(scp);
@@ -775,11 +815,11 @@ unsigned long long ProtocolSCP::GetSize(const std::string &path, bool follow_sym
 		}
 		case SSH_ERROR: {
 			fprintf(stderr, "SSH_ERROR\n");
-			throw ProtocolError("Query size error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("Query size error", ssh_get_error(_conn->ssh), rc);
 		}
 	}
 
-	throw ProtocolError("Query size fault",  ssh_get_error(_conn->ssh), rc);
+	throw ProtocolError("Query size fault", ssh_get_error(_conn->ssh), rc);
 #endif
 }
 
@@ -810,7 +850,7 @@ void ProtocolSCP::GetInformation(FileInformation &file_info, const std::string &
 	SCPRequest scp (ssh_scp_new(_conn->ssh, SSH_SCP_READ | SSH_SCP_RECURSIVE, path.c_str()));// | SSH_SCP_RECURSIVE
 	int rc = ssh_scp_init(scp);
 	if (rc != SSH_OK) {
-		throw ProtocolError("SCP init error",  ssh_get_error(_conn->ssh), rc);
+		throw ProtocolError("SCP init error", ssh_get_error(_conn->ssh), rc);
 	}
 
 	rc = ssh_scp_pull_request(scp);
@@ -834,18 +874,18 @@ void ProtocolSCP::GetInformation(FileInformation &file_info, const std::string &
 		}
 		case SSH_ERROR: {
 			fprintf(stderr, "SSH_ERROR\n");
-			throw ProtocolError("Query info error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("Query info error", ssh_get_error(_conn->ssh), rc);
 		}
 	}
 
-	throw ProtocolError("Query info fault",  ssh_get_error(_conn->ssh), rc);
+	throw ProtocolError("Query info fault", ssh_get_error(_conn->ssh), rc);
 #endif
 }
 
 void ProtocolSCP::FileDelete(const std::string &path)
 {
 	SimpleCommand sc(_conn);
-	int rc = sc.Execute("unlink %s", QuotedArg(path).c_str());
+	int rc = sc.Execute("%s %s", _quirks.rm_file, QuotedArg(path).c_str());
 	if (rc != 0) {
 		throw ProtocolError(sc.FilteredError().c_str(), rc);
 	}
@@ -854,7 +894,7 @@ void ProtocolSCP::FileDelete(const std::string &path)
 void ProtocolSCP::DirectoryDelete(const std::string &path)
 {
 	SimpleCommand sc(_conn);
-	int rc = sc.Execute("rmdir %s", QuotedArg(path).c_str());
+	int rc = sc.Execute("%s %s", _quirks.rm_dir, QuotedArg(path).c_str());
 	if (rc != 0) {
 		throw ProtocolError(sc.FilteredError().c_str(), rc);
 	}
@@ -874,12 +914,12 @@ void ProtocolSCP::DirectoryCreate(const std::string &path, mode_t mode)
 	SCPRequest scp(ssh_scp_new(_conn->ssh, SSH_SCP_WRITE | SSH_SCP_RECURSIVE, ExtractFilePath(path).c_str()));//
 	int rc = ssh_scp_init(scp);
 	if (rc != SSH_OK) {
-		throw ProtocolError("SCP init error",  ssh_get_error(_conn->ssh), rc);
+		throw ProtocolError("SCP init error", ssh_get_error(_conn->ssh), rc);
 	}
 
 	rc = ssh_scp_push_directory(scp, ExtractFileName(path).c_str(), mode & 0777);
 	if (rc != SSH_OK) {
-		throw ProtocolError("SCP push directory error",  ssh_get_error(_conn->ssh), rc);
+		throw ProtocolError("SCP push directory error", ssh_get_error(_conn->ssh), rc);
 	}
 }
 
@@ -974,7 +1014,7 @@ public:
 	{
 		int rc = ssh_scp_init(_scp);
 		if (rc != SSH_OK) {
-			throw ProtocolError("SCP init error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("SCP init error", ssh_get_error(_conn->ssh), rc);
 		}
 
 		for (;;) {
@@ -997,7 +1037,7 @@ public:
 				}
 				case SSH_ERROR: {
 					fprintf(stderr, "SSH_ERROR\n");
-					throw ProtocolError("Pull file error",  ssh_get_error(_conn->ssh), rc);
+					throw ProtocolError("Pull file error", ssh_get_error(_conn->ssh), rc);
 				}
 			}
 		}
@@ -1023,7 +1063,7 @@ public:
 		}
 		ssize_t rc = ssh_scp_read(_scp, buf, len);
 		if (rc < 0) {
-			throw ProtocolError("Read file error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("Read file error", ssh_get_error(_conn->ssh), rc);
 
 		} else if ((size_t)rc <= _pending_size) {
 			_pending_size-= (size_t)rc;
@@ -1054,11 +1094,11 @@ public:
 		mode&= 0777;
 		int rc = ssh_scp_init(_scp);
 		if (rc != SSH_OK) {
-			throw ProtocolError("SCP init error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("SCP init error", ssh_get_error(_conn->ssh), rc);
 		}
 		rc = SSH_SCP_PUSH_FILE(_scp, ExtractFileName(path).c_str(), size_hint, mode);
 		if (rc != SSH_OK) {
-			throw ProtocolError("SCP push error",  ssh_get_error(_conn->ssh), rc);
+			throw ProtocolError("SCP push error", ssh_get_error(_conn->ssh), rc);
 		}
 	}
 
@@ -1093,7 +1133,7 @@ public:
 		if (len) {
 			int rc = ssh_scp_write(_scp, buf, len);
 			if (rc != SSH_OK) {
-				throw ProtocolError("SCP write error",  ssh_get_error(_conn->ssh), rc);
+				throw ProtocolError("SCP write error", ssh_get_error(_conn->ssh), rc);
 			}
 		}
 	}

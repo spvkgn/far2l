@@ -12,15 +12,20 @@
 #include "TTYInput.h"
 #include "IFar2lInterractor.h"
 #include "TTYXGlue.h"
+#include "OSC52ClipboardBackend.h"
 
-class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2lInterractor
+class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2lInterractor, IOSC52Interractor
 {
 	const char *_full_exe_path;
 	int _stdin = 0, _stdout = 1;
 	const char *_nodetect = "";
 	bool _far2l_tty = false;
-	wchar_t _stable_width_chars_cache[0x200]{};
+	bool _osc52clip_set = false;
 
+	std::mutex _palette_mtx;
+	TTYBasePalette _palette;
+	bool _override_default_palette = false;
+	std::condition_variable _palette_changed_cond;
 
 	enum {
 		FKS_UNKNOWN,
@@ -37,7 +42,7 @@ class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2
 	unsigned int _prev_width = 0, _prev_height = 0;
 	std::vector<CHAR_INFO> _cur_output, _prev_output;
 
-	long _terminal_size_change_id;
+	long _terminal_size_change_id = 0;
 
 	pthread_t _reader_trd = 0;
 	volatile bool _exiting = false;
@@ -55,7 +60,7 @@ class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2
 	std::mutex _async_mutex;
 	ITTYXGluePtr _ttyx;
 
-	COORD _largest_window_size;
+	COORD _largest_window_size{};
 	std::atomic<bool> _largest_window_size_ready{false};
 	std::atomic<bool> _flush_input_queue{false};
 
@@ -81,21 +86,30 @@ class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2
 			bool title_changed : 1;
 			bool far2l_interract : 1;
 			bool go_background : 1;
+			bool osc52clip_set : 1;
+			bool palette : 1;
 		} flags;
 		uint32_t all;
 	} _ae {};
 
+	std::string _osc52clip;
+
 	ClipboardBackendSetter _clipboard_backend_setter;
 
-	bool IsUnstableWidthCharCached(wchar_t c);
-
+	bool GetWinSize(struct winsize &w);
+	void ChooseSimpleClipboardBackend();
 	void DispatchTermResized(TTYOutput &tty_out);
 	void DispatchOutput(TTYOutput &tty_out);
 	void DispatchFar2lInterract(TTYOutput &tty_out);
+	void DispatchOSC52ClipSet(TTYOutput &tty_out);
+	void DispatchPalette(TTYOutput &tty_out);
 
 	void DetachNotifyPipe();
 
 protected:
+	// IOSC52Interractor
+	virtual void OSC52SetClipboard(const char *text);
+
 	// IFar2lInterractor
 	virtual bool Far2lInterract(StackSerializer &stk_ser, bool wait);
 
@@ -106,14 +120,17 @@ protected:
 	virtual void OnConsoleOutputWindowMoved(bool absolute, COORD pos);
 	virtual COORD OnConsoleGetLargestWindowSize();
 	virtual void OnConsoleAdhocQuickEdit();
-	virtual DWORD OnConsoleSetTweaks(DWORD tweaks);
+	virtual DWORD64 OnConsoleSetTweaks(DWORD64 tweaks);
 	virtual void OnConsoleChangeFont();
+	virtual void OnConsoleSaveWindowState();
 	virtual void OnConsoleSetMaximized(bool maximized);
 	virtual void OnConsoleExit();
 	virtual bool OnConsoleIsActive();
 	virtual void OnConsoleDisplayNotification(const wchar_t *title, const wchar_t *text);
 	virtual bool OnConsoleBackgroundMode(bool TryEnterBackgroundMode);
 	virtual bool OnConsoleSetFKeyTitles(const char **titles);
+	virtual BYTE OnConsoleGetColorPalette();
+	virtual void OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK);
 
 	// ITTYInputSpecialSequenceHandler
 	virtual void OnInspectKeyEvent(KEY_EVENT_RECORD &event);

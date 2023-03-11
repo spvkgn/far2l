@@ -186,7 +186,7 @@ void ScreenBuf::Read(int X1,int Y1,int X2,int Y2,CHAR_INFO *Text,int MaxTextLeng
 /* Изменить значение цветовых атрибутов в соответствии с маской
    (в основном применяется для "создания" тени)
 */
-void ScreenBuf::ApplyColorMask(int X1,int Y1,int X2,int Y2,WORD ColorMask)
+void ScreenBuf::ApplyColorMask(int X1,int Y1,int X2,int Y2,DWORD64 ColorMask)
 {
 	CriticalSectionLock Lock(CS);
 	int Width=X2-X1+1;
@@ -216,7 +216,7 @@ void ScreenBuf::ApplyColorMask(int X1,int Y1,int X2,int Y2,WORD ColorMask)
 
 /* Непосредственное изменение цветовых атрибутов
 */
-void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,WORD Color)
+void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,DWORD64 Color)
 {
 	CriticalSectionLock Lock(CS);
 	if(X1<=ScrX && Y1<=ScrY && X2>=0 && Y2>=0)
@@ -253,7 +253,7 @@ void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,WORD Color)
 
 /* Непосредственное изменение цветовых атрибутов с заданым цетом исключением
 */
-void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,int Color,WORD ExceptColor)
+void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,DWORD64 Color,DWORD64 ExceptColor)
 {
 	CriticalSectionLock Lock(CS);
 	if(X1<=ScrX && Y1<=ScrY && X2>=0 && Y2>=0)
@@ -285,7 +285,7 @@ void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,int Color,WORD ExceptColo
 
 /* Закрасить прямоугольник символом Ch и цветом Color
 */
-void ScreenBuf::FillRect(int X1,int Y1,int X2,int Y2,WCHAR Ch,WORD Color)
+void ScreenBuf::FillRect(int X1,int Y1,int X2,int Y2,WCHAR Ch,DWORD64 Color)
 {
 	CriticalSectionLock Lock(CS);
 	int Width=X2-X1+1;
@@ -316,6 +316,8 @@ void ScreenBuf::FillRect(int X1,int Y1,int X2,int Y2,WCHAR Ch,WORD Color)
 */
 void ScreenBuf::Flush()
 {
+	ConsoleRepaintsDeferScope crds;
+
 	CriticalSectionLock Lock(CS);
 	
 	if (!LockCount)
@@ -379,12 +381,6 @@ void ScreenBuf::Flush()
 							}
 							else if (Started && I>WriteRegion.Bottom && J>=WriteRegion.Left)
 							{
-								//BUGBUG: при включенном СlearType-сглаживании на экране остаётся "мусор" - тонкие вертикальные полосы
-								// кстати, и при выключенном тоже (но реже).
-								// баг, конечно, не наш, но что делать.
-								// расширяем область прорисовки влево-вправо на 1 символ:
-								WriteRegion.Left=Max(static_cast<SHORT>(0),static_cast<SHORT>(WriteRegion.Left-1));
-								WriteRegion.Right=Min(static_cast<SHORT>(WriteRegion.Right+1),static_cast<SHORT>(BufX-1));
 								bool Merge=false;
 								PSMALL_RECT Last=WriteList.Last();
 

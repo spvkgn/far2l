@@ -42,7 +42,7 @@ static int PZ_to_PWZ(const char *src, wchar_t *dst, int lendst)
 }
 
 
-const char *FirstSlashA(const char *String)
+static const char *FirstSlashA(const char *String)
 {
 	do
 	{
@@ -68,7 +68,7 @@ bool FirstSlashA(const char *String,size_t &pos)
 	return Ret;
 }
 
-const char *LastSlashA(const char *String)
+static const char *LastSlashA(const char *String)
 {
 	const char *Start = String;
 
@@ -81,7 +81,7 @@ const char *LastSlashA(const char *String)
 	return IsSlashA(*String)?String:nullptr;
 }
 
-bool LastSlashA(const char *String,size_t &pos)
+static bool LastSlashA(const char *String,size_t &pos)
 {
 	bool Ret=false;
 	const char *Ptr=LastSlashA(String);
@@ -95,7 +95,7 @@ bool LastSlashA(const char *String,size_t &pos)
 	return Ret;
 }
 
-void AnsiToUnicodeBin(const char *lpszAnsiString, wchar_t *lpwszUnicodeString, int nLength, UINT CodePage=CP_UTF8)
+static void AnsiToUnicodeBin(const char *lpszAnsiString, wchar_t *lpwszUnicodeString, int nLength, UINT CodePage=CP_UTF8)
 {
 	if (lpszAnsiString && lpwszUnicodeString && nLength)
 	{
@@ -105,22 +105,26 @@ void AnsiToUnicodeBin(const char *lpszAnsiString, wchar_t *lpwszUnicodeString, i
 	}
 }
 
-wchar_t *AnsiToUnicodeBin(const char *lpszAnsiString, int nLength, UINT CodePage=CP_UTF8)
+static wchar_t *AnsiToUnicodeBin(const char *lpszAnsiString, int nLength, UINT CodePage=CP_UTF8)
 {
 	wchar_t *lpResult = (wchar_t*)malloc(nLength*sizeof(wchar_t));
 	AnsiToUnicodeBin(lpszAnsiString,lpResult,nLength,CodePage);
 	return lpResult;
 }
 
-wchar_t *AnsiToUnicode(const char *lpszAnsiString, UINT CodePage=CP_UTF8)
+static wchar_t *AnsiToUnicode(const char *lpszAnsiString, int nMaxLength = -1, UINT CodePage = CP_UTF8)
 {
 	if (!lpszAnsiString)
 		return nullptr;
 
-	return AnsiToUnicodeBin(lpszAnsiString,(int)strlen(lpszAnsiString)+1,CodePage);
+	int nLength = (nMaxLength == -1) ? strlen(lpszAnsiString) : (int)strnlen(lpszAnsiString, nMaxLength);
+
+	wchar_t *out = AnsiToUnicodeBin(lpszAnsiString, nLength+1, CodePage);
+	out[nLength] = 0;
+	return out;
 }
 
-char *UnicodeToAnsiBin(const wchar_t *lpwszUnicodeString, int nLength, UINT CodePage=CP_UTF8)
+static char *UnicodeToAnsiBin(const wchar_t *lpwszUnicodeString, int nLength, UINT CodePage=CP_UTF8)
 {
 	/* $ 06.01.2008 TS
 		! Увеличил размер выделяемой под строку памяти на 1 байт для нормальной
@@ -132,14 +136,14 @@ char *UnicodeToAnsiBin(const wchar_t *lpwszUnicodeString, int nLength, UINT Code
 
 	ErrnoSaver ErSr;
 	int dst_length = WINPORT(WideCharToMultiByte)(
-		    CodePage,
-		    0,
-		    lpwszUnicodeString,
-		    nLength,
-		    NULL,
-		    0,
-		    nullptr,
-		    nullptr
+			CodePage,
+			0,
+			lpwszUnicodeString,
+			nLength,
+			NULL,
+			0,
+			nullptr,
+			nullptr
 		);
 	if (dst_length<=0) dst_length = nLength + 1; else ++dst_length;
 	char *lpResult = (char*)malloc(dst_length);
@@ -149,21 +153,21 @@ char *UnicodeToAnsiBin(const wchar_t *lpwszUnicodeString, int nLength, UINT Code
 	if (nLength)
 	{
 		WINPORT(WideCharToMultiByte)(
-		    CodePage,
-		    0,
-		    lpwszUnicodeString,
-		    nLength,
-		    lpResult,
-		    dst_length,
-		    nullptr,
-		    nullptr
+			CodePage,
+			0,
+			lpwszUnicodeString,
+			nLength,
+			lpResult,
+			dst_length,
+			nullptr,
+			nullptr
 		);
 	}
 
 	return lpResult;
 }
 
-char *UnicodeToAnsi(const wchar_t *lpwszUnicodeString, UINT CodePage=CP_UTF8)
+static char *UnicodeToAnsi(const wchar_t *lpwszUnicodeString, UINT CodePage=CP_UTF8)
 {
 	if (!lpwszUnicodeString)
 		return nullptr;
@@ -171,7 +175,7 @@ char *UnicodeToAnsi(const wchar_t *lpwszUnicodeString, UINT CodePage=CP_UTF8)
 	return UnicodeToAnsiBin(lpwszUnicodeString,StrLength(lpwszUnicodeString)+1,CodePage);
 }
 
-wchar_t **ArrayAnsiToUnicode(char ** lpaszAnsiString, int iCount)
+static wchar_t **ArrayAnsiToUnicode(char ** lpaszAnsiString, int iCount)
 {
 	wchar_t** lpaResult = nullptr;
 
@@ -193,7 +197,7 @@ wchar_t **ArrayAnsiToUnicode(char ** lpaszAnsiString, int iCount)
 	return lpaResult;
 }
 
-void FreeArrayUnicode(wchar_t ** lpawszUnicodeString)
+static void FreeArrayUnicode(wchar_t ** lpawszUnicodeString)
 {
 	if (lpawszUnicodeString)
 	{
@@ -206,7 +210,7 @@ void FreeArrayUnicode(wchar_t ** lpawszUnicodeString)
 	}
 }
 
-DWORD OldKeyToKey(DWORD dOldKey)
+static DWORD OldKeyToKey(DWORD dOldKey)
 {
 	if (dOldKey&0x100)
 	{
@@ -416,7 +420,7 @@ void ConvertPanelItemA(const oldfar::PluginPanelItem *PanelItemA, PluginPanelIte
 		(*PanelItemW)[i].Flags = PanelItemA[i].Flags;
 		(*PanelItemW)[i].NumberOfLinks = PanelItemA[i].NumberOfLinks;
 		(*PanelItemW)[i].CRC32 = PanelItemA[i].CRC32;
-		(*PanelItemW)[i].FindData.lpwszFileName = AnsiToUnicode(PanelItemA[i].FindData.cFileName);
+		(*PanelItemW)[i].FindData.lpwszFileName = AnsiToUnicode(PanelItemA[i].FindData.cFileName, ARRAYSIZE(PanelItemA[i].FindData.cFileName));
 
 		if (PanelItemA[i].Description)
 			(*PanelItemW)[i].Description = AnsiToUnicode(PanelItemA[i].Description);
@@ -1234,7 +1238,7 @@ void UnicodeListItemToAnsi(FarListItem* li, oldfar::FarListItem* liA)
 
 size_t GetAnsiVBufSize(oldfar::FarDialogItem &diA)
 {
-	return (diA.X2-diA.X1+1)*(diA.Y2-diA.Y1+1);
+	return size_t(diA.X2-diA.X1+1) * (diA.Y2-diA.Y1+1);
 }
 
 PCHAR_INFO GetAnsiVBufPtr(PCHAR_INFO VBuf, size_t Size)
@@ -1267,10 +1271,12 @@ void AnsiVBufToUnicode(PCHAR_INFO VBufA, PCHAR_INFO VBuf, size_t Size,bool NoCvt
 			}
 			else
 			{
-				AnsiToUnicodeBin(&VBufA[i].Char.AsciiChar,&VBuf[i].Char.UnicodeChar,1);
+				WCHAR wc{};
+				AnsiToUnicodeBin(&VBufA[i].Char.AsciiChar,&wc,1);
+				CI_SET_WCHAR(VBuf[i], wc);
 			}
 
-			VBuf[i].Attributes = VBufA[i].Attributes;
+			CI_SET_ATTR(VBuf[i], VBufA[i].Attributes);
 		}
 	}
 }
@@ -1582,12 +1588,12 @@ void FreeUnicodeDialogItem(FarDialogItem &di)
 void FreeAnsiDialogItem(oldfar::FarDialogItem &diA)
 {
 	if ((diA.Type==oldfar::DI_EDIT || diA.Type==oldfar::DI_FIXEDIT) &&
-	        (diA.Flags&oldfar::DIF_HISTORY ||diA.Flags&oldfar::DIF_MASKEDIT) &&
-	        diA.Param.History)
+			(diA.Flags&oldfar::DIF_HISTORY ||diA.Flags&oldfar::DIF_MASKEDIT) &&
+			diA.Param.History)
 		free((void*)diA.Param.History);
 
 	if ((diA.Type==oldfar::DI_EDIT || diA.Type==oldfar::DI_COMBOBOX) &&
-	        diA.Flags&oldfar::DIF_VAREDIT && diA.Data.Ptr.PtrData)
+			diA.Flags&oldfar::DIF_VAREDIT && diA.Data.Ptr.PtrData)
 		free(diA.Data.Ptr.PtrData);
 
 	memset(&diA,0,sizeof(oldfar::FarDialogItem));
@@ -3026,7 +3032,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,int Command,void *Param)
 			return FarVer;
 		}
 		case oldfar::ACTL_CONSOLEMODE:
-			return IsFullscreen();
+			return FALSE;
 
 		case oldfar::ACTL_GETSYSWORDDIV:
 		{
@@ -3508,11 +3514,13 @@ int WINAPI FarEditorControlA(int Command,void* Param)
 	switch (Command)
 	{
 		case oldfar::ECTL_ADDCOLOR:			Command = ECTL_ADDCOLOR; break;
+		case oldfar::ECTL_ADDTRUECOLOR:			Command = ECTL_ADDTRUECOLOR; break;
 		case oldfar::ECTL_DELETEBLOCK:	Command = ECTL_DELETEBLOCK; break;
 		case oldfar::ECTL_DELETECHAR:		Command = ECTL_DELETECHAR; break;
 		case oldfar::ECTL_DELETESTRING:	Command = ECTL_DELETESTRING; break;
 		case oldfar::ECTL_EXPANDTABS:		Command = ECTL_EXPANDTABS; break;
 		case oldfar::ECTL_GETCOLOR:			Command = ECTL_GETCOLOR; break;
+		case oldfar::ECTL_GETTRUECOLOR:			Command = ECTL_GETTRUECOLOR; break;
 		case oldfar::ECTL_GETBOOKMARKS:	Command = ECTL_GETBOOKMARKS; break;
 		case oldfar::ECTL_INSERTSTRING:	Command = ECTL_INSERTSTRING; break;
 		case oldfar::ECTL_QUIT:					Command = ECTL_QUIT; break;
@@ -3662,12 +3670,12 @@ int WINAPI FarEditorControlA(int Command,void* Param)
 						wchar_t res;
 						ErrnoSaver ErSr;
 						WINPORT(MultiByteToWideChar)(
-						    CP_OEMCP,
-						    0,
-						    &pIR->Event.KeyEvent.uChar.AsciiChar,
-						    1,
-						    &res,
-						    1
+							CP_OEMCP,
+							0,
+							&pIR->Event.KeyEvent.uChar.AsciiChar,
+							1,
+							&res,
+							1
 						);
 						pIR->Event.KeyEvent.uChar.UnicodeChar=res;
 					}
@@ -3696,14 +3704,14 @@ int WINAPI FarEditorControlA(int Command,void* Param)
 						char res;
 						ErrnoSaver ErSr;
 						WINPORT(WideCharToMultiByte)(
-						    CP_OEMCP,
-						    0,
-						    &pIR->Event.KeyEvent.uChar.UnicodeChar,
-						    1,
-						    &res,
-						    1,
-						    nullptr,
-						    nullptr
+							CP_OEMCP,
+							0,
+							&pIR->Event.KeyEvent.uChar.UnicodeChar,
+							1,
+							&res,
+							1,
+							nullptr,
+							nullptr
 						);
 						pIR->Event.KeyEvent.uChar.UnicodeChar=res;
 					}
@@ -4016,8 +4024,8 @@ int WINAPI FarCharTableA(int Command, char *Buffer, int BufferSize)
 		for (unsigned int i = 0; i < 256; ++i)
 		{
 			TableSet->EncodeTable[i] = TableSet->DecodeTable[i] = i;
-			TableSet->UpperTable[i] = _toupper(i);
-			TableSet->LowerTable[i] = _tolower(i);
+			TableSet->UpperTable[i] = toupper(i);
+			TableSet->LowerTable[i] = tolower(i);
 		}
 
 		FormatString sTableName;
@@ -4042,7 +4050,7 @@ int WINAPI FarCharTableA(int Command, char *Buffer, int BufferSize)
 
 		ErrnoSaver ErSr;
 		const wchar_t *codePageName = L"";//FormatCodePageName(nCP, cpiex.CodePageName, sizeof(cpiex.CodePageName)/sizeof(wchar_t));
-		sTableName<<fmt::Width(5)<<nCP<<BoxSymbols[BS_V1]<<L" "<<codePageName;
+		sTableName<<fmt::Expand(5)<<nCP<<BoxSymbols[BS_V1]<<L" "<<codePageName;
 		sTableName.strValue().GetCharString(TableSet->TableName, sizeof(TableSet->TableName) - 1, CP_OEMCP);
 		wchar_t *us=AnsiToUnicodeBin((char*)TableSet->DecodeTable, sizeof(TableSet->DecodeTable), nCP);
 		WINPORT(CharLowerBuff)(us, sizeof(TableSet->DecodeTable));
@@ -4059,11 +4067,11 @@ int WINAPI FarCharTableA(int Command, char *Buffer, int BufferSize)
 }
 
 char* WINAPI XlatA(
-    char *Line,                    // исходная строка
-    int StartPos,                  // начало переконвертирования
-    int EndPos,                    // конец переконвертирования
-    const oldfar::CharTableSet *TableSet, // перекодировочная таблица (может быть nullptr)
-    DWORD Flags)                   // флаги (см. enum XLATMODE)
+	char *Line,                    // исходная строка
+	int StartPos,                  // начало переконвертирования
+	int EndPos,                    // конец переконвертирования
+	const oldfar::CharTableSet *TableSet, // перекодировочная таблица (может быть nullptr)
+	DWORD Flags)                   // флаги (см. enum XLATMODE)
 {
 	FARString strLine(Line);
 	DWORD NewFlags = 0;

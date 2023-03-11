@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "poscache.hpp"
 #include "udlist.hpp"
 #include "config.hpp"
+#include "ConfigSaveLoad.hpp"
 
 FilePositionCache::FilePositionCache(FilePositionCacheKind kind)
 	: _kind(kind),
@@ -215,3 +216,12 @@ bool FilePositionCache::GetPosition(const wchar_t *name, PosCache& poscache)
 	return true;
 }
 
+void FilePositionCache::ResetPosition(const wchar_t *name)
+{
+	std::string section;
+	MakeSectionName(name, section);
+	if (!_kfh) {
+		_kfh.reset(new KeyFileHelper(_kf_path));
+	}
+	_kfh->RemoveSection(section);
+}

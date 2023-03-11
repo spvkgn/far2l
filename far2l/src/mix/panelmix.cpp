@@ -49,7 +49,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "datetime.hpp"
 
 int ColumnTypeWidth[]={0, 6, 6, 8, 5, 14, 14, 14, 14, 10, 0, 0, 3, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
- 
+
 static const wchar_t *ColumnSymbol[]={L"N",L"S",L"P",L"D",L"T",L"DM",L"DC",L"DA",L"DE",L"A",L"Z",L"O",L"U",L"LN",L"F",L"G",L"C0",L"C1",L"C2",L"C3",L"C4",L"C5",L"C6",L"C7",L"C8",L"C9",L"C10",L"C11",L"C12",L"C13",L"C14",L"C15",L"C16",L"C17",L"C18",L"C19"};
 
 
@@ -102,7 +102,7 @@ void ShellUpdatePanels(Panel *SrcPanel,BOOL NeedSetUpADir)
 	CtrlObject->Cp()->Redraw();
 }
 
-int CheckUpdateAnotherPanel(Panel *SrcPanel,const wchar_t *SelName)
+bool CheckUpdateAnotherPanel(Panel *SrcPanel,const wchar_t *SelName)
 {
 	if (!SrcPanel)
 		SrcPanel=CtrlObject->Cp()->ActivePanel;
@@ -122,11 +122,11 @@ int CheckUpdateAnotherPanel(Panel *SrcPanel,const wchar_t *SelName)
 		if (wcsstr(strAnotherCurDir,strFullName))
 		{
 			((FileList*)AnotherPanel)->CloseChangeNotification();
-			return TRUE;
+			return true;
 		}
 	}
 
-	return FALSE;
+	return false;
 }
 
 int _MakePath1(DWORD Key, FARString &strPathName, const wchar_t *Param2)
@@ -217,7 +217,7 @@ int _MakePath1(DWORD Key, FARString &strPathName, const wchar_t *Param2)
 
 
 void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
-                                  unsigned int *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int &ColumnCount)
+	unsigned int *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int &ColumnCount)
 {
 	const wchar_t *TextPtr=ColumnTitles;
 
@@ -379,77 +379,65 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 
 
 void ViewSettingsToText(unsigned int *ViewColumnTypes,int *ViewColumnWidths,
-                                  int *ViewColumnWidthsTypes,int ColumnCount,FARString &strColumnTitles,
-                                  FARString &strColumnWidths)
+	int *ViewColumnWidthsTypes,int ColumnCount,FARString &strColumnTitles,
+	FARString &strColumnWidths)
 {
 	strColumnTitles.Clear();
 	strColumnWidths.Clear();
 
-	for (int I=0; I<ColumnCount; I++)
+	for (int I = 0; I < ColumnCount; ++I)
 	{
-		FARString strType;
-		int ColumnType=ViewColumnTypes[I] & 0xff;
-		strType = ColumnSymbol[ColumnType];
-
-		if (ColumnType==NAME_COLUMN)
+		const int ColumnType = ViewColumnTypes[I] & 0xff;
+		strColumnTitles += ColumnSymbol[ColumnType];
+		switch (ColumnType)
 		{
-			if (ViewColumnTypes[I] & COLUMN_MARK)
-				strType += L"M";
+			case NAME_COLUMN:
+				if (ViewColumnTypes[I] & COLUMN_MARK)
+					strColumnTitles += L'M';
 
-			if (ViewColumnTypes[I] & COLUMN_NAMEONLY)
-				strType += L"O";
+				if (ViewColumnTypes[I] & COLUMN_NAMEONLY)
+					strColumnTitles += L'O';
 
-			if (ViewColumnTypes[I] & COLUMN_RIGHTALIGN)
-				strType += L"R";
+				if (ViewColumnTypes[I] & COLUMN_RIGHTALIGN)
+					strColumnTitles += L'R';
+			break;
+
+			case SIZE_COLUMN: case PHYSICAL_COLUMN:
+				if (ViewColumnTypes[I] & COLUMN_COMMAS)
+					strColumnTitles += L'C';
+
+				if (ViewColumnTypes[I] & COLUMN_ECONOMIC)
+					strColumnTitles += L'E';
+
+				if (ViewColumnTypes[I] & COLUMN_FLOATSIZE)
+					strColumnTitles += L'F';
+
+				if (ViewColumnTypes[I] & COLUMN_THOUSAND)
+					strColumnTitles += L'T';
+			break;
+
+			case WDATE_COLUMN: case ADATE_COLUMN: case CDATE_COLUMN: case CHDATE_COLUMN:
+				if (ViewColumnTypes[I] & COLUMN_BRIEF)
+					strColumnTitles += L'B';
+
+				if (ViewColumnTypes[I] & COLUMN_MONTH)
+					strColumnTitles += L'M';
+			break;
+
+			case OWNER_COLUMN:
+				if (ViewColumnTypes[I] & COLUMN_FULLOWNER)
+					strColumnTitles += L'L';
+			break;
 		}
 
-		if (ColumnType==SIZE_COLUMN || ColumnType==PHYSICAL_COLUMN)
+		strColumnWidths.AppendFormat(L"%d", ViewColumnWidths[I]);
+		if (ViewColumnWidthsTypes[I] == PERCENT_WIDTH)
+			strColumnWidths += L'%';
+
+		if (I < ColumnCount - 1)
 		{
-			if (ViewColumnTypes[I] & COLUMN_COMMAS)
-				strType += L"C";
-
-			if (ViewColumnTypes[I] & COLUMN_ECONOMIC)
-				strType += L"E";
-
-			if (ViewColumnTypes[I] & COLUMN_FLOATSIZE)
-				strType += L"F";
-
-			if (ViewColumnTypes[I] & COLUMN_THOUSAND)
-				strType += L"T";
-		}
-
-		if (ColumnType==WDATE_COLUMN || ColumnType==ADATE_COLUMN || ColumnType==CDATE_COLUMN  || ColumnType==CHDATE_COLUMN)
-		{
-			if (ViewColumnTypes[I] & COLUMN_BRIEF)
-				strType += L"B";
-
-			if (ViewColumnTypes[I] & COLUMN_MONTH)
-				strType += L"M";
-		}
-
-		if (ColumnType==OWNER_COLUMN)
-		{
-			if (ViewColumnTypes[I] & COLUMN_FULLOWNER)
-				strType += L"L";
-		}
-
-		strColumnTitles += strType;
-		wchar_t *lpwszWidth = strType.GetBuffer(20);
-		_itow(ViewColumnWidths[I],lpwszWidth,10);
-		strType.ReleaseBuffer();
-		strColumnWidths += strType;
-
-		switch (ViewColumnWidthsTypes[I])
-		{
-			case PERCENT_WIDTH:
-				strColumnWidths += L"%";
-				break;
-		}
-
-		if (I<ColumnCount-1)
-		{
-			strColumnTitles += L",";
-			strColumnWidths += L",";
+			strColumnTitles += L',';
+			strColumnWidths += L',';
 		}
 	}
 }
@@ -494,7 +482,7 @@ const FARString FormatStr_Attribute( DWORD FileAttributes, DWORD UnixMode, int W
 	}
 
 	if (Width > 0)
-		strResult<<fmt::Width(Width)<<fmt::Precision(Width);
+		strResult<<fmt::Size(Width);
 
 	strResult<<OutStr;
 
@@ -550,7 +538,7 @@ const FARString FormatStr_DateTime(const FILETIME *FileTime,int ColumnType,DWORD
 
 	ConvertDate(*FileTime,strDateStr,strTimeStr,ColumnWidth,Brief,TextMonth,FullYear);
 
-	strResult<<fmt::Width(Width)<<fmt::Precision(Width);
+	strResult<<fmt::Expand(Width)<<fmt::Truncate(Width);
 	switch(ColumnType)
 	{
 		case DATE_COLUMN:
@@ -592,10 +580,10 @@ const FARString FormatStr_Size(int64_t FileSize, int64_t PhysicalSize, const FAR
 			PtrName=Msg::ListSymLink;
 		}
 
-		strResult<<fmt::Width(Width)<<fmt::Precision(Width);
+		strResult<<fmt::Size(Width);
 		if (StrLength(PtrName) <= Width-2) {
-			// precombine into tmp string to avoid miseffect of fmt::Width etc (#1137)
-			strResult<<FARString(L"<").Append(PtrName).Append(L">");
+			// precombine into tmp string to avoid miseffect of fmt::Size etc (#1137)
+			strResult<<FARString(L"<").Append(PtrName).Append(L'>');
 		} else {
 			strResult<<PtrName;
 		}

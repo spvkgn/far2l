@@ -63,7 +63,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vtlog.h"
 #include <vector>
 #include <string>
-#include <wordexp.h>
 #include <utils.h>
 
 //
@@ -166,12 +165,11 @@ BOOL CommandLine::IntChDir(const wchar_t *CmdLine,int ClosePlugin,bool Silent)
 	{
 	  //CmdStr.SetString(L"");
 	  GotoXY(X1,Y1);
-	  FS<<fmt::Width(X2-X1+1)<<L"";
+	  FS<<fmt::Expand(X2-X1+1)<<L"";
 	  Show();
 	  return TRUE;
 	}
 	*/
-	strDir.ReleaseBuffer();
 
 	if (SetPanel->GetType()==FILE_PANEL && SetPanel->GetMode()==PLUGIN_PANEL)
 	{

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <string.h>
+#include <errno.h>
 #include <os_call.hpp>
 
 #include <algorithm>
@@ -19,11 +20,11 @@
 ////////////////////////////
 char MakeHexDigit(const unsigned char c)
 {
-	if (c >= 0 && c <= 9) {
+	if (c <= 9) {
 		return '0' + c;
 	}
 
-	if (c >= 0xa && c <= 0xf) {
+	if (c <= 0xf) {
 		return 'a' + (c - 0xa);
 	}
 
@@ -36,18 +37,19 @@ void CheckedCloseFD(int &fd)
 {
 	int tmp = fd;
 	if (tmp != -1) {
-               fd = -1;
-               if (os_call_int(close, tmp) != 0) {
-                       perror("CheckedCloseFD");
-                       abort();
-               }
-       }
+		fd = -1;
+		if (os_call_int(close, tmp) != 0) {
+			const int err = errno;
+			fprintf(stderr, "%s: %d\n", __FUNCTION__, err);
+			ASSERT(err != EBADF);
+		}
+	}
 }
 
 void CheckedCloseFDPair(int *fd)
 {
-       CheckedCloseFD(fd[0]);
-       CheckedCloseFD(fd[1]);
+	CheckedCloseFD(fd[0]);
+	CheckedCloseFD(fd[1]);
 }
 
 size_t WriteAll(int fd, const void *data, size_t len, size_t chunk)
@@ -111,11 +113,11 @@ ssize_t ReadWritePiece(int fd_src, int fd_dst)
 
 int pipe_cloexec(int pipedes[2])
 {
-#if defined(__APPLE__) || defined(__CYGWIN__)
+#if defined(__APPLE__) || defined(__CYGWIN__) || defined(__HAIKU__)
 	int r = os_call_int(pipe, pipedes);
 	if (r==0) {
-		fcntl(pipedes[0], F_SETFD, FD_CLOEXEC);
-		fcntl(pipedes[1], F_SETFD, FD_CLOEXEC);
+		MakeFDCloexec(pipedes[0]);
+		MakeFDCloexec(pipedes[1]);
 	}
 	return r;
 #else
@@ -217,55 +219,6 @@ std::wstring FileSizeString(unsigned long long value)
 	return str;
 }
 
-
-
-#ifdef __CYGWIN__
-extern "C"
-{
-char * itoa(int i, char *a, int radix)
-{
-	switch (radix) {
-		case 10: sprintf(a, "%d", i); break;
-		case 16: sprintf(a, "%x", i); break;
-	}
-	return a;
-}
-}
-#endif
-
-unsigned long htoul(const char *str, size_t maxlen)
-{
-	unsigned long out = 0;
-
-	for (size_t i = 0; i != maxlen; ++i) {
-		unsigned char x = ParseHexDigit(str[i]);
-		if (x == 0xff) {
-			break;
-		}
-		out<<= 4;
-		out|= (unsigned char)x;
-	}
-
-	return out;
-}
-
-unsigned long atoul(const char *str, size_t maxlen)
-{
-	unsigned long out = 0;
-
-	for (size_t i = 0; i != maxlen; ++i) {
-		if (str[i] >= '0' && str[i] <= '9') {
-			out*= 10;
-			out+= str[i] - '0';
-
-		} else
-			break;
-	}
-
-	return out;
-}
-
-
 static inline bool CaseIgnoreEngChrMatch(const char c1, const char c2)
 {
 	if (c1 != c2) {
@@ -285,6 +238,11 @@ static inline bool CaseIgnoreEngChrMatch(const char c1, const char c2)
 	}
 
 	return true;
+}
+
+bool CaseIgnoreEngStrMatch(const std::string &str1, const std::string &str2)
+{
+	return str1.size() == str2.size() && CaseIgnoreEngStrMatch(str1.c_str(), str2.c_str(), str1.size());
 }
 
 bool CaseIgnoreEngStrMatch(const char *str1, const char *str2, size_t len)

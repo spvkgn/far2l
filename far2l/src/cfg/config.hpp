@@ -35,6 +35,21 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "FARString.hpp"
 
+enum
+{
+	DRIVE_SHOW_TYPE       = 0x00000001,
+	DRIVE_SHOW_NETNAME    = 0x00000002,
+	DRIVE_SHOW_LABEL      = 0x00000004,
+	DRIVE_SHOW_FILESYSTEM = 0x00000008,
+	DRIVE_SHOW_SIZE       = 0x00000010,
+	DRIVE_SHOW_MOUNTS  = 0x00000020,
+	DRIVE_SHOW_PLUGINS    = 0x00000040,
+	DRIVE_SHOW_BOOKMARKS  = 0x00000080,
+	DRIVE_SHOW_SIZE_FLOAT = 0x00000100,
+	DRIVE_SHOW_REMOTE     = 0x00000200,
+};
+
+
 //  +CASR_* Поведение Ctrl-Alt-Shift для AllCtrlAltShiftRule
 enum
 {
@@ -118,7 +133,12 @@ struct Confirmation
 	int Drag;
 	int Delete;
 	int DeleteFolder;
-	int Exit;
+
+	int Exit;        // see ExitEffective()
+	int ExitOrBknd;  // see ExitEffective()
+	/// returns reference to Exit or ExitOrBknd - depending of background mode availability
+	int &ExitEffective();
+
 	int Esc;  // Для CheckForEsc
 	/* $ 12.03.2002 VVM
 	  + Opt.EscTwiceToInterrupt
@@ -200,7 +220,7 @@ struct EditorOptions
 	int ShowKeyBar;
 	int ShowTitleBar;
 	int ShowScrollBar;
-	int EditOpenedForWrite;
+	int UseEditorConfigOrg;
 	int SearchSelFound;
 	int SearchRegexp;
 	int SearchPickUpWord;
@@ -276,7 +296,11 @@ struct NowellOptions
 
 struct ScreenSizes
 {
-	COORD DeltaXY;            // на сколько поз. изменить размеры для распахнутого экрана
+	union
+	{
+		COORD DeltaXY;            // на сколько поз. изменить размеры для распахнутого экрана
+		DWORD dwDeltaXY;
+	};
 	int WScreenSizeSet;
 	COORD WScreenSize[4];
 };
@@ -291,7 +315,6 @@ struct LoadPluginsOptions
 	FARString strCustomPluginsPath;  // путь для поиска плагинов, указанный в /p
 	FARString strPersonalPluginsPath;
 	int SilentLoadPlugin; // при загрузке плагина с кривым...
-	int OEMPluginsSupport;
 	int ScanSymlinks;
 };
 
@@ -424,6 +447,8 @@ struct Options
 	int SetupArgv; // количество каталогов в ком.строке ФАРа
 	int ChangeDriveMode;
 	int ChangeDriveDisconnetMode;
+	FARString ChangeDriveExceptions;
+	FARString ChangeDriveColumn2, ChangeDriveColumn3;
 
 	int SaveHistory;
 	int HistoryCount;
@@ -452,6 +477,8 @@ struct Options
 	int NoGraphics;
 	int NoBoxes;
 	int ConsolePaintSharp, ExclusiveCtrlLeft, ExclusiveCtrlRight, ExclusiveAltLeft, ExclusiveAltRight, ExclusiveWinLeft, ExclusiveWinRight;
+	int OSC52ClipSet;
+	int TTYPaletteOverride;
 
 	Confirmation Confirm;
 	PluginConfirmation PluginConfirm;
@@ -515,8 +542,6 @@ struct Options
 	int FullScreenHelp;
 	int HelpTabSize;
 
-	int HelpURLRules; // =0 отключить возможность запуска URL-приложений
-
 	// запоминать логические диски и не опрашивать каждый раз. Для предотвращения "просыпания" "зеленых" винтов.
 	int RememberLogicalDrives;
 	/*
@@ -548,7 +573,6 @@ struct Options
 	int ExecuteUseAppPath;
 	int ExecuteFullTitle;
 	int ExecuteSilentExternal;
-	FARString strExecuteBatchType;
 
 	DWORD PluginMaxReadData;
 	int UseNumPad;
@@ -557,7 +581,6 @@ struct Options
 
 	DWORD ShowTimeoutDelFiles; // таймаут в процессе удаления (в ms)
 	DWORD ShowTimeoutDACLFiles;
-	int DelThreadPriority; // приоритет процесса удаления, по умолчанию = THREAD_PRIORITY_NORMAL
 
 	//int CPAJHefuayor; // производное от "Close Plugin And Jump:
 	// Highly experimental feature, use at your own risk"
@@ -572,7 +595,7 @@ struct Options
 	ScreenSizes ScrSize;
 	MacroOptions Macro;
 
-	int FindCodePage;
+	DWORD FindCodePage;
 
 	TreeOptions Tree;
 	InfoPanelOptions InfoPanel;
@@ -581,8 +604,6 @@ struct Options
 
 	bool IsUserAdmin;
 	FARString strWindowTitle;
-
-	BOOL WindowMode;
 };
 
 extern Options Opt;
@@ -600,10 +621,7 @@ void SetDizConfig();
 void ViewerConfig(ViewerOptions &ViOpt,bool Local=false);
 void EditorConfig(EditorOptions &EdOpt,bool Local=false);
 void NotificationsConfig(NotificationsOptions &NotifOpt);
-void ReadConfig();
 void ApplyConfig();
-void AssertConfigLoaded();
-void SaveConfig(int Ask);
 void SetFolderInfoFiles();
 void InfoPanelSettings();
 void AutoCompleteSettings();

@@ -217,17 +217,16 @@ int CheckShortcutFolder(FARString *pTestPath,int IsHostFile, BOOL Silent)
 void CreatePath(FARString &strPath)
 {
 	wchar_t *ChPtr = strPath.GetBuffer();
-//	wchar_t *DirPart = ChPtr;
-	BOOL bEnd = FALSE;
+	bool bEnd = false;
 
 	for (;;)
 	{
 		if (!*ChPtr || IsSlash(*ChPtr))
 		{
-			if (!*ChPtr)
-				bEnd = TRUE;
-
-			*ChPtr = 0;
+			if (*ChPtr)
+				*ChPtr = 0;
+			else
+				bEnd = true;
 
 			if (apiCreateDirectory(strPath, nullptr))
 				TreeList::AddTreeName(strPath);
@@ -236,7 +235,6 @@ void CreatePath(FARString &strPath)
 				break;
 
 			*ChPtr = GOOD_SLASH;
-//			DirPart = ChPtr+1;
 		}
 
 		ChPtr++;
@@ -248,7 +246,9 @@ void CreatePath(FARString &strPath)
 std::string GetHelperPathName(const char *name)
 {
  	std::string out = g_strFarPath.GetMB();
-	out+= GOOD_SLASH;
+	if (!out.empty() && out.back() != GOOD_SLASH) {
+		out+= GOOD_SLASH;
+	}
 	out+= name;
 
 	struct stat s;
@@ -293,8 +293,8 @@ void PrepareTemporaryOpenPath(FARString &Path)
 		time_t delta = std::min(now - ts_mod.tv_sec, now - ts_change.tv_sec);
 		if (delta > 60) {//one minute ought be enouht to open anything (c)
 			outdated.push_back(found_name);
-			fprintf(stderr, "PrepareTemporaryOpenPath: delta=%u for '%ls'\n", 
-				(unsigned int)delta, found_name.CPtr());
+			fprintf(stderr, "PrepareTemporaryOpenPath: delta=%llu for '%ls'\n",
+				(unsigned long long)delta, found_name.CPtr());
 		}
 	};
 

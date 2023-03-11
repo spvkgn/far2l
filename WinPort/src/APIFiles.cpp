@@ -1,6 +1,6 @@
 #include <string>
-#include <locale> 
-#include <set> 
+#include <locale>
+#include <set>
 #include <vector>
 #include <algorithm>
 #include <iostream>
@@ -58,30 +58,46 @@ template <class CHAR_T>
 
 	return out;
 }
-	
+
 extern "C"
 {
-	struct WinPortHandleFile : WinPortHandle
+	struct WinPortHandleFile : MagicWinPortHandle<0> // <0> - for file handles
 	{
+		int fd;
+
 		WinPortHandleFile(int fd_ = -1) : fd(fd_) {}
 
 		virtual ~WinPortHandleFile()
 		{
-			if (os_call_int(sdc_close, fd) == -1 ){
-				fprintf(stderr, "~WinPortHandleFile: error %u closing fd %d", errno, fd);
-			}	
+			if (fd != -1) {
+				fprintf(stderr, "~WinPortHandleFile: unclosed fd %d\n", fd);
+			}
 		}
-		int fd;
-	};
-	
 
-	
-	
+	protected:
+
+		virtual bool Cleanup() noexcept
+		{
+			bool out = (fd == -1 || os_call_int(sdc_close, fd) == 0);
+			if (!out) {
+				ErrnoSaver es;
+				fprintf(stderr, "WinPortHandleFile: error %u closing fd %d\n", es.Get(), fd);
+			}
+
+			fd = -1;
+			return out;
+		}
+
+	};
+
+
+
+
 	WINPORT_DECL(CreateDirectory, BOOL, (LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes ))
 	{
 		const std::string &path = ConsumeWinPath(lpPathName);
 		int r = os_call_int(sdc_mkdir, path.c_str(), (mode_t)0775);
-			
+
 		return (r == -1) ? FALSE : TRUE;
 	}
 
@@ -95,7 +111,7 @@ extern "C"
 			// fprintf(stderr, "Failed to remove directory: '%s' errno %u\n", path.c_str(),errno);
 			return FALSE;
 		}
-		
+
 		return TRUE;
 	}
 
@@ -108,7 +124,7 @@ extern "C"
 			// fprintf(stderr, "Failed to remove file: '%s' errno %u\n", path.c_str(), errno);
 			return FALSE;
 		}
-		
+
 		return TRUE;
 	}
 
@@ -121,7 +137,7 @@ extern "C"
 		const DWORD *UnixMode, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 	{
 		//return CreateFile( lpFileName, dwDesiredAccess, dwShareMode,
-		//	lpSecurityAttributes, dwCreationDisposition, 
+		//	lpSecurityAttributes, dwCreationDisposition,
 		//	dwFlagsAndAttributes, hTemplateFile);
 		int flags = 0;
 		const bool want_read = (dwDesiredAccess & (GENERIC_READ|GENERIC_ALL|FILE_READ_DATA|FILE_READ_ATTRIBUTES)) != 0;
@@ -137,7 +153,7 @@ extern "C"
 		}
 #ifdef _WIN32
 		flags|= O_BINARY;
-#else		
+#else
 		flags|= O_CLOEXEC;
 #ifdef __linux__
 		if ((dwFlagsAndAttributes & FILE_FLAG_WRITE_THROUGH) != 0)
@@ -145,10 +161,10 @@ extern "C"
 
 		if ((dwFlagsAndAttributes & FILE_FLAG_NO_BUFFERING) != 0)
 			flags|= O_DIRECT;
-		
+
 #endif
 #endif
-		switch (dwCreationDisposition) 
+		switch (dwCreationDisposition)
 		{
 		case CREATE_ALWAYS: flags|= O_CREAT | O_TRUNC; break;
 		case CREATE_NEW: flags|= O_CREAT | O_EXCL; break;
@@ -163,17 +179,17 @@ extern "C"
 		}
 		mode&= 0777; // may be allow also SUID/SGID?
 
-		int r = os_call_int(open_all_args, path.c_str(), flags, mode);		
+		int r = os_call_int(open_all_args, path.c_str(), flags, mode);
 		if (r==-1) {
-			//fprintf(stderr, "CreateFile: %ls - dwDesiredAccess=0x%x flags=0x%x mode=0%o path=%s errno=%d\n", 
+			//fprintf(stderr, "CreateFile: %ls - dwDesiredAccess=0x%x flags=0x%x mode=0%o path=%s errno=%d\n",
 			//	lpFileName, dwDesiredAccess, flags, mode, path.c_str(), errno);
-				
+
 			return INVALID_HANDLE_VALUE;
 		}
 
 #ifndef __linux__
 		if ((dwFlagsAndAttributes & (FILE_FLAG_WRITE_THROUGH|FILE_FLAG_NO_BUFFERING)) != 0) {
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__HAIKU__)
 			fcntl(r, O_DIRECT, 1);
 #elif !defined(__CYGWIN__)
 			fcntl(r, F_NOCACHE, 1);
@@ -181,11 +197,9 @@ extern "C"
 		}
 #endif // __linux__
 
-#if defined(__linux__) || defined(__FreeBSD__)
 		if ((dwFlagsAndAttributes & (FILE_FLAG_NO_BUFFERING | FILE_FLAG_SEQUENTIAL_SCAN)) == FILE_FLAG_SEQUENTIAL_SCAN && !want_write) {
-			posix_fadvise(r, 0, 0, POSIX_FADV_SEQUENTIAL);
+			HintFDSequentialAccess(r);
 		}
-#endif
 
 		/*nobody cares.. if ((dwFlagsAndAttributes&FILE_FLAG_BACKUP_SEMANTICS)==0) {
 			struct stat s = { };
@@ -197,7 +211,13 @@ extern "C"
 			}
 		}*/
 
-		return WinPortHandle_Register(new WinPortHandleFile(r));
+		auto *wph = new(std::nothrow) WinPortHandleFile(r);
+		if (!wph) {
+			sdc_close(r);
+			return INVALID_HANDLE_VALUE;
+		}
+
+		return wph->Register();
 	}
 
 	BOOL WINPORT(MoveFile)(LPCWSTR ExistingFileName, LPCWSTR NewFileName )
@@ -205,9 +225,9 @@ extern "C"
 		struct stat s;
 		if (os_call_int(sdc_stat, ConsumeWinPath(NewFileName).c_str(), &s)==0) {
 			WINPORT(SetLastError)(ERROR_ALREADY_EXISTS);
-			return false;			
+			return false;
 		}
-			
+
 		return (os_call_int(sdc_rename, ConsumeWinPath(ExistingFileName).c_str(), ConsumeWinPath(NewFileName).c_str())==0);
 	}
 
@@ -222,28 +242,30 @@ extern "C"
 	DWORD WINPORT(GetCurrentDirectory)( DWORD  nBufferLength, LPWSTR lpBuffer)
 	{
 		std::vector<char> buf(nBufferLength + 1);
-		if (!_getcwd(&buf[0], nBufferLength)) {
-			return (nBufferLength < 1024) ? 1024 : 0;
+		if (UNLIKELY(!_getcwd(buf.data(), nBufferLength))) {
+			return (nBufferLength < PATH_MAX) ? PATH_MAX : 0;
 		}
-		
-		std::wstring u16 = MB2Wide(&buf[0]);
-		memcpy(lpBuffer, u16.c_str(), (u16.size() + 1) * sizeof(*lpBuffer));
-		return (DWORD)u16.size();
+
+		const std::wstring &wstr = MB2Wide(buf.data());
+		if (UNLIKELY(wstr.size() + 1 > nBufferLength)) {
+			return DWORD(wstr.size() + 1);
+		}
+
+		wmemcpy(lpBuffer, wstr.c_str(), wstr.size() + 1);
+		return (DWORD)wstr.size();
 	}
 
 	BOOL WINPORT(SetCurrentDirectory)(LPCWSTR lpPathName)
 	{
 		const std::string &path = ConsumeWinPath(lpPathName);
-		int r = os_call_int(sdc_chdir, path.c_str());
-		if (r == 0)
-			return TRUE;
-		return FALSE;
+		auto r = os_call_int(sdc_chdir, path.c_str());
+		return UNLIKELY(r == -1) ? FALSE : TRUE;
 	}
 
 	BOOL WINPORT(GetFileSizeEx)( HANDLE hFile, PLARGE_INTEGER lpFileSize)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 #ifdef _WIN32
@@ -282,17 +304,17 @@ extern "C"
 		return sz64.LowPart;
 	}
 
-	BOOL WINPORT(ReadFile)( HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, 
+	BOOL WINPORT(ReadFile)( HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead,
 		LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
-		if (lpOverlapped) {
+		if (UNLIKELY(lpOverlapped)) {
 			fprintf(stderr, "WINPORT(ReadFile) with lpOverlapped\n");
 		}
-		
+
 		ssize_t done = 0, remain = nNumberOfBytesToRead;
 		for (;;) {
 			if (!remain) break;
@@ -320,21 +342,21 @@ extern "C"
 			remain-= r;
 			done+= r;
 		}
-		
+
 		//if (r!=nNumberOfBytesToRead && IsDebuggerPresent()) DebugBreak();
 
-		if (lpNumberOfBytesRead) 
+		if (lpNumberOfBytesRead)
 			*lpNumberOfBytesRead = done;
 
 		return TRUE;
 
 	}
 
-	BOOL WINPORT(WriteFile)( HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, 
+	BOOL WINPORT(WriteFile)( HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,
 		LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			if (lpNumberOfBytesWritten)
 				*lpNumberOfBytesWritten = 0;
 			return FALSE;
@@ -350,30 +372,30 @@ extern "C"
 			return FALSE;
 		}
 
-		if (lpNumberOfBytesWritten) 
+		if (lpNumberOfBytesWritten)
 			*lpNumberOfBytesWritten = r;
 		return TRUE;
 	}
 
-	BOOL WINPORT(SetFilePointerEx)( HANDLE hFile, LARGE_INTEGER liDistanceToMove, 
+	BOOL WINPORT(SetFilePointerEx)( HANDLE hFile, LARGE_INTEGER liDistanceToMove,
 		PLARGE_INTEGER lpNewFilePointer, DWORD dwMoveMethod)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 		int whence;
 		switch (dwMoveMethod) {
-		case FILE_BEGIN: whence = SEEK_SET; break;
-		case FILE_CURRENT: whence = SEEK_CUR; break;
-		case FILE_END: whence = SEEK_END; break;
-		default:
-			WINPORT(SetLastError)(ERROR_INVALID_PARAMETER);
-			return FALSE;
+			case FILE_BEGIN: whence = SEEK_SET; break;
+			case FILE_CURRENT: whence = SEEK_CUR; break;
+			case FILE_END: whence = SEEK_END; break;
+			default:
+				WINPORT(SetLastError)(ERROR_INVALID_PARAMETER);
+				return FALSE;
 		}
 
 		off_t r = os_call_v<off_t, -1>(sdc_lseek, wph->fd, (off_t)liDistanceToMove.QuadPart, whence);
-		if (r==(off_t)-1)
+		if (UNLIKELY(r==(off_t)-1))
 			return FALSE;
 		if (lpNewFilePointer) lpNewFilePointer->QuadPart = r;
 		return TRUE;
@@ -382,7 +404,7 @@ extern "C"
 	VOID WINPORT(FileAllocationHint) (HANDLE hFile, DWORD64 HintFileSize)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return;
 		}
 
@@ -403,7 +425,7 @@ extern "C"
 	BOOL WINPORT(FileAllocationRequire) (HANDLE hFile, DWORD64 RequireFileSize)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 
@@ -411,7 +433,7 @@ extern "C"
 		if (fstat(wph->fd, &s) == -1)
 			return FALSE;
 
-#if defined(__linux__) || defined(__FreeBSD__)
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__HAIKU__)
 		int ret = posix_fallocate(wph->fd, 0, (off_t)RequireFileSize);
 		if (ret == 0)
 			return TRUE;
@@ -464,14 +486,14 @@ extern "C"
 	DWORD WINPORT(SetFilePointer)( HANDLE hFile, LONG lDistanceToMove, PLONG  lpDistanceToMoveHigh, DWORD  dwMoveMethod)
 	{
 		LARGE_INTEGER liDistanceToMove, liNewFilePointer = {};
+		liDistanceToMove.LowPart = lDistanceToMove;
 		if (lpDistanceToMoveHigh) {
-			liDistanceToMove.LowPart = lDistanceToMove;
-			liDistanceToMove.HighPart = lpDistanceToMoveHigh ? *lpDistanceToMoveHigh : 0;			
+			liDistanceToMove.HighPart = *lpDistanceToMoveHigh;
 		} else {
-			liDistanceToMove.LowPart = lDistanceToMove;
 			liDistanceToMove.HighPart = (lDistanceToMove < 0) ? -1 : 0;
 		}
-		if (!WINPORT(SetFilePointerEx)( hFile, liDistanceToMove, &liNewFilePointer, dwMoveMethod))
+		auto r = WINPORT(SetFilePointerEx)( hFile, liDistanceToMove, &liNewFilePointer, dwMoveMethod);
+		if (UNLIKELY(!r))
 			return INVALID_SET_FILE_POINTER;
 
 		if (lpDistanceToMoveHigh)
@@ -480,28 +502,29 @@ extern "C"
 		return liNewFilePointer.LowPart;
 	}
 
-	BOOL WINPORT(GetFileTime)( HANDLE hFile, LPFILETIME lpCreationTime, 
+	BOOL WINPORT(GetFileTime)( HANDLE hFile, LPFILETIME lpCreationTime,
 		LPFILETIME lpLastAccessTime, LPFILETIME lpLastWriteTime)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 		struct stat s{};
-		if (os_call_int(sdc_fstat, wph->fd, &s) < 0)
+		auto r = os_call_int(sdc_fstat, wph->fd, &s);
+		if (UNLIKELY(r < 0))
 			return FALSE;
-			
+
 		WINPORT(FileTime_UnixToWin32)(s.st_mtim, lpLastWriteTime);
 		WINPORT(FileTime_UnixToWin32)(s.st_ctim, lpCreationTime);
 		WINPORT(FileTime_UnixToWin32)(s.st_atim, lpLastAccessTime);
 		return TRUE;
 	}
 
-	BOOL WINPORT(SetFileTime)( HANDLE hFile, const FILETIME *lpCreationTime, 
+	BOOL WINPORT(SetFileTime)( HANDLE hFile, const FILETIME *lpCreationTime,
 		const FILETIME *lpLastAccessTime, const FILETIME *lpLastWriteTime)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 
@@ -512,19 +535,20 @@ extern "C"
 		if (lpLastWriteTime) {
 			WINPORT(FileTime_Win32ToUnix)(lpLastWriteTime, &ts[1]);
 		}
-		const struct timeval tv[2] = { {ts[0].tv_sec, suseconds_t(ts[0].tv_nsec / 1000)}, {ts[1].tv_sec, suseconds_t(ts[1].tv_nsec / 1000)}};
-		if (os_call_int(sdc_futimes, wph->fd, tv) < 0)
+
+		auto r = os_call_int(sdc_futimens, wph->fd, (const struct timespec *)ts);
+		if (UNLIKELY(r < 0))
 			return FALSE;
 
 		return TRUE;
 	}
-	
+
 
 	DWORD WINPORT(EvaluateAttributes)(uint32_t unix_mode, const WCHAR *pathname)
 	{
 		return EvaluateAttributesT(unix_mode, PointToNamePart(pathname));
 	}
-	
+
 	DWORD WINPORT(EvaluateAttributesA)(uint32_t unix_mode, const char *pathname)
 	{
 		return EvaluateAttributesT(unix_mode, PointToNamePart(pathname));
@@ -617,14 +641,15 @@ extern "C"
 	BOOL WINPORT(SetEndOfFile)( HANDLE hFile)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 
 		off_t pos = os_call_v<off_t, -1>(sdc_lseek, wph->fd, (off_t)0, SEEK_CUR);
-		if (pos==(off_t)-1)
+		if (UNLIKELY(pos==(off_t)-1))
 			return FALSE;
-		if (os_call_int(sdc_ftruncate, wph->fd, pos) == -1)
+		auto r = os_call_int(sdc_ftruncate, wph->fd, pos);
+		if (UNLIKELY(r == -1))
 			return FALSE;
 
 		return TRUE;
@@ -633,7 +658,7 @@ extern "C"
 	BOOL WINPORT(FlushFileBuffers)( HANDLE hFile)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FALSE;
 		}
 		//fsync(wph->fd);
@@ -643,7 +668,7 @@ extern "C"
 	DWORD WINPORT(GetFileType)( HANDLE hFile)
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return FILE_TYPE_UNKNOWN;
 		}
 
@@ -666,14 +691,14 @@ extern "C"
 		return FILE_TYPE_UNKNOWN;
 #endif
 	}
-	
+
 	WINPORT_DECL(GetFileDescriptor, int, (HANDLE hFile))
 	{
 		AutoWinPortHandle<WinPortHandleFile> wph(hFile);
-		if (!wph) {
+		if (UNLIKELY(!wph)) {
 			return -1;
 		}
-		
+
 		return wph->fd;
 	}
 
@@ -707,25 +732,30 @@ extern "C"
 			for (;;) {
 				if (!_d)
 					return false;
-				
+
 				errno = 0;
 				de = os_call_pv<struct dirent>(sdc_readdir, _d);
 				if (!de)
 					return false;
 
-				if ( PreMatchDType(de->d_type) && MatchName(de->d_name) ) {
-					mode_t hint_mode_type;
-					switch (de->d_type) {
-						case DT_DIR: hint_mode_type = S_IFDIR; break;
-						case DT_REG: hint_mode_type = S_IFREG; break;
-						case DT_LNK: hint_mode_type = S_IFLNK; break;
-						case DT_BLK: hint_mode_type = S_IFBLK; break;
-						case DT_FIFO: hint_mode_type = S_IFIFO; break;
-						case DT_CHR: hint_mode_type = S_IFCHR; break;
-						case DT_SOCK: hint_mode_type = S_IFSOCK; break;
-						default: hint_mode_type = 0; 
-					}
+#ifndef __HAIKU__
+                if (PreMatchDType(de->d_type) && MatchName(de->d_name) ) {
+                    mode_t hint_mode_type = 0;
+                    switch (de-> d_type) {
+                        case DT_DIR: hint_mode_type = S_IFDIR; break;
+                        case DT_REG: hint_mode_type = S_IFREG; break;
+                        case DT_LNK: hint_mode_type = S_IFLNK; break;
+                        case DT_BLK: hint_mode_type = S_IFBLK; break;
+                        case DT_FIFO: hint_mode_type = S_IFIFO; break;
+                        case DT_CHR: hint_mode_type = S_IFCHR; break;
+                        case DT_SOCK: hint_mode_type = S_IFSOCK; break;
+                        default: hint_mode_type = 0;
+                    }
 					if (MatchAttributesAndFillWFD(de->d_name, lpFindFileData, hint_mode_type))
+#else
+                if (MatchName(de->d_name) ) {
+					if (MatchAttributesAndFillWFD(de->d_name, lpFindFileData))
+#endif
 						return true;
 				}
 			}
@@ -766,7 +796,7 @@ extern "C"
 			}
 
 			MB2Wide(name, _tmp.wide_name);
-			wcsncpy(wfd->cFileName, _tmp.wide_name.c_str(), MAX_NAME - 1);
+			wcsncpy(wfd->cFileName, _tmp.wide_name.c_str(), MAX_NAME);
 
 			const DWORD attrs = wfd->dwFileAttributes;
 			if ((attrs & FILE_ATTRIBUTE_DIRECTORY) != 0) {
@@ -786,11 +816,11 @@ extern "C"
 					return false;
 				}
 			}
-			
+
 			return true;
 		}
 
-		bool MatchName(const char *name) 
+		bool MatchName(const char *name)
 		{
 			if ((_flags & FIND_FILE_FLAG_NO_CUR_UP) != 0) {
 				if (name[0] == '.') {
@@ -798,21 +828,22 @@ extern "C"
 						return false;
 					}
 					if (name[1] == '.' && name[2] == 0) {
-						return false;					
+						return false;
 					}
 				}
 			}
 			if (_mask.empty())
 				return true;
-			
+
 			if ((_flags & FIND_FILE_FLAG_CASE_INSENSITIVE) != 0)
 				return MatchWildcardICE(name, _mask.c_str());
 
 			return MatchWildcard(name, _mask.c_str());
 		}
-		
+
 		DIR *_d = nullptr;
-		
+
+#ifndef __HAIKU__
 		bool PreMatchDType(unsigned char d_type)
 		{
 			switch (d_type) {
@@ -820,15 +851,16 @@ extern "C"
 				case DT_REG: return (_flags & FIND_FILE_FLAG_NO_FILES) == 0;
 				case DT_LNK: return (_flags & FIND_FILE_FLAG_NO_LINKS) == 0;
 				case DT_UNKNOWN: return true;
-				
+
 				default: return (_flags&FIND_FILE_FLAG_NO_DEVICES) == 0;
-				
+
 			}
 		}
+#endif
 
 		struct {
 			std::string path;
-			std::wstring wide_name;			
+			std::wstring wide_name;
 		} _tmp;
 		std::string _root;
 		std::string _mask;
@@ -870,7 +902,7 @@ extern "C"
 			}
 
 			LPCWSTR last_slash = wcsrchr(lpFileName, GOOD_SLASH);
-			wcsncpy(lpFindFileData->cFileName, last_slash ? last_slash + 1 : lpFileName, MAX_NAME - 1);
+			wcsncpy(lpFindFileData->cFileName, last_slash ? last_slash + 1 : lpFileName, MAX_NAME);
 			return (HANDLE)&g_unix_found_file_dummy;
 		}
 
@@ -1006,7 +1038,7 @@ extern "C"
 		return unique;
 	}
 
-	WINPORT_DECL(GetFullPathName, DWORD, 
+	WINPORT_DECL(GetFullPathName, DWORD,
 		(LPCTSTR lpFileName,  DWORD nBufferLength, LPTSTR lpBuffer, LPTSTR *lpFilePart))
 	{
 		std::wstring full_name;
@@ -1023,7 +1055,7 @@ extern "C"
 			full_name = lpFileName;
 		if (nBufferLength<=full_name.size())
 			return full_name.size() + 1;
-		
+
 		memcpy(lpBuffer, full_name.c_str(), (full_name.size() + 1) * sizeof(WCHAR));
 		if (lpFilePart) {
 			WCHAR *slash = wcsrchr(lpBuffer, GOOD_SLASH);

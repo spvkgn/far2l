@@ -50,6 +50,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "history.hpp"
 #include "message.hpp"
 #include "config.hpp"
+#include "ConfigSaveLoad.hpp"
 #include "usermenu.hpp"
 #include "datetime.hpp"
 #include "setcolor.hpp"
@@ -542,7 +543,7 @@ void ShellOptions(int LastCommand,MOUSE_EVENT_RECORD *MouseEvent)
 					break;
 				case MENU_COMMANDS_EDITUSERMENU: // Edit user menu
 				{
-					UserMenu Menu(true);
+					UserMenu::Present(true);
 				}
 				break;
 				case MENU_COMMANDS_FILEASSOCIATIONS: // File associations

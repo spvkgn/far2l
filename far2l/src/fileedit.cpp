@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "fileedit.hpp"
 #include "keyboard.hpp"
 #include "codepage.hpp"
+#include "EditorConfigOrg.hpp"
 #include "lang.hpp"
 #include "macroopcode.hpp"
 #include "keys.hpp"
@@ -394,8 +395,13 @@ FileEditor::~FileEditor()
 	//AY: флаг оповещающий закрытие редактора.
 	m_bClosing = true;
 
-	if (m_editor->EdOpt.SavePos && CtrlObject)
-		SaveToCache();
+	if (CtrlObject)
+	{
+		if (m_editor->EdOpt.SavePos)
+			SaveToCache();
+		else
+			CtrlObject->EditorPosCache->ResetPosition(ComposeCacheName());
+	}
 
 	BitFlags FEditFlags=m_editor->Flags;
 	int FEditEditorID=m_editor->EditorID;
@@ -706,10 +712,7 @@ void FileEditor::InitKeyBar()
 	if (!Opt.UsePrintManager || CtrlObject->Plugins.FindPlugin(SYSID_PRINTMANAGER))
 		EditKeyBar.Change(KBL_ALT,L"",5-1);
 
-	if (m_codepage!=WINPORT(GetOEMCP)())
-		EditKeyBar.Change(KBL_MAIN,(Opt.OnlyEditorViewerUsed?Msg::SingleEditF8DOS:Msg::EditF8DOS),7);
-	else
-		EditKeyBar.Change(KBL_MAIN,(Opt.OnlyEditorViewerUsed?Msg::SingleEditF8:Msg::EditF8),7);
+	SetEditKeyBarStatefulLabels();
 
 	EditKeyBar.ReadRegGroup(L"Editor",Opt.strLanguage);
 	EditKeyBar.SetAllRegGroup();
@@ -780,7 +783,7 @@ int64_t FileEditor::VMProcess(int OpCode,void *vParam,int64_t iParam)
 	}
 
 	if (OpCode == MCODE_V_EDITORCURPOS)
-		return (int64_t)(m_editor->CurLine->GetTabCurPos()+1);
+		return (int64_t)(m_editor->CurLine->GetCellCurPos()+1);
 
 	if (OpCode == MCODE_V_EDITORCURLINE)
 		return (int64_t)(m_editor->NumLine+1);
@@ -802,8 +805,6 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 	SudoClientRegion sdc_rgn;
 	if (Key!=KEY_F4 && Key!=KEY_IDLE)
 		F4KeyOnly=false;
-
-	DWORD FNAttr;
 
 	if (Flags.Check(FFILEEDIT_REDRAWTITLE) && (((unsigned int)Key & 0x00ffffff) < KEY_END_FKEY || IS_INTERNAL_KEY_REAL((unsigned int)Key & 0x00ffffff)))
 		ShowConsoleTitle();
@@ -936,7 +937,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 		{
 			case KEY_F1:
 			{
-				Help Hlp(L"Editor");
+				Help::Present(L"Editor");
 				return TRUE;
 			}
 			/* $ 25.04.2001 IS
@@ -996,36 +997,19 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 
 				while (!Done) // бьемся до упора
 				{
-					size_t pos;
-
-					// проверим путь к файлу, может его уже снесли...
-					if (FindLastSlash(pos,strFullFileName))
-					{
-						wchar_t *lpwszPtr = strFullFileName.GetBuffer();
-						wchar_t wChr = lpwszPtr[pos+1];
-						lpwszPtr[pos+1]=0;
-
-						// В корне?
-						if (!IsLocalRootPath(lpwszPtr))
-						{
-							// а дальше? каталог существует?
-							if ((FNAttr=apiGetFileAttributes(lpwszPtr)) == INVALID_FILE_ATTRIBUTES ||
-							        !(FNAttr&FILE_ATTRIBUTE_DIRECTORY)
-							        //|| LocalStricmp(OldCurDir,FullFileName)  // <- это видимо лишнее.
-							   )
-								Flags.Set(FFILEEDIT_SAVETOSAVEAS);
-						}
-
-						lpwszPtr[pos+1]=wChr;
-						//strFullFileName.ReleaseBuffer (); так как ничего не поменялось то это лишнее.
-					}
-
-					if (Key == KEY_F2 &&
-					        (FNAttr=apiGetFileAttributes(strFullFileName)) != INVALID_FILE_ATTRIBUTES &&
-					        !(FNAttr&FILE_ATTRIBUTE_DIRECTORY)
-					   )
+					if (Key == KEY_F2 && apiPathIsFile(strFullFileName))
 					{
 						Flags.Clear(FFILEEDIT_SAVETOSAVEAS);
+					}
+					else if (!Flags.Check(FFILEEDIT_SAVETOSAVEAS))
+					{
+						FARString strDir = strFullFileName;
+						if (CutToSlash(strDir, false)  // проверим путь к файлу, может его уже снесли...
+						  && !IsLocalRootPath(strDir)  // В корне?
+						  && !apiPathIsDir(strDir))    // каталог существует?
+						{
+							Flags.Set(FFILEEDIT_SAVETOSAVEAS);
+						}
 					}
 
 					UINT codepage = m_codepage;
@@ -1203,6 +1187,24 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 				if (!ProcessKey(KEY_F2)) // учтем факт того, что могли отказаться от сохранения
 					return FALSE;
 
+			case KEY_F5:
+				m_editor->SetShowWhiteSpace(m_editor->GetShowWhiteSpace() ? 0 : 1);
+				m_editor->Show();
+				ChangeEditKeyBar();
+				return TRUE;
+
+			case KEY_SHIFTF5:
+				ChooseTabSizeMenu();
+				ShowStatus();
+				return TRUE;
+
+			case KEY_CTRLF5:
+				m_editor->SetConvertTabs( (m_editor->GetConvertTabs() != EXPAND_NOTABS) ? EXPAND_NOTABS : EXPAND_NEWTABS);
+				m_editor->EnableSaveTabSettings();
+				ChangeEditKeyBar();
+				ShowStatus();
+				return TRUE;
+
 			case KEY_F4:
 				if (F4KeyOnly)
 					return TRUE;
@@ -1300,14 +1302,17 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 				}
 				return TRUE;
 			}
-			case KEY_ALTSHIFTF9:
+			case KEY_F9: case KEY_ALTSHIFTF9:
 			{
 				//     Работа с локальной копией EditorOptions
 				EditorOptions EdOpt;
 				GetEditorOptions(EdOpt);
+				EditorOptions SavedEdOpt = EdOpt;
 				EditorConfig(EdOpt,true); // $ 27.11.2001 DJ - Local в EditorConfig
 				EditKeyBar.Refresh(true); //???? Нужно ли????
 				SetEditorOptions(EdOpt);
+				if (SavedEdOpt.TabSize != EdOpt.TabSize || SavedEdOpt.ExpandTabs != EdOpt.ExpandTabs)
+					m_editor->EnableSaveTabSettings();
 
 				EditKeyBar.Refresh(Opt.EdOpt.ShowKeyBar);
 
@@ -1394,6 +1399,24 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 {
 	SudoClientRegion sdc_rgn;
 	ChangePriority ChPriority(ChangePriority::NORMAL);
+	if (Opt.EdOpt.UseEditorConfigOrg)
+	{
+		FARString strFullName;
+		ConvertNameToFull(Name, strFullName);
+		EditorConfigOrg EdCfg;
+		EdCfg.Populate(strFullName.GetMB().c_str());
+		if (EdCfg.CodePageBOM >= 0)
+			m_AddSignature = (EdCfg.CodePageBOM == 0) ? FB_NO : FB_YES;
+		if (EdCfg.CodePage > 0)
+			m_codepage = EdCfg.CodePage;
+		if (EdCfg.EndOfLine)
+			far_wcsncpy(m_editor->GlobalEOL,EdCfg.EndOfLine,ARRAYSIZE(m_editor->GlobalEOL));
+		if (EdCfg.TabSize > 0)
+			m_editor->SetTabSize(EdCfg.TabSize);
+		if (EdCfg.ExpandTabs >= 0)
+			m_editor->SetConvertTabs(EdCfg.ExpandTabs);
+	}
+
 	TPreRedrawFuncGuard preRedrawFuncGuard(Editor::PR_EditorShowMsg);
 	wakeful W;
 	int LastLineCR = 0;
@@ -1402,7 +1425,7 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 	File EditFile;
 	DWORD FileAttr = apiGetFileAttributes(Name);
 	if ((FileAttr!=INVALID_FILE_ATTRIBUTES && (FileAttr&FILE_ATTRIBUTE_DEVICE)!=0) || //avoid stuck
-		!EditFile.Open(Name, GENERIC_READ, FILE_SHARE_READ|(Opt.EdOpt.EditOpenedForWrite?FILE_SHARE_WRITE:0), nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
+		!EditFile.Open(Name, GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 	{
 		SysErrorCode=WINPORT(GetLastError)();
 		if ((SysErrorCode != ERROR_FILE_NOT_FOUND) && (SysErrorCode != ERROR_PATH_NOT_FOUND))
@@ -1612,10 +1635,12 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 	EditFile.Close();
 	//if ( bCached )
 	m_editor->SetCacheParams(&cp);
+
 	SysErrorCode=WINPORT(GetLastError)();
 	apiGetFindDataForExactPathName(Name, FileInfo);
 	EditorGetFileAttributes(Name);
 	strLoadedFileName = Name;
+	ChangeEditKeyBar();
 	return TRUE;
 }
 
@@ -1706,25 +1731,19 @@ void FileEditor::BaseContentWriter::EncodeAndWrite(UINT codepage, const wchar_t 
 			Wide2MB(Str, Length, _tmpstr);
 			Write(_tmpstr.data(), _tmpstr.size());
 		}
-		else if (codepage == CP_WIDE_BE)
+		else 
 		{
-			if (_tmpwstr.size() < Length)
-				_tmpwstr.resize(Length + 0x20);
-
-			WideReverse(Str, (wchar_t *)_tmpwstr.data(), Length);
-			Write(_tmpwstr.data(), Length * sizeof(wchar_t));
-
-		} else {
 			int cnt = WINPORT(WideCharToMultiByte)(codepage, 0, Str, Length, nullptr, 0, nullptr, nullptr);
+
 			if (cnt <= 0)
 				return;
 
-			if (_tmpstr.size() < (size_t)cnt)
-				_tmpstr.resize(cnt + 0x20);
+			if (_tmpcvec.size() < (size_t)cnt)
+				_tmpcvec.resize(cnt + 0x20);
 
-			cnt = WINPORT(WideCharToMultiByte)(codepage, 0, Str, Length, (char *)_tmpstr.data(), _tmpstr.size(), nullptr, nullptr);
+			cnt = WINPORT(WideCharToMultiByte)(codepage, 0, Str, Length, _tmpcvec.data(), _tmpcvec.size(), nullptr, nullptr);
 			if (cnt > 0)
-				Write(_tmpstr.data(), cnt);
+				Write(_tmpcvec.data(), cnt);
 		}
 }
 
@@ -2071,7 +2090,10 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 	/* 28.12.2001 VVM
 	  ! Проверить на успешную запись */
 	if (RetCode==SAVEFILE_SUCCESS)
+	{
 		m_editor->TextChanged(0);
+//		m_editor->EnableSaveTabSettings();
+	}
 
 	if (GetDynamicallyBorn()) // принудительно сбросим Title // Flags.Check(FFILEEDIT_SAVETOSAVEAS) ????????
 		strTitle.Clear();
@@ -2229,14 +2251,55 @@ void FileEditor::SetTitle(const wchar_t *Title)
 	strTitle = Title;
 }
 
+void FileEditor::SetEditKeyBarStatefulLabels()
+{
+	if (m_codepage != WINPORT(GetOEMCP)())
+		EditKeyBar.Change(KBL_MAIN, (Opt.OnlyEditorViewerUsed?Msg::SingleEditF8DOS:Msg::EditF8DOS), 7);
+	else
+		EditKeyBar.Change(KBL_MAIN, (Opt.OnlyEditorViewerUsed?Msg::SingleEditF8:Msg::EditF8), 7);
+
+	EditKeyBar.Change(KBL_MAIN, m_editor->GetShowWhiteSpace() ? Msg::EditF5Hide : Msg::EditF5, 4);
+
+	EditKeyBar.Change(KBL_CTRL, m_editor->GetConvertTabs() ? Msg::EditCtrlF5 : Msg::EditCtrlF5Spaces, 4);
+}
+
+
 void FileEditor::ChangeEditKeyBar()
 {
-	if (m_codepage!=WINPORT(GetOEMCP)())
-		EditKeyBar.Change((Opt.OnlyEditorViewerUsed?Msg::SingleEditF8DOS:Msg::EditF8DOS),7);
-	else
-		EditKeyBar.Change((Opt.OnlyEditorViewerUsed?Msg::SingleEditF8:Msg::EditF8),7);
-
+	SetEditKeyBarStatefulLabels();
 	EditKeyBar.Redraw();
+}
+
+void FileEditor::ChooseTabSizeMenu()
+{
+	std::vector<std::wstring> items;
+	StrExplode(items, std::wstring(Msg::EditTabWidthItems.CPtr()), L";");
+	VMenu menu(Msg::EditTabWidthTitle,nullptr,0,ScrY-4);
+	menu.SetFlags(VMENU_WRAPMODE | VMENU_AUTOHIGHLIGHT);
+	menu.SetHelp(L"TabSizeMenu");
+	menu.SetPosition(-1, -1, 0, 0);
+
+	for (const auto &item : items)
+	{
+		MenuItemEx mi;
+		mi.SetSelect((&item - &items[0]) == (m_editor->GetTabSize() - 1));
+		mi.strName = item;
+		menu.AddItem(&mi);
+	}
+	menu.Show();
+	while (!menu.Done())
+	{
+		menu.ReadInput();
+		menu.ProcessInput();
+	}
+
+	int r = menu.GetExitCode();
+	if (r >= 0)
+	{
+		m_editor->SetTabSize(r + 1);
+		m_editor->EnableSaveTabSettings();
+		m_editor->Show();
+	}
 }
 
 FARString &FileEditor::GetTitle(FARString &strLocalTitle,int SubLen,int TruncSize)
@@ -2285,23 +2348,27 @@ void FileEditor::ShowStatus()
 
 	strLineStr.Format(L"%d/%d", m_editor->NumLine+1, m_editor->NumLastLine);
 	FARString strAttr(AttrStr);
+
+	FARString strTabMode;
+	strTabMode.Format(L"%c%d", m_editor->GetConvertTabs() ? 'S' : 'T', m_editor->GetTabSize());
 	FormatString FString;
-	FString<<fmt::LeftAlign()<<fmt::Width(NameLength)<<strLocalTitle<<L' '<<
+	FString<<fmt::LeftAlign()<<fmt::Expand(NameLength)<<strLocalTitle<<L' '<<
 	(m_editor->Flags.Check(FEDITOR_MODIFIED) ? L'*':L' ')<<
 	(m_editor->Flags.Check(FEDITOR_LOCKMODE) ? L'-':L' ')<<
 	(m_editor->Flags.Check(FEDITOR_PROCESSCTRLQ) ? L'"':L' ')<<
-	fmt::Width(5)<<EOLName(m_editor->GlobalEOL)<<L' '<<
-	fmt::Width(5)<<m_codepage<<L' '<<fmt::Width(7)<<Msg::EditStatusLine<<L' '<<
-	fmt::Width(SizeLineStr)<<fmt::Precision(SizeLineStr)<<strLineStr<<L' '<<
-	fmt::Width(5)<<Msg::EditStatusCol<<L' '<<
-	fmt::LeftAlign()<<fmt::Width(4)<<m_editor->CurLine->GetTabCurPos()+1<<L' '<<
-	fmt::Width(3)<<strAttr;
+	strTabMode<<L' '<<
+	fmt::Expand(5)<<EOLName(m_editor->GlobalEOL)<<L' '<<
+	fmt::Expand(5)<<m_codepage<<L' '<<fmt::Expand(7)<<Msg::EditStatusLine<<L' '<<
+	fmt::Expand(SizeLineStr)<<fmt::Truncate(SizeLineStr)<<strLineStr<<L' '<<
+	fmt::Expand(5)<<Msg::EditStatusCol<<L' '<<
+	fmt::LeftAlign()<<fmt::Expand(4)<<m_editor->CurLine->GetCellCurPos()+1<<L' '<<
+	fmt::Expand(3)<<strAttr;
 	int StatusWidth=ObjWidth - (Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN)?5:0);
 
 	if (StatusWidth<0)
 		StatusWidth=0;
 
-	FS<<fmt::LeftAlign()<<fmt::Width(StatusWidth)<<fmt::Precision(StatusWidth)<<FString.strValue();
+	FS<<fmt::LeftAlign()<<fmt::Size(StatusWidth)<<FString.strValue();
 	{
 		const wchar_t *Str;
 		int Length;
@@ -2763,7 +2830,7 @@ bool FileEditor::LoadFromCache(EditorCacheParams *pp)
 		pp->ScreenLine=static_cast<int>(PosCache.Param[1]);
 		pp->LinePos=static_cast<int>(PosCache.Param[2]);
 		pp->LeftPos=static_cast<int>(PosCache.Param[3]);
-		pp->CodePage=static_cast<UINT>(PosCache.Param[4]);
+		POSCACHE_EDIT_PARAM4_UNPACK(PosCache.Param[4], pp->CodePage, pp->ExpandTabs, pp->TabSize);
 
 		if (pp->Line < 0) pp->Line=0;
 
@@ -2781,11 +2848,16 @@ bool FileEditor::LoadFromCache(EditorCacheParams *pp)
 	return false;
 }
 
+FARString FileEditor::ComposeCacheName()
+{
+	return strPluginData.IsEmpty()
+		? strFullFileName : strPluginData + PointToName(strFullFileName);
+}
+
 void FileEditor::SaveToCache()
 {
 	EditorCacheParams cp;
 	m_editor->GetCacheParams(&cp);
-	FARString strCacheName=strPluginData.IsEmpty()?strFullFileName:strPluginData+PointToName(strFullFileName);
 
 	if (!Flags.Check(FFILEEDIT_OPENFAILED))   //????
 	{
@@ -2794,7 +2866,8 @@ void FileEditor::SaveToCache()
 		poscache.Param[1] = cp.ScreenLine;
 		poscache.Param[2] = cp.LinePos;
 		poscache.Param[3] = cp.LeftPos;
-		poscache.Param[4] = Flags.Check(FFILEEDIT_CODEPAGECHANGEDBYUSER)?m_codepage:0;
+		const int codepage = Flags.Check(FFILEEDIT_CODEPAGECHANGEDBYUSER) ? m_codepage : 0;
+		POSCACHE_EDIT_PARAM4_PACK(poscache.Param[4], codepage, cp.ExpandTabs, cp.TabSize);
 
 		if (Opt.EdOpt.SaveShortPos)
 		{
@@ -2805,7 +2878,7 @@ void FileEditor::SaveToCache()
 			poscache.Position[3] = cp.SavePos.LeftPos;
 		}
 
-		CtrlObject->EditorPosCache->AddPosition(strCacheName, poscache);
+		CtrlObject->EditorPosCache->AddPosition(ComposeCacheName(), poscache);
 	}
 }
 

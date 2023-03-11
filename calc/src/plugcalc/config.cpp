@@ -14,7 +14,7 @@
 #include <algorithm>
 
 #include <sgml/sgml.h>
-
+#include <utils.h>
 #include "api.h"
 #include "newparse.h"
 #include "calc.h"
@@ -124,11 +124,6 @@ static const struct
 	{ DI_BUTTON,       0,  0,  0,  0, DIF_CENTERGROUP|DIF_BTNNOCLOSE|DIF_DISABLE, mAdvanced, NULL, NULL },
 };
 
-
-BOOL InitConfig()
-{
-	return TRUE;
-}
 
 BOOL LoadConfig()
 {

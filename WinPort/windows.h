@@ -18,8 +18,6 @@
 # endif
 #define swprintf swprintf_ws2ls
 
-#define    GetConsoleFontSize			WINPORT(GetConsoleFontSize)
-#define    GetCurrentConsoleFont		WINPORT(GetCurrentConsoleFont)
 #define    GetLargestConsoleWindowSize		WINPORT(GetLargestConsoleWindowSize)
 #define    SetConsoleWindowInfo			WINPORT(SetConsoleWindowInfo)
 #define    SetConsoleTitle			WINPORT(SetConsoleTitle)
@@ -45,14 +43,11 @@
 #define    GetNumberOfConsoleInputEvents			WINPORT(GetNumberOfConsoleInputEvents)
 #define    PeekConsoleInput			WINPORT(PeekConsoleInput)
 #define    ReadConsoleInput			WINPORT(ReadConsoleInput)
-#define    ReadConsole			WINPORT(ReadConsole)
 #define    WriteConsoleInput			WINPORT(WriteConsoleInput)
 	
 #define    SetConsoleDisplayMode			WINPORT(SetConsoleDisplayMode)
 #define    GetConsoleDisplayMode			WINPORT(GetConsoleDisplayMode)
 
-#define    AddConsoleAlias			WINPORT(AddConsoleAlias)
-#define    GetConsoleAlias			WINPORT(GetConsoleAlias)
 #define    GenerateConsoleCtrlEvent			WINPORT(GenerateConsoleCtrlEvent)
 #define    GenerateConsoleCtrlEvent			WINPORT(GenerateConsoleCtrlEvent)
 
@@ -75,9 +70,6 @@
 #define    SetLastError			WINPORT(SetLastError)
 #define    GetCurrentProcessId			WINPORT(GetCurrentProcessId)
 #define    GetDoubleClickTime			WINPORT(GetDoubleClickTime)
-#define    GetComputerName			WINPORT(GetComputerName)
-#define    GetUserName			WINPORT(GetUserName)
-	
 
 //files
 
@@ -139,7 +131,6 @@
 #define    IsCharAlphaNumeric			WINPORT(IsCharAlphaNumeric)
 #define    CompareString			WINPORT(CompareString)
 #define    CompareStringA			WINPORT(CompareStringA)
-#define    IsTextUnicode			WINPORT(IsTextUnicode)
 #define    WideCharToMultiByte			WINPORT(WideCharToMultiByte)
 #define    MultiByteToWideChar			WINPORT(MultiByteToWideChar)
 #define    CharUpper			WINPORT(CharUpper)

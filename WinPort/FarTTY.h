@@ -1,8 +1,10 @@
 #pragma once
 
+/*** This particular file distributed under Public Domain terms. ***/
+
 /** This file contains main definitions of commands used by far2l TTY extensions,
- as well as some documentation for them.
-*/
+ * as well as some documentation for them.
+ */
 
 ////////////////////
 /**
@@ -14,6 +16,7 @@ If request ID is zero then server doesnt reply on such request, if ID is not zer
 completion server sends back to client reply that has similar encoding and same ID on top of its
 arguments stack, however other reply's arguments represent result of requested operation.
 Note that in descriptions below arguments are listed in stack top->bottom order.
+All integer values are in little-endian format.
 */
 
 /** Initiates ad-hoc copy-to-clipboard starting at last mouse click position
@@ -53,7 +56,8 @@ Note that in descriptions below arguments are listed in stack top->bottom order.
 /** Gets maximum possible size of window
  In: N/A
  Out:
-  COORD (window size)
+  uint16_t (height)
+  uint16_t (width)
 */
 #define FARTTY_INTERRACT_GET_WINDOW_MAXSIZE        'w'
 
@@ -72,6 +76,16 @@ Note that in descriptions below arguments are listed in stack top->bottom order.
   bool (true on success; false if operation impossible)
 */
 #define FARTTY_INTERRACT_SET_FKEY_TITLES           'f'
+
+/** Request color palette info
+ In:
+  N/A
+ Out:
+   uint8_t maximum count of color resolution bits supported (4, 8, 24)
+   uint8_t reserved and set to zero, client should ignore it
+*/
+#define FARTTY_INTERRACT_GET_COLOR_PALETTE         'p'
+
 
 /** Declares that client supports specified extra features, so server _may_ change its hehaviour accordingly if it also supports some of them
  In:
@@ -115,6 +129,8 @@ Glossary:
 
  Passcode - random string that client sends to server to identify itself. Server on its side may
   ask user for allowing clipboard access and may use this passcode to remember user's choice.
+  Its recommended to remember passcode on server side on per-client identity basis, to protect
+  against malicious client that somehow stolen other client's passcode.
 
  Clipboard format ID - value that describes kind of data to be transferred. ID can be predefined
   or dynamically registered. In first case it describes some well-known data format, in another -
@@ -186,8 +202,7 @@ Glossary:
  In:
   uint32_t (format ID)
  Out:
-  int8_t (1 - success, 0 - failure, -1 - clipboard wasn't open)
-  uint32_t (size of data)
+  uint32_t (0 - on failure, -1 - clipboard wasn't open, other value - size of data - on success)
   data of specified size
   uint64_t OPTIONAL (clipboard data ID, only if server reported FARTTY_FEATCLIP_DATA_ID)
 */

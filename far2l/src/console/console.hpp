@@ -50,9 +50,6 @@ public:
 	HANDLE GetOutputHandle();
 	HANDLE GetErrorHandle();
 
-	BOOL IsZoomed();
-	BOOL IsIconic();
-
 	bool GetSize(COORD& Size);
 	bool SetSize(COORD Size);
 
@@ -94,8 +91,6 @@ public:
 	bool FlushInputBuffer();
 
 	bool GetNumberOfInputEvents(DWORD& NumberOfEvents);
-
-	DWORD GetAlias(LPCWSTR Source, LPWSTR TargetBuffer, DWORD TargetBufferLength, LPCWSTR ExeName);
 
 	bool GetDisplayMode(DWORD& Mode);
 

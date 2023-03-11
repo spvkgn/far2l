@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <wctype.h>
+#include <limits.h>
 
 #ifdef __linux__
 // for PATH_MAX
@@ -25,6 +26,9 @@ typedef unsigned __int64 uint64_t;
 
 #else
 #ifndef FAR_PYTHON_GEN
+# include <limits.h>
+# include <sys/types.h>
+# include <sys/stat.h>
 # include <unistd.h>
 # include <wchar.h>
 # ifdef __cplusplus
@@ -61,150 +65,18 @@ typedef unsigned __int64 uint64_t;
 #define _chsize sdc_ftruncate
 #define _itoa itoa
 
+#ifndef __HAIKU__
 #define __cdecl
 #define __stdcall
+#endif
 #define _export
 #define _cdecl
+
 
 #define _UI64_MAX  0xffffffffffffffff
 
 #define FOPEN_READ		"r"
 #define FOPEN_WRITE	"w"
-
-#ifdef __APPLE__
-# define st_mtim st_mtimespec
-# define st_ctim st_ctimespec
-# define st_atim st_atimespec
-#endif
-
-#ifndef FAR_PYTHON_GEN
-#include <limits.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-static int _wtoi(const wchar_t *w)
-{
-	wchar_t *endptr = 0;
-	return wcstol(w, &endptr, 10);
-}
-static int64_t _wtoi64(const wchar_t *w)
-{
-	wchar_t *endptr = 0;
-	return wcstoll(w, &endptr, 10);
-}
-
-#ifndef __CYGWIN__	
-static char * itoa(int i, char *a, int radix)
-{
-	switch (radix) {
-		case 10: sprintf(a, "%d", i); break;
-		case 16: sprintf(a, "%x", i); break;
-	}
-	return a;
-}
-#endif
-
-static char * _i64toa(int64_t i, char *a, int radix)
-{
-	switch (radix) {
-		case 10: sprintf(a, "%lld", (long long)i); break;
-		case 16: sprintf(a, "%llx", (long long)i); break;
-	}
-	return a;
-}
-
-static wchar_t * _i64tow(int64_t i, wchar_t *w, int radix)
-{
-	int neg;
-	if (i==0) {
-		w[0] = '0';
-		w[1] = 0;
-		return w;
-	}
-
-	neg = i < 0;
-	if (neg) {
-		*w++ = '-';
-		i = -i;
-	}
-
-	for (int64_t j = i; j; j/= radix) ++w;
-	*w = 0;
-	for (; i; i/= radix) {
-		unsigned int d = i % radix;
-		--w;
-		if (d<=9) *w = d + '0';
-		else *w = d - 10 + 'a';
-	}
-
-	return neg ? w-1 : w;
-}
-
-
-static wchar_t * _itow(int i, wchar_t *w, int radix)
-{
-	int neg;
-	if (i==0) {
-		w[0] = '0';
-		w[1] = 0;
-		return w;
-	}
-	neg = i<0;
-	if (neg) {
-		*w++ = '-';
-		i = -i;
-	}
-
-	for (int j = i; j; j/= radix) ++w;
-	*w = 0;
-	for (; i; i/= radix) {
-		unsigned int d = i % radix;
-		--w;
-		if (d<=9) *w = d + '0';
-		else *w = d - 10 + 'a';
-	}
-
-	return neg ? w-1 : w;
-}
-
-static const void *_lfind(
-   const void *key,
-   const void *base,
-   unsigned int *num,
-   unsigned int width,
-   int (__cdecl *compare)(const void *, const void *)
-)
-{
-	unsigned int i, n = *num;
-	for (i = 0; i<n; ++i) {
-		if (compare(key, base)==0)
-			return base;
-		base = (const char *)base + width;
-	}
-
-	return NULL;
-}
-/*
-static char iswdigit(wchar_t w)
-{
-	return w>='0' && w<='9';
-}
-
-static char iswxdigit(wchar_t w)
-{
-	return ( (w>='0' && w<='9') || (w>='a' && w<='f') || (w>='A' && w<='F'));
-}
-
-static char iswspace(wchar_t c) {return c==' '; }
-static char iswlower(wchar_t c) {return 0; }
-static char iswupper(wchar_t c) {return 0; }
-static char iswalpha(wchar_t c) {return ((c>='a' && c<='z') || (c>='A' && c<='Z')); }
-static char iswalnum(wchar_t c) {return iswalpha(c) || (c>='0' && c<='9'); }
-static wchar_t towupper(wchar_t c) {return c; }
-static wchar_t towlower(wchar_t c) {return c; }*/
-
-#endif /* FAR_PYTHON_GEN */
 #endif
 
 
@@ -362,11 +234,26 @@ typedef int HRESULT;
 #endif
 
 typedef struct _FILETIME {
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    DWORD dwHighDateTime;
+    DWORD dwLowDateTime;
+#else
     DWORD dwLowDateTime;
     DWORD dwHighDateTime;
+#endif
 } FILETIME, *PFILETIME, *LPFILETIME;
 
 typedef union _LARGE_INTEGER {
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    struct {
+        LONG HighPart;
+        DWORD LowPart;
+    } u;
+    struct {
+        LONG HighPart;
+        DWORD LowPart;
+    };
+#else
     struct {
         DWORD LowPart;
         LONG HighPart;
@@ -375,11 +262,22 @@ typedef union _LARGE_INTEGER {
         DWORD LowPart;
         LONG HighPart;
     };
+#endif
     LONGLONG QuadPart;
 } LARGE_INTEGER;
 typedef LARGE_INTEGER *PLARGE_INTEGER;
 
 typedef union _ULARGE_INTEGER {
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    struct {
+        DWORD HighPart;
+        DWORD LowPart;
+    } u;
+    struct {
+        DWORD HighPart;
+        DWORD LowPart;
+    };
+#else
     struct {
         DWORD LowPart;
         DWORD HighPart;
@@ -388,6 +286,7 @@ typedef union _ULARGE_INTEGER {
         DWORD LowPart;
         DWORD HighPart;
     };
+#endif
     ULONGLONG QuadPart;
 } ULARGE_INTEGER;
 typedef ULARGE_INTEGER *PULARGE_INTEGER;
@@ -466,7 +365,7 @@ typedef struct _SMALL_RECT {
 typedef struct _CONSOLE_SCREEN_BUFFER_INFO {
     COORD dwSize;
     COORD dwCursorPosition;
-    WORD  wAttributes;
+    DWORD64  wAttributes;
     SMALL_RECT srWindow;
     COORD dwMaximumWindowSize;
 } CONSOLE_SCREEN_BUFFER_INFO, *PCONSOLE_SCREEN_BUFFER_INFO;
@@ -476,14 +375,43 @@ typedef struct _CONSOLE_CURSOR_INFO {
     BOOL   bVisible;
 } CONSOLE_CURSOR_INFO, *PCONSOLE_CURSOR_INFO;
 
+typedef DWORD64 COMP_CHAR;
+
 typedef struct _CHAR_INFO {
     union {
-        WCHAR UnicodeChar;
+        // WCHAR or result of CompositeCharRegister() can be differentiated
+        // using CI_USING_COMPOSITE_CHAR() that checks presence of highest bit
+        // to change this field better use CI_SET_WCHAR/CI_SET_WCATTR/CI_SET_COMPOSITE
+        // that guards against unwanted sign extension if casting from wchar_t
+        COMP_CHAR UnicodeChar;
         CHAR   AsciiChar;
     } Char;
-    WORD Attributes;
+
+    // low 16 bits - usual attributes, followed by two 24-bit RGB colors that used
+    // if FOREGROUND_TRUECOLOR/BACKGROUND_TRUECOLOR defined and backend supports truecolor
+    DWORD64 Attributes;
 } CHAR_INFO, *PCHAR_INFO;
 
+#define COMPOSITE_CHAR_MARK (COMP_CHAR(1) << 63)
+
+#define CI_SET_ATTR(CI, ATTR)       { (CI).Attributes = (DWORD64)ATTR; }
+#define CI_SET_WCHAR(CI, WC)        { (CI).Char.UnicodeChar = (COMP_CHAR)(uint32_t)(WC); }
+#define CI_SET_COMPOSITE(CI, PWC)   { (CI).Char.UnicodeChar = WINPORT(CompositeCharRegister)(PWC); }
+
+#define CI_SET_WCATTR(CI, WC, ATTR) {(CI).Char.UnicodeChar = (COMP_CHAR)(uint32_t)(WC); (CI).Attributes = (DWORD64)ATTR;}
+
+#define CI_USING_COMPOSITE_CHAR(CI) ( ((CI).Char.UnicodeChar & COMPOSITE_CHAR_MARK) != 0 )
+#define CI_FULL_WIDTH_CHAR(CI) ( (!CI_USING_COMPOSITE_CHAR(CI) && IsCharFullWidth((CI).Char.UnicodeChar)) \
+	|| (CI_USING_COMPOSITE_CHAR(CI) && IsCharFullWidth(*WINPORT(CompositeCharLookup)((CI).Char.UnicodeChar))))
+
+#define GET_RGB_FORE(ATTR)       ((DWORD)(((ATTR) >> 16) & 0xffffff))
+#define GET_RGB_BACK(ATTR)       ((DWORD)(((ATTR) >> 40) & 0xffffff))
+#define SET_RGB_FORE(ATTR, RGB)  \
+	((ATTR) = ((ATTR) & 0xffffff000000ffff) | FOREGROUND_TRUECOLOR | ((((DWORD64)(RGB)) & 0xffffff) << 16))
+#define SET_RGB_BACK(ATTR, RGB)  \
+	((ATTR) = ((ATTR) & 0x000000ffffffffff) | BACKGROUND_TRUECOLOR | ((((DWORD64)(RGB)) & 0xffffff) << 40))
+#define SET_RGB_BOTH(ATTR, RGB_FORE, RGB_BACK)  \
+	((ATTR) = ((ATTR) & 0xffff) | FOREGROUND_TRUECOLOR | BACKGROUND_TRUECOLOR | ((((DWORD64)(RGB_FORE)) & 0xffffff) << 16) | ((((DWORD64)(RGB_BACK)) & 0xffffff) << 40) )
 
 typedef struct _WINDOW_BUFFER_SIZE_RECORD {
     COORD dwSize;
@@ -508,6 +436,11 @@ typedef struct _KEY_EVENT_RECORD {
     } uChar;
     DWORD dwControlKeyState;
 } KEY_EVENT_RECORD, *PKEY_EVENT_RECORD;
+
+typedef struct _CALLBACK_EVENT_RECORD {
+	VOID (*Function)(VOID *Context);
+	VOID *Context;
+} CALLBACK_EVENT_RECORD, *PCALLBACK_EVENT_RECORD;
 
 //
 // ControlKeyState flags
@@ -548,12 +481,17 @@ typedef struct _MOUSE_EVENT_RECORD {
 #define MOUSE_WHEELED 0x0004
 #define MOUSE_HWHEELED 0x0008
 
+typedef struct _BRACKETED_PASTE {
+    BOOL bStartPaste;
+} BRACKETED_PASTE, *PBRACKETED_PASTE;
 
 #define KEY_EVENT         0x0001 // Event contains key event record
 #define MOUSE_EVENT       0x0002 // Event contains mouse event record
 #define WINDOW_BUFFER_SIZE_EVENT 0x0004 // Event contains window change event record
 #define MENU_EVENT 0x0008 // Event contains menu event record
 #define FOCUS_EVENT 0x0010 // event contains focus change
+#define BRACKETED_PASTE_EVENT 0x0020 // event contains bracketed paste state change
+#define CALLBACK_EVENT 0x0040 // callback to be invoked when its record dequeued, its translated into NOOP_EVENT when invoked
 #define NOOP_EVENT 0x0080 // nothing interesting, typically injected to kick events dispatcher
 
 
@@ -565,6 +503,8 @@ typedef struct _INPUT_RECORD {
         WINDOW_BUFFER_SIZE_RECORD WindowBufferSizeEvent;
         MENU_EVENT_RECORD MenuEvent;
         FOCUS_EVENT_RECORD FocusEvent;
+        BRACKETED_PASTE BracketedPaste;
+        CALLBACK_EVENT_RECORD CallbackEvent;
     } Event;
 } INPUT_RECORD, *PINPUT_RECORD;
 
@@ -578,15 +518,18 @@ typedef struct _INPUT_RECORD {
 #define BACKGROUND_GREEN     0x0020 // background color contains green.
 #define BACKGROUND_RED       0x0040 // background color contains red.
 #define BACKGROUND_INTENSITY 0x0080 // background color is intensified.
-#define COMMON_LVB_LEADING_BYTE    0x0100 // Leading Byte of DBCS
-#define COMMON_LVB_TRAILING_BYTE   0x0200 // Trailing Byte of DBCS
-#define COMMON_LVB_GRID_HORIZONTAL 0x0400 // DBCS: Grid attribute: top horizontal.
-#define COMMON_LVB_GRID_LVERTICAL  0x0800 // DBCS: Grid attribute: left vertical.
-#define COMMON_LVB_GRID_RVERTICAL  0x1000 // DBCS: Grid attribute: right vertical.
-#define COMMON_LVB_REVERSE_VIDEO   0x4000 // DBCS: Reverse fore/back ground attribute.
-#define COMMON_LVB_UNDERSCORE      0x8000 // DBCS: Underscore.
+#define FOREGROUND_TRUECOLOR    0x0100 // Use 24 bit RGB colors set by SET_RGB_FORE
+#define BACKGROUND_TRUECOLOR    0x0200 // Use 24 bit RGB colors set by SET_RGB_BACK
+#define COMMON_LVB_REVERSE_VIDEO   0x4000 // Reverse fore/back ground attribute.
+#define COMMON_LVB_UNDERSCORE      0x8000 // Underscore.
+#define COMMON_LVB_STRIKEOUT       0x2000 // Striekout.
 
-#define COMMON_LVB_SBCSDBCS        0x0300 // SBCS or DBCS flag.
+// Constants below not implemented and their bit values are reserved and must be zero-inited
+// #define COMMON_LVB_GRID_HORIZONTAL
+// #define COMMON_LVB_GRID_LVERTICAL
+// #define COMMON_LVB_GRID_RVERTICAL
+// #define COMMON_LVB_SBCSDBCS
+
 
 
 //
@@ -649,10 +592,10 @@ typedef struct _UNICODE_STRING {
 #define FALSE 0
 
 typedef struct _GUID {
-    unsigned long  Data1;
-    unsigned short Data2;
-    unsigned short Data3;
-    unsigned char  Data4[ 8 ];
+    uint32_t Data1;
+    uint16_t Data2;
+    uint16_t Data3;
+    uint8_t Data4[ 8 ];
 } GUID, IID;
 
 typedef struct tagRECT {

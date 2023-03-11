@@ -146,7 +146,6 @@ class ShellCopy
 		COPY_FLAGS Flags;
 		Panel *SrcPanel,*DestPanel;
 		int SrcPanelMode,DestPanelMode;
-		int SrcDriveType,DestDriveType;
 		DizList DestDiz;
 		FARString strDestDizPath;
 		FARString strCopiedName;
@@ -164,7 +163,20 @@ class ShellCopy
 		// в остальных случаях - RP_EXACTCOPY - как у источника
 		ReparsePointTypes RPT;
 		ShellCopyBuffer CopyBuffer;
+
 		std::vector<FARString> SelectedPanelItems;
+		struct CopiedDirectory
+		{
+			std::string Path;
+			FILETIME ftUnixAccessTime;
+			FILETIME ftUnixModificationTime;
+			DWORD dwUnixMode;
+		};
+
+		std::vector<CopiedDirectory> DirectoriesAttributes;
+		void EnqueueDirectoryAttributes(const FAR_FIND_DATA_EX &SrcData, FARString &strDest);
+		void SetEnqueuedDirectoriesAttributes();
+
 		bool IsSymlinkTargetAlsoCopied(const wchar_t *SymLink);
 
 		COPY_CODES CopyFileTree(const wchar_t *Dest);
@@ -176,8 +188,6 @@ class ShellCopy
 		                            const FAR_FIND_DATA_EX &SrcData,
 		                            FARString &strDest,
 		                            int KeepPathPos, int Rename);
-
-		COPY_CODES CheckStreams(const wchar_t *Src,const wchar_t *DestPath);
 
 		int  ShellCopyFile(const wchar_t *SrcName,const FAR_FIND_DATA_EX &SrcData,
 		                   FARString &strDestName,int Append);

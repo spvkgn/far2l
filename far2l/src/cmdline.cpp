@@ -53,6 +53,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interf.hpp"
 #include "syslog.hpp"
 #include "config.hpp"
+#include "ConfigSaveLoad.hpp"
 #include "usermenu.hpp"
 #include "datetime.hpp"
 #include "pathmix.hpp"
@@ -60,6 +61,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "keyboard.hpp"
 #include "vmenu.hpp"
+#include "CachedCreds.hpp"
 #include "exitcode.hpp"
 #include "vtlog.h"
 #include "vtshell.h"
@@ -70,7 +72,6 @@ CommandLine::CommandLine():
 	CmdStr(CtrlObject->Cp(),0,true,CtrlObject->CmdHistory,0,(Opt.CmdLine.AutoComplete?EditControl::EC_ENABLEAUTOCOMPLETE:0)|EditControl::EC_ENABLEFNCOMPLETE),
 	BackgroundScreen(nullptr),
 	LastCmdPartLength(-1),
-	LastKey(0),
 	PushDirStackSize(0)
 {
 	CmdStr.SetEditBeyondEnd(FALSE);
@@ -116,14 +117,19 @@ void CommandLine::DisplayObject()
 	SetColor(COL_COMMANDLINEPREFIX);
 	Text(strTruncDir);
 	CmdStr.SetObjectColor(COL_COMMANDLINE,COL_COMMANDLINESELECTED);
-
-	CmdStr.SetPosition(X1+(int)strTruncDir.GetLength(),Y1,X2,Y2);
+	CmdStr.SetPosition(X1+(int)strTruncDir.CellsCount(),Y1,X2,Y2);
 
 	CmdStr.Show();
 
+	DrawComboBoxMark(0x2191);
+}
+
+void CommandLine::DrawComboBoxMark(wchar_t MarkChar)
+{
+	wchar_t MarkWz[2] = {MarkChar, 0};
 	GotoXY(X2+1,Y1);
 	SetColor(COL_COMMANDLINEPREFIX);
-	Text(L"\x2191");
+	Text(MarkWz);
 }
 
 
@@ -154,10 +160,14 @@ int64_t CommandLine::VMProcess(int OpCode,void *vParam,int64_t iParam)
 	return 0;
 }
 
-void CommandLine::ProcessCompletion(bool possibilities)
+void CommandLine::ProcessTabCompletion()
 {
 	FARString strStr;
 	CmdStr.GetString(strStr);
+	// show all possibilities on double tab on same input string
+	const bool possibilities = !strLastCompletionCmdStr.IsEmpty() && strStr == strLastCompletionCmdStr;
+	strLastCompletionCmdStr = strStr;
+
 	if (!strStr.IsEmpty()) {
 		std::string cmd = strStr.GetMB();
 		VTCompletor vtc;		
@@ -202,15 +212,13 @@ int CommandLine::ProcessKey(int Key)
 	const wchar_t *PStr;
 	FARString strStr;
 
-	int SavedLastKey = LastKey;
-	
-	if ( Key!=KEY_NONE)
-		LastKey = Key;
-	
 	if ( Key==KEY_TAB || Key==KEY_SHIFTTAB) {
-		ProcessCompletion(SavedLastKey==Key);
+		ProcessTabCompletion();
 		return TRUE;
 	}
+
+	if (Key != KEY_NONE)
+		strLastCompletionCmdStr.Clear();
 	
 	if (Key == (KEY_MSWHEEL_UP | KEY_CTRL | KEY_SHIFT))
 	{
@@ -327,7 +335,7 @@ int CommandLine::ProcessKey(int Key)
 			return TRUE;
 		case KEY_F2:
 		{
-			UserMenu Menu(false);
+			UserMenu::Present(false);
 			return TRUE;
 		}
 		case KEY_ALTF8:
@@ -363,7 +371,7 @@ int CommandLine::ProcessKey(int Key)
 			Panel *ActivePanel=CtrlObject->Cp()->ActivePanel;
 			{
 				// TODO: здесь можно добавить проверку, что мы в корне диска и отсутствие файла Tree.Far...
-				FolderTree Tree(strStr,MODALTREE_ACTIVE,TRUE,FALSE);
+				FolderTree::Present(strStr,MODALTREE_ACTIVE,TRUE,FALSE);
 			}
 			CtrlObject->Cp()->RedrawKeyBar();
 
@@ -464,7 +472,7 @@ int CommandLine::ProcessKey(int Key)
 			if (!(Opt.ExcludeCmdHistory&EXCLUDECMDHISTORY_NOTCMDLINE) && !strStr.Begins(L' '))
 				CtrlObject->CmdHistory->AddToHistory(strStr);
 
-			ProcessOSAliases(strStr);
+			// ProcessOSAliases(strStr);
 
 			if (ActivePanel->ProcessPluginEvent(FE_COMMAND,(void *)strStr.CPtr())) {
 				FARString strCurDirFromPanel;
@@ -619,114 +627,133 @@ int CommandLine::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 
 void CommandLine::GetPrompt(FARString &strDestStr)
 {
+	FARString strExpandedFormatStr;
 	if (Opt.CmdLine.UsePromptFormat)
 	{
-		FARString strFormatStr, strExpandedFormatStr;
+		FARString strFormatStr;
 		strFormatStr = Opt.CmdLine.strPromptFormat;
 		apiExpandEnvironmentStrings(strFormatStr, strExpandedFormatStr);
-		const wchar_t *Format=strExpandedFormatStr;
-		wchar_t ChrFmt[][2]=
-		{
-			{L'A',L'&'},   // $A - & (Ampersand)
-			{L'B',L'|'},   // $B - | (pipe)
-			{L'C',L'('},   // $C - ( (Left parenthesis)
-			{L'F',L')'},   // $F - ) (Right parenthesis)
-			{L'G',L'>'},   // $G - > (greater-than sign)
-			{L'L',L'<'},   // $L - < (less-than sign)
-			{L'Q',L'='},   // $Q - = (equal sign)
-			{L'S',L' '},   // $S - (space)
-			{L'$',L'$'},   // $$ - $ (dollar sign)
-		};
 
-		while (*Format)
+	} else { // default prompt
+		strExpandedFormatStr = "$p$# ";
+	}
+
+	constexpr wchar_t ChrFmt[][2]=
+	{
+		{L'A',L'&'},   // $A - & (Ampersand)
+		{L'B',L'|'},   // $B - | (pipe)
+		{L'C',L'('},   // $C - ( (Left parenthesis)
+		{L'F',L')'},   // $F - ) (Right parenthesis)
+		{L'G',L'>'},   // $G - > (greater-than sign)
+		{L'L',L'<'},   // $L - < (less-than sign)
+		{L'Q',L'='},   // $Q - = (equal sign)
+		{L'S',L' '},   // $S - (space)
+		{L'$',L'$'},   // $$ - $ (dollar sign)
+	};
+
+	const wchar_t *Format=strExpandedFormatStr;
+	while (*Format)
+	{
+		if (*Format==L'$')
 		{
-			if (*Format==L'$')
+			wchar_t Chr=Upper(*++Format);
+			size_t I;
+
+			for (I=0; I < ARRAYSIZE(ChrFmt); ++I)
 			{
-				wchar_t Chr=Upper(*++Format);
-				size_t I;
-
-				for (I=0; I < ARRAYSIZE(ChrFmt); ++I)
+				if (ChrFmt[I][0] == Chr)
 				{
-					if (ChrFmt[I][0] == Chr)
+					strDestStr += ChrFmt[I][1];
+					break;
+				}
+			}
+
+			if (I == ARRAYSIZE(ChrFmt))
+			{
+				switch (Chr)
+				{
+						/* эти не раелизованы
+						$E - Escape code (ASCII code 27)
+						$V - Windows XP version number
+						$_ - Carriage return and linefeed
+						$M - Отображение полного имени удаленного диска, связанного с именем текущего диска, или пустой строки, если текущий диск не является сетевым.
+						*/
+					case L'+': // $+  - Отображение нужного числа знаков плюс (+) в зависимости от текущей глубины стека каталогов PUSHD, по одному знаку на каждый сохраненный путь.
 					{
-						strDestStr += ChrFmt[I][1];
+						if (PushDirStackSize)
+						{
+							strDestStr.Append(L'+', PushDirStackSize);
+						}
+
+						break;
+					}
+					case L'H': // $H - Backspace (erases previous character)
+					{
+						if (!strDestStr.IsEmpty())
+							strDestStr.Truncate(strDestStr.GetLength()-1);
+
+						break;
+					}
+					case L'@': // $@xx - Admin
+					{
+						wchar_t lb=*++Format;
+						wchar_t rb=*++Format;
+						if ( Opt.IsUserAdmin )
+						{
+							strDestStr += lb;
+							strDestStr += Msg::ConfigCmdlinePromptFormatAdmin;
+							strDestStr += rb;
+						}
+						break;
+					}
+					case L'D': // $D - Current date
+					case L'T': // $T - Current time
+					{
+						FARString strDateTime;
+						MkStrFTime(strDateTime,(Chr==L'D'?L"%D":L"%T"));
+						strDestStr += strDateTime;
+						break;
+					}
+					case L'R': // $R - Current drive and path, always full
+					{
+						strDestStr += strCurDir;
+						break;
+					}
+					case L'P': // $P - Current drive and path, shortened home
+					{
+						const auto &strHome = CachedHomeDir();
+						if (strCurDir.Begins(strHome)) {
+							strDestStr += L'~';
+							strDestStr += strCurDir.CPtr() + strHome.GetLength();
+						} else {
+							strDestStr += strCurDir;
+						}
+						break;
+					}
+					case L'#': // # or $ - depending of user root or not
+					{
+						strDestStr += Opt.IsUserAdmin ? L"#" : L"$";
+						break;
+					}
+					case L'U': // User name
+					{
+						strDestStr += CachedUserName();
+						break;
+					}
+					case L'N': // Host name
+					{
+						strDestStr += CachedComputerName();
 						break;
 					}
 				}
-
-				if (I == ARRAYSIZE(ChrFmt))
-				{
-					switch (Chr)
-					{
-							/* эти не раелизованы
-							$E - Escape code (ASCII code 27)
-							$V - Windows XP version number
-							$_ - Carriage return and linefeed
-							$M - Отображение полного имени удаленного диска, связанного с именем текущего диска, или пустой строки, если текущий диск не является сетевым.
-							*/
-						case L'+': // $+  - Отображение нужного числа знаков плюс (+) в зависимости от текущей глубины стека каталогов PUSHD, по одному знаку на каждый сохраненный путь.
-						{
-							if (PushDirStackSize)
-							{
-								wchar_t * p = strDestStr.GetBuffer(strDestStr.GetLength()+PushDirStackSize+1);
-								wmemset(p + strDestStr.GetLength(),L'+',PushDirStackSize);
-								strDestStr.ReleaseBuffer(strDestStr.GetLength()+PushDirStackSize);
-							}
-
-							break;
-						}
-						case L'H': // $H - Backspace (erases previous character)
-						{
-							if (!strDestStr.IsEmpty())
-								strDestStr.Truncate(strDestStr.GetLength()-1);
-
-							break;
-						}
-						case L'@': // $@xx - Admin
-						{
-							wchar_t lb=*++Format;
-							wchar_t rb=*++Format;
-							if ( Opt.IsUserAdmin )
-							{
-								strDestStr += lb;
-								strDestStr += Msg::ConfigCmdlinePromptFormatAdmin;
-								strDestStr += rb;
-							}
-							break;
-						}
-						case L'D': // $D - Current date
-						case L'T': // $T - Current time
-						{
-							FARString strDateTime;
-							MkStrFTime(strDateTime,(Chr==L'D'?L"%D":L"%T"));
-							strDestStr += strDateTime;
-							break;
-						}
-						case L'P': // $P - Current drive and path
-						{
-							strDestStr += strCurDir;
-							break;
-						}
-						case L'#': // # or $ - depending of user root or not
-						{
-							strDestStr += Opt.IsUserAdmin ? L"#" : L"$";
-							break;
-						}
-					}
-				}
-
-				Format++;
 			}
-			else
-			{
-				strDestStr += *(Format++);
-			}
+
+			Format++;
 		}
-	}
-	else // default prompt = "$p$# "
-	{
-		strDestStr = strCurDir;
-		strDestStr += Opt.IsUserAdmin ? L"# " : L"$ ";
+		else
+		{
+			strDestStr += *(Format++);
+		}
 	}
 }
 
@@ -843,6 +870,13 @@ void CommandLine::CorrectRealScreenCoord()
 
 void CommandLine::ResizeConsole()
 {
-	BackgroundScreen->Resize(ScrX+1,ScrY+1,2,Opt.WindowMode!=FALSE);
+	BackgroundScreen->Resize(ScrX+1,ScrY+1,2,FALSE);
 //  this->DisplayObject();
+}
+
+void CommandLine::RedrawWithoutComboBoxMark()
+{
+	Redraw();
+	// erase \x2191 character...
+	DrawComboBoxMark(L' ');
 }

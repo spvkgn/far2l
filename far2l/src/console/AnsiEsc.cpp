@@ -2,17 +2,17 @@
 #include "AnsiEsc.hpp"
 #include "interf.hpp"
 #include "colors.hpp"
+#include "VT256ColorTable.h"
 
 namespace AnsiEsc
 {
-
 #define FOREGROUND_BLACK 0
 #define FOREGROUND_WHITE FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_BLUE
 
 #define BACKGROUND_BLACK 0
 #define BACKGROUND_WHITE BACKGROUND_RED|BACKGROUND_GREEN|BACKGROUND_BLUE
 
-static const BYTE ForegroundColor[16] = {
+static const BYTE g_palette_foreground[16] = {
 	FOREGROUND_BLACK,			// black foreground
 	FOREGROUND_RED,			// red foreground
 	FOREGROUND_GREEN,			// green foreground
@@ -33,7 +33,7 @@ static const BYTE ForegroundColor[16] = {
 
 };
 
-static const BYTE BackgroundColor[16] = {
+static const BYTE g_palette_background[16] = {
 	BACKGROUND_BLACK,			// black background
 	BACKGROUND_RED,			// red background
 	BACKGROUND_GREEN,			// green background
@@ -54,7 +54,7 @@ static const BYTE BackgroundColor[16] = {
 };
 
 
-static const BYTE Attr2Ansi[8] = {	// map console attribute to ANSI number
+const BYTE Attr2Ansi[8] = {	// map console attribute to ANSI number
 	0,					// black
 	4,					// blue
 	2,					// green
@@ -65,7 +65,18 @@ static const BYTE Attr2Ansi[8] = {	// map console attribute to ANSI number
 	7					// white
 };
 
+BYTE ConsoleColorToAnsi(BYTE clr)
+{
+	return Attr2Ansi[clr & 7] | (clr & 8);
+}
+
+
 /////////////////
+
+FontState::FontState()
+{
+}
+
 void FontState::ParseSuffixM(const int *args, int argc)
 {
 	int argz = 0;
@@ -78,15 +89,19 @@ void FontState::ParseSuffixM(const int *args, int argc)
 		const int a = args[i];
 		if (30 <= a && a <= 37) {
 			foreground = a - 30;
+			use_rgb_foreground = false;
 
 		} else if (90 <= a && a <= 97) {
 			foreground = (a - 90) + 8;
+			use_rgb_foreground = false;
 
 		} else if (40 <= a && a <= 47) {
 			background = a - 40;
+			use_rgb_background = false;
 
 		} else if (100 <= a && a <= 107) {
 			background = (a - 100) + 8;
+			use_rgb_background = false;
 
 		} else if (a == 38 || a == 48) {
 			// This is technically incorrect, but it's what xterm does, so
@@ -94,11 +109,41 @@ void FontState::ParseSuffixM(const int *args, int argc)
 			// only one parameter, which is divided into elements.  So where
 			// xterm does "38;2;R;G;B" it should really be "38;2:I:R:G:B" (I is
 			// a colour space identifier).
-			if (i + 1 < argc) {
-				if (args[i + 1] == 2)		// rgb
-					i += 4;
-				else if (args[i + 1] == 5)	// index
-					i += 2;
+			DWORD rgb = (DWORD)-1;
+			if (i + 4 < argc && args[i + 1] == 2) {
+				rgb = args[i + 2] | (args[i + 3] << 8) | (args[i + 4] << 16);
+				i+= 4;
+
+			} else if (i + 2 < argc && args[i + 1] == 5) {
+				unsigned int color_index = args[i + 2];
+				if (color_index < 16) {
+					if (a == 38) {
+						foreground = (BYTE)color_index;
+						use_rgb_foreground = false;
+					} else {
+						background = (BYTE)color_index;
+						use_rgb_background = false;
+					}
+
+				} else if (color_index - 16 < VT_256COLOR_TABLE_COUNT) {
+					rgb = g_VT256ColorTable[color_index - 16];
+				}
+				i+= 2;
+
+			} else {
+				fprintf(stderr, "ParseSuffixM: bad RGB color\n");
+			}
+
+			if (rgb == (DWORD)-1) {
+				;// nothing
+
+			} else if (a == 38) {
+				use_rgb_foreground = true;
+				rgb_foreground = rgb;
+
+			} else {
+				use_rgb_background = true;
+				rgb_background = rgb;
 			}
 
 		} else switch (a) {
@@ -107,16 +152,20 @@ void FontState::ParseSuffixM(const int *args, int argc)
 			concealed = false;
 			bold = false;
 			underline = false;
+			strikeout = false;
 
 		case 39:
 		case 49: {
-			const BYTE def_attr = 7;//FOREGROUND_WHITE;
-			reverse = false;
+			rvideo = false;
 			if (a != 49) {
-				foreground = Attr2Ansi[def_attr & 15];
+				foreground = 7; // white
+				use_rgb_foreground = false;
+				rgb_foreground = 0;
 			}
 			if (a != 39) {
-				background = Attr2Ansi[(def_attr >> 4) & 15];
+				background = 0; // black
+				use_rgb_background = false;
+				rgb_background = 0;
 			}
 		} break;
 
@@ -126,12 +175,15 @@ void FontState::ParseSuffixM(const int *args, int argc)
 		case  5: // blink
 		case  4:
 			underline = true;
-				break;
+			break;
 		case  7:
 			rvideo    = 1;
 			break;
 		case  8:
 			concealed = 1;
+			break;
+		case  9:
+			strikeout = true;
 			break;
 		case 21: // oops, this actually turns on double underline
 			// but xterm turns off bold too, so that's alright
@@ -148,54 +200,72 @@ void FontState::ParseSuffixM(const int *args, int argc)
 		case 28:
 			concealed = 0;
 			break;
+		case 29:
+			strikeout = false;
+			break;
 		}
 	}
 }
 
-void FontState::FromConsoleAttributes(WORD wAttributes)
+void FontState::FromConsoleAttributes(DWORD64 qAttributes)
 {
-	bold = (wAttributes & FOREGROUND_INTENSITY) != 0;
-	underline = (wAttributes & BACKGROUND_INTENSITY) != 0;
-	foreground = Attr2Ansi[wAttributes & 7];
-	background = Attr2Ansi[(wAttributes >> 4) & 7];
+	bold = (qAttributes & FOREGROUND_INTENSITY) != 0;
+	underline = (qAttributes & COMMON_LVB_UNDERSCORE) != 0;
+	strikeout = (qAttributes & COMMON_LVB_STRIKEOUT) != 0;
+	rvideo = (qAttributes & COMMON_LVB_REVERSE_VIDEO) != 0;
+	foreground = Attr2Ansi[qAttributes & 7];
+	background = Attr2Ansi[(qAttributes >> 4) & 7];
+
+	use_rgb_foreground = (qAttributes & FOREGROUND_TRUECOLOR) != 0;
+	if (use_rgb_foreground) {
+		rgb_foreground = GET_RGB_FORE(qAttributes);
+	}
+
+	use_rgb_background = (qAttributes & BACKGROUND_TRUECOLOR) != 0;
+	if (use_rgb_background) {
+		rgb_background = GET_RGB_BACK(qAttributes);
+	}
 }
 
-WORD FontState::ToConsoleAttributes()
+DWORD64 FontState::ToConsoleAttributes()
 {
-	WORD attribut = 0;
+	DWORD64 attribut = 0;
 
 	if (concealed) {
-		if (rvideo) {
-			attribut = ForegroundColor[foreground] | BackgroundColor[foreground];
-			if (bold) {
-				attribut|= FOREGROUND_INTENSITY | BACKGROUND_INTENSITY;
-			}
-		} else {
-			attribut = ForegroundColor[background] | BackgroundColor[background];
-			if (underline) {
-				attribut|= FOREGROUND_INTENSITY | BACKGROUND_INTENSITY;
-			}
+		attribut = g_palette_foreground[background] | g_palette_background[background];
+
+		if (use_rgb_background) {
+			SET_RGB_BOTH(attribut, rgb_background, rgb_background);
 		}
-	} else if (rvideo) {
-		attribut = ForegroundColor[background] | BackgroundColor[foreground];
-		if (bold) {
-			attribut|= BACKGROUND_INTENSITY;
-		}
-		if (underline) {
-			attribut|= FOREGROUND_INTENSITY;
-		}
+
 	} else {
-		attribut = ForegroundColor[foreground] | BackgroundColor[background];
-		if (bold) {
-			attribut|= FOREGROUND_INTENSITY;
+		attribut = g_palette_foreground[foreground] | g_palette_background[background];
+
+		if (use_rgb_foreground) {
+			SET_RGB_FORE(attribut, rgb_foreground);
 		}
-		if (underline) {
-			attribut|= BACKGROUND_INTENSITY;
+
+		if (use_rgb_background) {
+			SET_RGB_BACK(attribut, rgb_background);
 		}
 	}
-	if (reverse) {
-		attribut = ((attribut >> 4) & 15) | ((attribut & 15) << 4);
+
+	if (bold) {
+		attribut|= FOREGROUND_INTENSITY;
 	}
+
+	if (rvideo) {
+		attribut|= COMMON_LVB_REVERSE_VIDEO;
+	}
+
+	if (underline) {
+		attribut|= COMMON_LVB_UNDERSCORE;
+	}
+
+	if (strikeout) {
+		attribut|= COMMON_LVB_STRIKEOUT;
+	}
+
 	return attribut;
 }
 
@@ -219,7 +289,7 @@ const wchar_t *Parser::Parse(const wchar_t *str)
 				}
 				a = 0;
 
-			} else if (i < 32 && str[i] >= '0' && str[i] <= '9') {
+			} else if (str[i] >= '0' && str[i] <= '9') {
 				a*= 10;
 				a+= str[i] - '0';
 

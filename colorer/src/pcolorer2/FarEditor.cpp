@@ -606,23 +606,21 @@ int FarEditor::editorEvent(int event, void *param)
 
     // fills back
     if (lno == ei.CurLine && showHorizontalCross){
-      if (!TrueMod){
-        addFARColor(lno, 0, ei.LeftPos + ei.WindowSizeX, horzCrossColor);
-      }
-      else{
-        addFARColor(lno, 0, ei.LeftPos + ei.WindowSizeX, convert(nullptr));
-      }
+      addFARColor(lno, 0, ei.LeftPos + ei.WindowSizeX, horzCrossColor);
     }
     else{
       addFARColor(lno, 0, ei.LeftPos + ei.WindowSizeX, convert(nullptr));
     }
 
-    if (showVerticalCross && !TrueMod){
+    if (showVerticalCross){
+      auto col = vertCrossColor;
       ecp_cl.StringNumber = lno;
       ecp_cl.SrcPos = ecp.DestPos;
       info->EditorControl(ECTL_TABTOREAL, &ecp_cl);
-      vertCrossColor.concolor |= 0x10000;
-      addFARColor(lno, ecp_cl.DestPos, ecp_cl.DestPos+1, vertCrossColor);
+      if (!TrueMod) {
+        col.concolor |= 0x10000;
+      }
+      addFARColor(lno, ecp_cl.DestPos, ecp_cl.DestPos+1, col);
     };
 
     bool vertCrossDone = false;
@@ -645,17 +643,22 @@ int FarEditor::editorEvent(int event, void *param)
         if ((lno != ei.CurLine || !showHorizontalCross || crossZOrder == 0)){
           color col = convert(l1->styled());
 
-          //TODO
           if (lno == ei.CurLine && showHorizontalCross){
-            if (!TrueMod){
               if (foreDefault(col)){
-                col.concolor = (col.concolor&0xF0) + (horzCrossColor.concolor&0xF);
+                if (!TrueMod){
+                  col.concolor = (col.concolor&0xF0) + (horzCrossColor.concolor&0xF);
+                } else {
+                  col.fg = horzCrossColor.fg;
+                }
               }
 
               if (backDefault(col)){
-                col.concolor = (col.concolor&0xF) + (horzCrossColor.concolor&0xF0);
+                if (!TrueMod){
+                  col.concolor = (col.concolor&0xF) + (horzCrossColor.concolor&0xF0);
+                } else {
+                  col.bk = horzCrossColor.bk;
+                }
               }
-            }
           };
           if (!col.concolor){
             continue;
@@ -675,29 +678,44 @@ int FarEditor::editorEvent(int event, void *param)
           };
 
           // column
-          if (!TrueMod && showVerticalCross && crossZOrder == 0 && l1->start <= ecp_cl.DestPos && ecp_cl.DestPos < lend){
+          if (showVerticalCross && crossZOrder == 0 && l1->start <= ecp_cl.DestPos && ecp_cl.DestPos < lend){
             col = convert(l1->styled());
 
+            if (foreDefault(col)) {
+              if (!TrueMod){
+                col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
+              } else {
+                col.fg = horzCrossColor.fg;
+              }
+            }
 
-            if (foreDefault(col)) col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
-
-            if (backDefault(col)) col.concolor = (col.concolor&0xF) + (vertCrossColor.concolor&0xF0);
+            if (backDefault(col)) {
+              if (!TrueMod){
+                col.concolor = (col.concolor&0xF) + (vertCrossColor.concolor&0xF0);
+              } else {
+                col.bk = horzCrossColor.bk;
+              }
+            }
 
             ecp_cl.StringNumber = lno;
             ecp_cl.SrcPos = ecp.DestPos;
             info->EditorControl(ECTL_TABTOREAL, &ecp_cl);
-            col.concolor|=0x10000;
+            if (!TrueMod) {
+              col.concolor|=0x10000;
+            }
             addFARColor(lno, ecp_cl.DestPos, ecp_cl.DestPos+1, col);
             vertCrossDone = true;
           };
         };
       };
     };
-    if (!TrueMod && showVerticalCross && !vertCrossDone){
+    if (showVerticalCross && !vertCrossDone){
       ecp_cl.StringNumber = lno;
       ecp_cl.SrcPos = ecp.DestPos;
       info->EditorControl(ECTL_TABTOREAL, &ecp_cl);
-      vertCrossColor.concolor |= 0x10000;
+      if (!TrueMod) {
+        vertCrossColor.concolor |= 0x10000;
+      }
       addFARColor(lno, ecp_cl.DestPos, ecp_cl.DestPos+1, vertCrossColor);
     };
   };
@@ -712,29 +730,44 @@ int FarEditor::editorEvent(int event, void *param)
   if (pm != nullptr){
     color col = convert(pm->start->styled());
 
-    // TODO
-    if (!TrueMod && showHorizontalCross){
+    if (showHorizontalCross){
       if (foreDefault(col)){ 
-        col.concolor = (col.concolor&0xF0) + (horzCrossColor.concolor&0xF);
+        if (!TrueMod) {
+          col.concolor = (col.concolor&0xF0) + (horzCrossColor.concolor&0xF);
+        } else {
+          col.fg = horzCrossColor.fg;
+        }
       }
 
       if (backDefault(col)){
-        col.concolor = (col.concolor&0xF) + (horzCrossColor.concolor&0xF0);
+        if (!TrueMod) {
+          col.concolor = (col.concolor&0xF) + (horzCrossColor.concolor&0xF0);
+        } else {
+          col.bk = horzCrossColor.bk;
+        }
       }
     };
     //
     addFARColor(ei.CurLine, pm->start->start, pm->start->end, col);
 
     // TODO
-    if (!TrueMod && showVerticalCross && !showHorizontalCross && pm->start->start <= ei.CurPos && ei.CurPos < pm->start->end){
+    if (showVerticalCross && !showHorizontalCross && pm->start->start <= ei.CurPos && ei.CurPos < pm->start->end){
       col = convert(pm->start->styled());
 
       if (foreDefault(col)){
-        col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
+        if (!TrueMod) {
+          col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
+        } else {
+          col.fg = vertCrossColor.fg;
+        }
       }
 
       if (backDefault(col)){
-        col.concolor = (col.concolor&0xF) + (vertCrossColor.concolor&0xF0);
+        if (!TrueMod) {
+          col.concolor = (col.concolor&0xF) + (vertCrossColor.concolor&0xF0);
+        } else {
+          col.bk = vertCrossColor.bk;
+        }
       }
 
       col.concolor|=0x10000;
@@ -745,13 +778,21 @@ int FarEditor::editorEvent(int event, void *param)
       col = convert(pm->end->styled());
 
       //
-      if (!TrueMod && showHorizontalCross && pm->eline == ei.CurLine){
+      if (showHorizontalCross && pm->eline == ei.CurLine){
         if (foreDefault(col)){
-          col.concolor = (col.concolor&0xF0) + (horzCrossColor.concolor&0xF);
+          if (!TrueMod) {
+            col.concolor = (col.concolor&0xF0) + (horzCrossColor.concolor&0xF);
+          } else {
+            col.fg = horzCrossColor.fg;
+          }
         }
 
         if (backDefault(col)){
-          col.concolor = (col.concolor&0xF) + (horzCrossColor.concolor&0xF0);
+          if (!TrueMod) {
+            col.concolor = (col.concolor&0xF) + (horzCrossColor.concolor&0xF0);
+          } else {
+            col.bk = horzCrossColor.bk;
+          }
         }
       };
       //
@@ -761,15 +802,23 @@ int FarEditor::editorEvent(int event, void *param)
       info->EditorControl(ECTL_TABTOREAL, &ecp);
 
       //
-      if (!TrueMod && showVerticalCross && pm->end->start <= ecp.DestPos && ecp.DestPos < pm->end->end){
+      if (showVerticalCross && pm->end->start <= ecp.DestPos && ecp.DestPos < pm->end->end){
         col = convert(pm->end->styled());
 
         if (foreDefault(col)){
-          col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
+          if (!TrueMod) {
+            col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
+          } else {
+            col.fg = vertCrossColor.fg;
+          }
         }
 
         if (backDefault(col)){
-          col.concolor = (col.concolor&0xF) + (vertCrossColor.concolor&0xF0);
+          if (!TrueMod) {
+            col.concolor = (col.concolor&0xF0) + (vertCrossColor.concolor&0xF);
+          } else {
+            col.bk = vertCrossColor.bk;
+          }
         }
         
         col.concolor|=0x10000;
@@ -857,7 +906,7 @@ void FarEditor::showOutliner(Outliner *outliner)
         wchar_t * menuItem = new wchar_t[255];
 
         if (!oldOutline){
-          int si = swprintf(menuItem, 255, L"%4d ", item->lno+1);
+          int si = swprintf(menuItem, 255, L"%4ld ", item->lno+1);
 
           for (int lIdx = 0; lIdx < treeLevel; lIdx++){
             menuItem[si++] = ' ';
@@ -1249,12 +1298,57 @@ bool FarEditor::backDefault(color col)
 void FarEditor::addFARColor(int lno, int s, int e, color col)
 {
   if (TrueMod){
+/*
     AnnotationInfo ai;
     ai.fg_color = ((col.fg>>16)&0xFF) + (col.fg&0x00FF00) + ((col.fg&0xFF)<<16);
     ai.bk_color = ((col.bk>>16)&0xFF) + (col.bk&0x00FF00) + ((col.bk&0xFF)<<16);
     ai.bk_valid = ai.fg_valid = 1;
     ai.style = col.style;
     addAnnotation(lno, s, e, ai);
+*/
+    EditorTrueColor ec{};
+    ec.Base.StringNumber = lno;
+    ec.Base.StartPos = s;
+    ec.Base.EndPos = e-1;
+	if (col.fg || col.bk) {
+      ec.TrueFore.R = ((col.fg >> 16) & 0xFF);
+      ec.TrueFore.G = ((col.fg >> 8) & 0xFF);
+      ec.TrueFore.B = ((col.fg) & 0xFF);
+      ec.TrueFore.Flags = 1;
+      ec.TrueBack.R = ((col.bk >> 16) & 0xFF);
+      ec.TrueBack.G = ((col.bk >> 8) & 0xFF);
+      ec.TrueBack.B = ((col.bk) & 0xFF);
+      ec.TrueBack.Flags = 1;
+
+      if (ec.TrueFore.R > 0x10) ec.Base.Color|= FOREGROUND_RED;
+      if (ec.TrueFore.G > 0x10) ec.Base.Color|= FOREGROUND_GREEN;
+      if (ec.TrueFore.B > 0x10) ec.Base.Color|= FOREGROUND_BLUE;
+
+      if (ec.TrueBack.R > 0x10) ec.Base.Color|= BACKGROUND_RED;
+      if (ec.TrueBack.G > 0x10) ec.Base.Color|= BACKGROUND_GREEN;
+      if (ec.TrueBack.B > 0x10) ec.Base.Color|= BACKGROUND_BLUE;
+
+      if (ec.TrueFore.R > 0x80 || ec.TrueFore.G > 0x80 || ec.TrueFore.B > 0x80) {
+        ec.Base.Color = FOREGROUND_INTENSITY;
+      }
+      if (ec.Base.Color == 0 || ec.TrueBack.R > 0x80 || ec.TrueBack.G > 0x80 || ec.TrueBack.B > 0x80) {
+        ec.Base.Color = BACKGROUND_INTENSITY;
+      }
+      if (col.style & AI_STYLE_UNDERLINE) {
+        ec.Base.Color|= COMMON_LVB_UNDERSCORE;
+      }
+      if (col.style & AI_STYLE_STRIKEOUT) {
+        ec.Base.Color|= COMMON_LVB_STRIKEOUT;
+      }
+	}
+
+#if 0
+    CLR_TRACE("FarEditor", "line:%d, %d-%d, color:%x", lno, s, e, col);
+#endif // if 0
+    info->EditorControl(ECTL_ADDTRUECOLOR, &ec);
+#if 0
+    CLR_TRACE("FarEditor", "line %d: %d-%d: color=%x", lno, s, e, col);
+#endif // if 0
   }else{
     EditorColor ec;
     ec.StringNumber = lno;
@@ -1308,37 +1402,15 @@ void FarEditor::cleanEditor()
 }
 
 /* ***** BEGIN LICENSE BLOCK *****
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- *
- * The Original Code is the Colorer Library.
- *
- * The Initial Developer of the Original Code is
- * Cail Lomecb <cail@nm.ru>.
- * Portions created by the Initial Developer are Copyright (C) 1999-2005
- * the Initial Developer. All Rights Reserved.
- *
- * Contributor(s):
- *
- * Alternatively, the contents of this file may be used under the terms of
- * either the GNU General Public License Version 2 or later (the "GPL"), or
- * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
- * in which case the provisions of the GPL or the LGPL are applicable instead
- * of those above. If you wish to allow use of your version of this file only
- * under the terms of either the GPL or the LGPL, and not to allow others to
- * use your version of this file under the terms of the MPL, indicate your
- * decision by deleting the provisions above and replace them with the notice
- * and other provisions required by the GPL or the LGPL. If you do not delete
- * the provisions above, a recipient may use your version of this file under
- * the terms of any one of the MPL, the GPL or the LGPL.
- *
+ * Copyright (C) 1999-2009 Cail Lomecb <irusskih at gmail dot com>.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; If not, see <http://www.gnu.org/licenses/>.
  * ***** END LICENSE BLOCK ***** */

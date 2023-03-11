@@ -744,7 +744,7 @@ void Manager::ExitMainLoop(int Ask)
 		CloseFARMenu=TRUE;
 	};
 
-	if (!Ask || ((!Opt.Confirm.Exit || ConfirmExit()) && CtrlObject->Plugins.MayExitFar()))
+	if (!Ask || ((!Opt.Confirm.ExitEffective() || ConfirmExit()) && CtrlObject->Plugins.MayExitFar()))
 	{
 		/* $ 29.12.2000 IS
 		   + Проверяем, сохранены ли все измененные файлы. Если нет, то не выходим
@@ -862,56 +862,6 @@ int Manager::ProcessKey(DWORD Key)
 		{
 			switch (Key)
 			{
-				// <Удалить после появления макрофункции Scroll>
-				case KEY_CTRLALTUP:
-					if(Opt.WindowMode)
-					{
-						Console.ScrollWindow(-1);
-						return TRUE;
-					}
-					break;
-
-				case KEY_CTRLALTDOWN:
-					if(Opt.WindowMode)
-					{
-						Console.ScrollWindow(1);
-						return TRUE;
-					}
-					break;
-
-				case KEY_CTRLALTPGUP:
-					if(Opt.WindowMode)
-					{
-						Console.ScrollWindow(-ScrY);
-						return TRUE;
-					}
-					break;
-
-				case KEY_CTRLALTHOME:
-					if(Opt.WindowMode)
-					{
-						while(Console.ScrollWindow(-ScrY));
-						return TRUE;
-					}
-					break;
-
-				case KEY_CTRLALTPGDN:
-					if(Opt.WindowMode)
-					{
-						Console.ScrollWindow(ScrY);
-						return TRUE;
-					}
-					break;
-
-				case KEY_CTRLALTEND:
-					if(Opt.WindowMode)
-					{
-						while(Console.ScrollWindow(ScrY));
-						return TRUE;
-					}
-					break;
-				// </Удалить после появления макрофункции Scroll>
-
 				case KEY_CTRLW:
 					ShowProcessList();
 					return TRUE;
@@ -924,12 +874,12 @@ int Manager::ProcessKey(DWORD Key)
 				{
 					//_MANAGER(SysLog(1,"Manager::ProcessKey, KEY_ALTF9 pressed..."));
 					WINPORT(Sleep)(10);
-					SetVideoMode();
+					ToggleVideoMode();
 					WINPORT(Sleep)(10);
 
 					/* В процессе исполнения Alt-F9 (в нормальном режиме) в очередь
 					   консоли попадает WINDOW_BUFFER_SIZE_EVENT, формируется в
-					   ChangeVideoMode().
+					   ToggleVideoMode().
 					   В режиме исполнения макросов ЭТО не происходит по вполне понятным
 					   причинам.
 					*/
@@ -1795,20 +1745,31 @@ Frame* Manager::GetTopModal()
 
 /////////
 
-LockBottomFrame::LockBottomFrame()
-	: _frame(FrameManager ? FrameManager->GetBottomFrame() : nullptr)
+
+LockFrame::LockFrame(Frame *frame)
+	: _frame(frame), _refresh(false)
 {
 	if (_frame)
-	{
-		if (_frame->Locked())
-			_frame = nullptr;
-		else
-			_frame->Lock();
-	}
+		_frame->Lock();
 }
 
-LockBottomFrame::~LockBottomFrame()
+LockFrame::~LockFrame()
 {
 	if (_frame)
 		_frame->Unlock();
+
+	if (_refresh && FrameManager)
+		FrameManager->RefreshFrame(_frame);
+}
+
+///
+
+LockBottomFrame::LockBottomFrame()
+	: LockFrame(FrameManager ? FrameManager->GetBottomFrame() : nullptr)
+{
+}
+
+LockCurrentFrame::LockCurrentFrame()
+	: LockFrame(FrameManager ? FrameManager->GetCurrentFrame() : nullptr)
+{
 }

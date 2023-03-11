@@ -8,7 +8,7 @@
 ///   Something changed in code below.
 ///   "WinCompat.h" changed in a way affecting code below.
 ///   Behavior of backend's code changed in incompatible way.
-#define FAR2L_BACKEND_ABI_VERSION	0x01
+#define FAR2L_BACKEND_ABI_VERSION	0x04
 
 class IConsoleOutputBackend
 {
@@ -22,14 +22,17 @@ public:
 	virtual void OnConsoleOutputWindowMoved(bool absolute, COORD pos) = 0;
 	virtual COORD OnConsoleGetLargestWindowSize() = 0;
 	virtual void OnConsoleAdhocQuickEdit() = 0;
-	virtual DWORD OnConsoleSetTweaks(DWORD tweaks) = 0;
+	virtual DWORD64 OnConsoleSetTweaks(DWORD64 tweaks) = 0;
 	virtual void OnConsoleChangeFont() = 0;
+	virtual void OnConsoleSaveWindowState() = 0;
 	virtual void OnConsoleSetMaximized(bool maximized) = 0;
 	virtual void OnConsoleExit() = 0;
 	virtual bool OnConsoleIsActive() = 0;
 	virtual void OnConsoleDisplayNotification(const wchar_t *title, const wchar_t *text) = 0;
 	virtual bool OnConsoleBackgroundMode(bool TryEnterBackgroundMode) = 0;
 	virtual bool OnConsoleSetFKeyTitles(const char **titles) = 0;
+	virtual BYTE OnConsoleGetColorPalette() = 0;
+	virtual void OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK) = 0;
 };
 
 class IClipboardBackend
@@ -139,8 +142,8 @@ protected:
 public:
 	virtual void SetBackend(IConsoleOutputBackend *listener) = 0;
 
-	virtual void SetAttributes(USHORT attributes) = 0;
-	virtual USHORT GetAttributes() = 0;
+	virtual void SetAttributes(DWORD64 attributes) = 0;
+	virtual DWORD64 GetAttributes() = 0;
 	virtual void SetCursor(COORD pos) = 0;
 	virtual void SetCursor(UCHAR height, bool visible) = 0;
 	virtual COORD GetCursor() = 0;
@@ -166,7 +169,7 @@ public:
 	virtual size_t WriteString(const WCHAR *data, size_t count) = 0;
 	virtual size_t WriteStringAt(const WCHAR *data, size_t count, COORD &pos) = 0;
 	virtual size_t FillCharacterAt(WCHAR cCharacter, size_t count, COORD &pos) = 0;
-	virtual size_t FillAttributeAt(WORD wAttribute, size_t count, COORD &pos) = 0;
+	virtual size_t FillAttributeAt(DWORD64 qAttribute, size_t count, COORD &pos) = 0;
 	
 	virtual bool Scroll(const SMALL_RECT *lpScrollRectangle, const SMALL_RECT *lpClipRectangle, 
 				COORD dwDestinationOrigin, const CHAR_INFO *lpFill) = 0;
@@ -176,12 +179,17 @@ public:
 	virtual void SetScrollCallback(PCONSOLE_SCROLL_CALLBACK pCallback, PVOID pContext) = 0;
 	
 	virtual void AdhocQuickEdit() = 0;
-	virtual DWORD SetConsoleTweaks(DWORD tweaks) = 0;
+	virtual DWORD64 SetConsoleTweaks(DWORD64 tweaks) = 0;
 	virtual void ConsoleChangeFont() = 0;
+	virtual void ConsoleSaveWindowState() = 0;
 	virtual bool IsActive() = 0;
 	virtual void ConsoleDisplayNotification(const WCHAR *title, const WCHAR *text) = 0;
 	virtual bool ConsoleBackgroundMode(bool TryEnterBackgroundMode) = 0;
 	virtual bool SetFKeyTitles(const CHAR **titles) = 0;
+	virtual BYTE GetColorPalette() = 0;
+	virtual void OverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK) = 0;
+	virtual void RepaintsDeferStart() = 0;
+	virtual void RepaintsDeferFinish() = 0;
 
 	inline std::wstring GetTitle()
 	{

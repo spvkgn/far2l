@@ -167,19 +167,13 @@ void HostRemote::BusySet()
 
 void HostRemote::BusyReset()
 {
-	if (!_busy) {
-		fprintf(stderr, "HostRemote::BusyReset while not busy\n");
-		abort();
-	}
+	ASSERT_MSG(_busy, "not busy");
 	_busy = false;
 }
 
 void HostRemote::AssertNotBusy()
 {
-	if (_busy) {
-		fprintf(stderr, "HostRemote::AssertNotBusy while busy\n");
-		abort();
-	}
+	ASSERT_MSG(!_busy, "busy");
 }
 
 void HostRemote::CheckReady()
@@ -623,7 +617,7 @@ public:
 			_complete = true;
 			throw;
 		}
-  	}
+	}
 };
 
 std::shared_ptr<IDirectoryEnumer> HostRemote::DirectoryEnum(const std::string &path)

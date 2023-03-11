@@ -1,6 +1,7 @@
 #include <vector>
 #include <mutex>
 #include <wchar.h>
+#include <limits.h>
 #include "Globals.h"
 #include <utils.h>
 #include "SitesConfig.h"
@@ -34,8 +35,7 @@ public:
 	{
 		std::lock_guard<std::mutex> locker(_mutex);
 		if (!_all.emplace((void *)it, it).second) {
-			fprintf(stderr, "AllNetRocks - dup entry: %p\n", it);
-			abort();
+			ABORT_MSG("dup entry %p", it);
 		}
 	}
 
@@ -240,6 +240,9 @@ static bool PreprocessPathTokens(std::vector<std::string> &components)
 int PluginImpl::SetDirectory(const wchar_t *Dir, int OpMode)
 {
 	fprintf(stderr, "PluginImpl::SetDirectory('%ls', %d)\n", Dir, OpMode);
+	StackedDir sd;
+	StackedDirCapture(sd);
+
 	if (!_remote) {
 		if (_sites_cfg_location.Change(Wide2MB(Dir))) {
 			UpdatePathInfo();
@@ -253,9 +256,6 @@ int PluginImpl::SetDirectory(const wchar_t *Dir, int OpMode)
 	if (_location.server_kind == Location::SK_SITE) {
 		site_specification = SiteSpecification(StrWide2MB(_standalone_config), _location.server);
 	}
-
-	StackedDir sd;
-	StackedDirCapture(sd);
 
 	if (*Dir == L'/') {
 		DismissRemoteHost();
@@ -284,7 +284,8 @@ int PluginImpl::SetDirectory(const wchar_t *Dir, int OpMode)
 		GetItems gi(false);
 		for (const auto &item : gi) {
 			if ( (item.FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0
-			  && site_w == item.FindData.lpwszFileName) {
+				&& site_w == item.FindData.lpwszFileName)
+			{
 				ri.CurrentItem = ri.TopPanelItem = &item - &gi[0];
 				break;
 			}
@@ -588,18 +589,18 @@ int PluginImpl::MakeDirectory(const wchar_t **Name, int OpMode)
 
 	if (dir_name.empty()) {
 		fprintf(stderr, "NetRocks::MakeDirectory: cancel\n");
-		return FALSE;
+		return -1;
 	}
 
 	if (!_remote) {
 		if (!_sites_cfg_location.Make(dir_name)) {
-			return FALSE;
+			return 0;
 		}
 
 	} else {
 		OpMakeDirectory op(OpMode, _remote, CurrentSiteDir(true), dir_name);
 		if (!op.Do()) {
-			return FALSE;
+			return 0;
 		}
 
 		dir_name = op.DirName();
@@ -611,7 +612,7 @@ int PluginImpl::MakeDirectory(const wchar_t **Name, int OpMode)
 		*Name = _mk_dir;
 	}
 
-	return TRUE;;
+	return 1;
 }
 
 int PluginImpl::ProcessKey(int Key, unsigned int ControlState)
@@ -738,7 +739,8 @@ bool PluginImpl::ByKey_TryCrossload(bool mv)
 			}
 
 			for (const auto &item : gi) if ( (item.FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
-			  && wcscmp(item.FindData.lpwszFileName, L"..") != 0) {
+				&& wcscmp(item.FindData.lpwszFileName, L"..") != 0)
+			{
 				_sites_cfg_location.Transfer(sites_cfg_location, Wide2MB(item.FindData.lpwszFileName), mv);
 
 			} else if ( (item.FindData.dwFileAttributes & FILE_ATTRIBUTE_EXECUTABLE) != 0) {
@@ -787,20 +789,26 @@ bool PluginImpl::ByKey_TryEnterSelectedSite()
 	}
 
 	if ( (gfi->FindData.dwFileAttributes & FILE_ATTRIBUTE_EXECUTABLE) == 0) {
-         //&& wcscmp(gfi->FindData.lpwszFileName, G.GetMsgWide(MCreateSiteConnection)) == 0) {
+		//&& wcscmp(gfi->FindData.lpwszFileName, G.GetMsgWide(MCreateSiteConnection)) == 0) {
 		ByKey_EditSiteConnection(true);
-		return false;
-
+		return true;
 	}
 
+	StackedDir sd;
+	StackedDirCapture(sd);
 	bool out = SetDirectoryInternal(gfi->FindData.lpwszFileName, 0);
+	if (!out) {
+		StackedDirApply(sd);
+	}
 	UpdatePathInfo();
-	G.info.Control(PANEL_ACTIVE, FCTL_UPDATEPANEL, 0, 0);
-	G.info.Control(PANEL_ACTIVE, FCTL_CLEARSELECTION, 0, 0);
-	PanelRedrawInfo ri = {};
-	G.info.Control(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, (LONG_PTR)&ri);
+	if (out) {
+		G.info.Control(PANEL_ACTIVE, FCTL_UPDATEPANEL, 0, 0);
+		G.info.Control(PANEL_ACTIVE, FCTL_CLEARSELECTION, 0, 0);
+		PanelRedrawInfo ri = {};
+		G.info.Control(PANEL_ACTIVE, FCTL_REDRAWPANEL, 0, (LONG_PTR)&ri);
+	}
 
-	return out;
+	return true;
 }
 
 void PluginImpl::ByKey_EditAttributesSelected()
@@ -843,6 +851,8 @@ void PluginImpl::StackedDirCapture(StackedDir &sd)
 {
 	sd.remote = _remote;
 	sd.location = _location;
+	sd.sites_cfg_location = _sites_cfg_location;
+	sd.standalone_config = _standalone_config;
 }
 
 void PluginImpl::StackedDirApply(StackedDir &sd)
@@ -856,6 +866,8 @@ void PluginImpl::StackedDirApply(StackedDir &sd)
 		}
 	}
 	_location = sd.location;
+	_sites_cfg_location = sd.sites_cfg_location;
+	_standalone_config = sd.standalone_config;
 	UpdatePathInfo();
 }
 
@@ -873,7 +885,7 @@ int PluginImpl::ProcessEventCommand(const wchar_t *cmd)
 		StackedDirCapture(sd);
 
 		const std::wstring &dir = GetCommandArgument(cmd);
-		if (SetDirectoryInternal(dir.empty() ? L"~" : dir.c_str(), 0)) {
+		if ((!_remote && (dir.empty() || dir == L".")) || SetDirectoryInternal(dir.empty() ? L"~" : dir.c_str(), 0)) {
 			_dir_stack.emplace_back(sd);
 			FakeExec();
 		}
@@ -929,8 +941,9 @@ void PluginImpl::DismissRemoteHost()
 	g_conn_pool->Put(CurrentConnectionPoolId(), _remote);
 
 	if (_allow_remember_location_dir &&
-	  _location.server_kind == Location::SK_SITE
-	  && G.GetGlobalConfigBool("RememberDirectory", false) ) {
+		_location.server_kind == Location::SK_SITE
+		&& G.GetGlobalConfigBool("RememberDirectory", false))
+	{
 		SiteSpecification site_specification(StrWide2MB(_standalone_config), _location.server);
 		SitesConfig sc(site_specification.sites_cfg_location);
 		sc.SetDirectory(site_specification.site.c_str(), _location.ToString(false).c_str());

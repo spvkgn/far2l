@@ -39,7 +39,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <errno.h>
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__CYGWIN__)
 # include <sys/mount.h>
-#else
+#elif !defined(__HAIKU__)
 # include <sys/statfs.h>
 # include <sys/ioctl.h>
 # include <linux/fs.h>
@@ -68,7 +68,8 @@ static void TranslateFindFile(const WIN32_FIND_DATA &wfd, FAR_FIND_DATA_EX& Find
 	FindData.dwUnixMode = wfd.dwUnixMode;
 	FindData.nHardLinks = wfd.nHardLinks;
 	FindData.nBlockSize = wfd.nBlockSize;
-	FindData.strFileName = wfd.cFileName;
+
+	FindData.strFileName.CopyArray(wfd.cFileName);
 }
 
 FindFile::FindFile(LPCWSTR Object, bool ScanSymLink, DWORD WinPortFindFlags) :
@@ -115,7 +116,7 @@ bool FindFile::Get(FAR_FIND_DATA_EX& FindData)
 	if ((FindData.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) && FindData.strFileName.At(0) == L'.'
 		&& ((FindData.strFileName.At(1) == L'.' && !FindData.strFileName.At(2)) || !FindData.strFileName.At(1)))
 	{ // FIND_FILE_FLAG_NO_CUR_UP should handle this
-		abort();
+		ABORT();
 	}
 
 	return true;
@@ -477,7 +478,7 @@ bool apiExpandEnvironmentStrings(const wchar_t *src, FARString &strDest)
 BOOL apiGetVolumeInformation(
     const wchar_t *lpwszRootPathName,
     FARString *pVolumeName,
-    LPDWORD lpVolumeSerialNumber,
+    DWORD64 *lpVolumeSerialNumber,
     LPDWORD lpMaximumComponentLength,
     LPDWORD lpFileSystemFlags,
     FARString *pFileSystemName
@@ -646,11 +647,11 @@ int apiGetFileTypeByName(const wchar_t *Name)
 
 BOOL apiGetDiskSize(const wchar_t *Path,uint64_t *TotalSize, uint64_t *TotalFree, uint64_t *UserFree)
 {
-	struct statvfs s = {};
-	if (statvfs(Wide2MB(Path).c_str(), &s) != 0) {
+	struct statfs s = {};
+	if (statfs(Wide2MB(Path).c_str(), &s) != 0) {
 		return FALSE;
 	}
-	*TotalSize = *TotalFree = *UserFree = s.f_frsize;
+	*TotalSize = *TotalFree = *UserFree = s.f_bsize; //f_frsize
 	*TotalSize*= s.f_blocks;
 	*TotalFree*= s.f_bfree;
 	*UserFree*= s.f_bavail;
@@ -683,6 +684,24 @@ BOOL apiSetFileAttributes(LPCWSTR lpFileName,DWORD dwFileAttributes)
 		return TRUE;
 
 	return FALSE;
+}
+
+bool apiPathExists(LPCWSTR lpPathName)
+{
+	struct stat s{};
+	return sdc_lstat(Wide2MB(lpPathName).c_str(), &s) == 0;
+}
+
+bool apiPathIsDir(LPCWSTR lpPathName)
+{
+	struct stat s{};
+	return sdc_stat(Wide2MB(lpPathName).c_str(), &s) == 0 && S_ISDIR(s.st_mode);
+}
+
+bool apiPathIsFile(LPCWSTR lpPathName)
+{
+	struct stat s{};
+	return sdc_stat(Wide2MB(lpPathName).c_str(), &s) == 0 && S_ISREG(s.st_mode);
 }
 
 IUnmakeWritablePtr apiMakeWritable(LPCWSTR lpFileName)

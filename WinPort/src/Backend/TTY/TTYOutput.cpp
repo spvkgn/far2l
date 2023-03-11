@@ -12,32 +12,135 @@
 # include <sys/kbio.h>
 #endif
 #include <os_call.hpp>
+#include <VT256ColorTable.h>
+#include <utils.h>
+#include <TestPath.h>
 #include "TTYOutput.h"
 #include "FarTTY.h"
 #include "WideMB.h"
+#include "WinPort.h"
+#include "../WinPortRGB.h"
 
 #define ESC "\x1b"
 
-TTYOutput::Attributes::Attributes(WORD attributes) :
-	foreground_intensive( (attributes & FOREGROUND_INTENSITY) != 0),
-	background_intensive( (attributes & BACKGROUND_INTENSITY) != 0),
-	foreground(0), background(0)
+#define ATTRIBUTES_AFFECTING_BACKGROUND \
+	(BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED | BACKGROUND_INTENSITY | BACKGROUND_TRUECOLOR)
+
+TTYBasePalette::TTYBasePalette()
 {
-	if (attributes&FOREGROUND_RED) foreground|= 1;
-	if (attributes&FOREGROUND_GREEN) foreground|= 2;
-	if (attributes&FOREGROUND_BLUE) foreground|= 4;
-
-	if (attributes&BACKGROUND_RED) background|= 1;
-	if (attributes&BACKGROUND_GREEN) background|= 2;
-	if (attributes&BACKGROUND_BLUE) background|= 4;
-
+	for (size_t i = 0; i < BASE_PALETTE_SIZE; ++i) {
+		foreground[i] = (DWORD)-1;
+		background[i] = (DWORD)-1;
+	}
 }
 
-bool TTYOutput::Attributes::operator ==(const Attributes &attr) const
+void TTYOutput::TrueColors::AppendSuffix(std::string &out, DWORD rgb)
 {
-	return (foreground_intensive == attr.foreground_intensive
-		&& background_intensive == attr.background_intensive
-		&& foreground == attr.foreground && background == attr.background);
+	// first try to deduce 256-color palette index...
+	if (_colors256_lookup.empty()) {
+		static_assert(VT_256COLOR_TABLE_COUNT <= 0x100, "Too big VT_256COLOR_TABLE_COUNT");
+		for (size_t i = 0; i < VT_256COLOR_TABLE_COUNT; ++i) {
+			_colors256_lookup[g_VT256ColorTable[i]] = i;
+		}
+	}
+	char buf[64];
+	const auto &it = _colors256_lookup.find(rgb);
+	if (it != _colors256_lookup.end()) {
+		sprintf(buf, "5;%u;", ((unsigned int)it->second) + 16);
+	} else {
+		sprintf(buf, "2;%u;%u;%u;", rgb & 0xff, (rgb >> 8) & 0xff, (rgb >> 16) & 0xff);
+	}
+	out+= buf;
+}
+
+template <DWORD64 R, DWORD64 G, DWORD64 B>
+	static void AppendAnsiColorSuffix(std::string &out, DWORD64 attr)
+{
+	char ch = '0';
+	if (attr & R) ch+= 1;
+	if (attr & G) ch+= 2;
+	if (attr & B) ch+= 4;
+	out+= ch;
+	out+= ';';
+}
+
+void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
+{
+	const DWORD64 xa = _prev_attr_valid ? attr ^ _prev_attr : (DWORD64)-1;
+	if (xa == 0) {
+		return;
+	}
+	if (is_space && (xa & ATTRIBUTES_AFFECTING_BACKGROUND) == 0) {
+		if ((attr & BACKGROUND_TRUECOLOR) == 0 || GET_RGB_BACK(xa) == 0) {
+			if ( ((attr | _prev_attr) & (COMMON_LVB_REVERSE_VIDEO | COMMON_LVB_UNDERSCORE | COMMON_LVB_STRIKEOUT)) == 0) {
+				return;
+			}
+		}
+	}
+
+	_tmp_attrs = ESC "[";
+// wikipedia claims that colors 90-97 are nonstandard, so in case of some
+// terminal missing '90–97 Set bright foreground color' - use bold font
+	if (_kernel_tty && (xa & FOREGROUND_INTENSITY) != 0) {
+		_tmp_attrs+= (attr & FOREGROUND_INTENSITY) ? "1;" : "22;";
+	}
+
+	bool emit_tc_fore =
+		((attr & FOREGROUND_TRUECOLOR) != 0 && (GET_RGB_FORE(xa) != 0 || (xa & FOREGROUND_TRUECOLOR) != 0));
+
+	bool emit_tc_back =
+		((attr & BACKGROUND_TRUECOLOR) != 0 && (GET_RGB_BACK(xa) != 0 || (xa & BACKGROUND_TRUECOLOR) != 0));
+
+	if ( ((xa & (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)) != 0)
+	  || ((_prev_attr & FOREGROUND_TRUECOLOR) != 0 && (attr & FOREGROUND_TRUECOLOR) == 0) ) {
+		_tmp_attrs+= (attr & FOREGROUND_INTENSITY) ? '9' : '3';
+		AppendAnsiColorSuffix<FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE>(_tmp_attrs, attr);
+		if ((attr & FOREGROUND_TRUECOLOR) != 0) {
+			emit_tc_fore = true;
+		}
+	}
+
+	if ( ((xa & (BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED | BACKGROUND_INTENSITY)) != 0)
+	  || ((_prev_attr & BACKGROUND_TRUECOLOR) != 0 && (attr & BACKGROUND_TRUECOLOR) == 0) ) {
+		if (attr & BACKGROUND_INTENSITY) {
+			_tmp_attrs+= "10";
+		} else {
+			_tmp_attrs+= '4';
+		}
+		AppendAnsiColorSuffix<BACKGROUND_RED, BACKGROUND_GREEN, BACKGROUND_BLUE>(_tmp_attrs, attr);
+		if ((attr & BACKGROUND_TRUECOLOR) != 0) {
+			emit_tc_back = true;
+		}
+	}
+
+	if (emit_tc_fore) {
+		_tmp_attrs+= "38;";
+		_true_colors.AppendSuffix(_tmp_attrs, GET_RGB_FORE(attr));
+	}
+
+	if (emit_tc_back) {
+		_tmp_attrs+= "48;";
+		_true_colors.AppendSuffix(_tmp_attrs, GET_RGB_BACK(attr));
+	}
+
+	if ( (xa & COMMON_LVB_STRIKEOUT) != 0) {
+		_tmp_attrs+= (attr & COMMON_LVB_STRIKEOUT) ? "9;" : "29;";
+	}
+
+	if ( (xa & COMMON_LVB_UNDERSCORE) != 0) {
+		_tmp_attrs+= (attr & COMMON_LVB_UNDERSCORE) ? "4;" : "24;";
+	}
+
+	if ( (xa & COMMON_LVB_REVERSE_VIDEO) != 0) {
+		_tmp_attrs+= (attr & COMMON_LVB_REVERSE_VIDEO) ? "7;" : "27;";
+	}
+
+	assert(!_tmp_attrs.empty() && _tmp_attrs.back() == ';');
+	_tmp_attrs.back() = 'm';
+	_prev_attr = attr;
+	_prev_attr_valid = true;
+
+	Write(_tmp_attrs.c_str(), _tmp_attrs.size());
 }
 
 ///////////////////////
@@ -56,17 +159,18 @@ TTYOutput::TTYOutput(int out, bool far2l_tty)
 	}
 #endif
 
-	Format(ESC "7" ESC "[?47h" ESC "[?1049h");
+	Format(ESC "7" ESC "[?47h" ESC "[?1049h" ESC "[?2004h");
 	ChangeKeypad(true);
 	ChangeMouse(true);
 
 	if (far2l_tty) {
 		StackSerializer stk_ser;
-		stk_ser.PushPOD((uint64_t)(FARTTY_FEAT_COMPACT_INPUT));
-		stk_ser.PushPOD(FARTTY_INTERRACT_CHOOSE_EXTRA_FEATURES);
-		stk_ser.PushPOD((uint8_t)0); // zero ID means not expecting reply
+		stk_ser.PushNum((uint64_t)(FARTTY_FEAT_COMPACT_INPUT));
+		stk_ser.PushNum(FARTTY_INTERRACT_CHOOSE_EXTRA_FEATURES);
+		stk_ser.PushNum((uint8_t)0); // zero ID means not expecting reply
 		SendFar2lInterract(stk_ser);
 	}
+
 	Flush();
 }
 
@@ -79,10 +183,37 @@ TTYOutput::~TTYOutput()
 		if (!_kernel_tty) {
 			Format(ESC "[0 q");
 		}
-		Format(ESC "[0m" ESC "[?1049l" ESC "[?47l" ESC "8" "\r\n");
+		Format(ESC "[0m" ESC "[?1049l" ESC "[?47l" ESC "8" ESC "[?2004l" "\r\n");
+		TTYBasePalette def_palette;
+		ChangePalette(def_palette);
 		Flush();
 
 	} catch (std::exception &) {
+	}
+}
+
+void TTYOutput::ChangePalette(const TTYBasePalette &palette)
+{
+	for (size_t i = 0; i < BASE_PALETTE_SIZE; ++i) {
+		// Win <-> TTY color index adjustement
+		const unsigned int j = (((i) & 0b001) << 2 | ((i) & 0b100) >> 2 | ((i) & 0b1010));
+		if (_palette.background[i] != palette.background[i] || _palette.foreground[i] != palette.foreground[i]) {
+			_palette.background[i] = palette.background[i];
+			_palette.foreground[i] = palette.foreground[i];
+
+			if (palette.foreground[i] == (DWORD)-1 || palette.background[i] == (DWORD)-1) {
+				Format(ESC "]104;%d\a", j);
+				continue;
+			}
+
+			WinPortRGB fg(palette.foreground[i]), bk(palette.background[i]);
+
+			if (_far2l_tty) { // far2l may set separate foreground & background colors
+				Format(ESC "]4;%d;#%06x;#%06x\a", j, fg.AsBGR(), bk.AsBGR());
+			} else {
+				Format(ESC "]4;%d;#%06x\a", j, (i < 8) ? bk.AsBGR() : fg.AsBGR());
+			}
+		}
 	}
 }
 
@@ -217,9 +348,9 @@ void TTYOutput::ChangeCursorHeight(unsigned int height)
 {
 	if (_far2l_tty) {
 		StackSerializer stk_ser;
-		stk_ser.PushPOD(UCHAR(height));
-		stk_ser.PushPOD(FARTTY_INTERRACT_SET_CURSOR_HEIGHT);
-		stk_ser.PushPOD((uint8_t)0); // zero ID means not expecting reply
+		stk_ser.PushNum(UCHAR(height));
+		stk_ser.PushNum(FARTTY_INTERRACT_SET_CURSOR_HEIGHT);
+		stk_ser.PushNum((uint8_t)0); // zero ID means not expecting reply
 		SendFar2lInterract(stk_ser);
 
 	} else if (_kernel_tty) {
@@ -304,49 +435,34 @@ int TTYOutput::WeightOfHorizontalMoveCursor(unsigned int y, unsigned int x) cons
 	return 6;
 }
 
+static inline bool ShouldPrintWCharAsSpace(wchar_t wc)
+{ // avoid writing control and invalid chars to TTY
+	return wc <= 0x20
+			|| (wc >= 0x7f && wc < 0xa0)
+			|| !WCHAR_IS_VALID(wc);
+}
+
 void TTYOutput::WriteLine(const CHAR_INFO *ci, unsigned int cnt)
 {
-	std::string tmp;
-	for (;cnt; ++ci,--cnt) {
-		const bool is_space = (ci->Char.UnicodeChar <= 0x20
-			|| (ci->Char.UnicodeChar >= 0x7f && ci->Char.UnicodeChar < 0xa0)
-			|| !WCHAR_IS_VALID(ci->Char.UnicodeChar));
+	for (;cnt; ++ci,--cnt, ++_cursor.x) if (ci->Char.UnicodeChar) {
+		const wchar_t *comp_seq = CI_USING_COMPOSITE_CHAR(*ci)
+			? WINPORT(CompositeCharLookup)(ci->Char.UnicodeChar) : nullptr;
 
-		Attributes attr(ci->Attributes);
-		if (_attr != attr && (!is_space || _attr.background != attr.background
-				|| _attr.background_intensive != attr.background_intensive) ) {
+		const bool is_space = ShouldPrintWCharAsSpace(comp_seq ? *comp_seq : ci->Char.UnicodeChar);
 
-			tmp = ESC "[";
-// wikipedia claims that colors 90-97 are nonstandard, so in case of some
-// terminal missing '90–97 Set bright foreground color' - use bold font
-			if (_kernel_tty && _attr.foreground_intensive != attr.foreground_intensive)
-				tmp+= attr.foreground_intensive ? "1;" : "22;";
+		WriteUpdatedAttributes(ci->Attributes, is_space);
 
-			if (_attr.foreground != attr.foreground
-			 || _attr.foreground_intensive != attr.foreground_intensive) {
-				tmp+= attr.foreground_intensive ? '9' : '3';
-				tmp+= '0' + attr.foreground;
-				tmp+= ';';
+		if (is_space) {
+			WriteWChar(L' ');
+
+		} else if (comp_seq) {
+			for (; *comp_seq; ++comp_seq) {
+				WriteWChar(*comp_seq);
 			}
 
-			if (_attr.background != attr.background
-			 || _attr.background_intensive != attr.background_intensive) {
-				if (attr.background_intensive) {
-					tmp+= "10";
-				} else
-					tmp+= '4';
-				tmp+= '0' + attr.background;
-				tmp+= ';';
-			}
-			assert(tmp[tmp.size() - 1] == ';');
-			tmp[tmp.size() - 1] = 'm';
-			Write(tmp.c_str(), tmp.size());
-
-			_attr = attr;
+		} else {
+			WriteWChar(ci->Char.UnicodeChar);
 		}
-
-		WriteWChar(is_space ? L' ' : ci->Char.UnicodeChar);
-		++_cursor.x;
 	}
 }
 
@@ -376,5 +492,13 @@ void TTYOutput::SendFar2lInterract(const StackSerializer &stk_ser)
 	request+= stk_ser.ToBase64();
 	request+= '\x07';
 
+	Write(request.c_str(), request.size());
+}
+
+void TTYOutput::SendOSC52ClipSet(const std::string &clip_data)
+{
+	std::string request = ESC "]52;;";
+	base64_encode(request, (const unsigned char *)clip_data.data(), clip_data.size());
+	request+= '\a';
 	Write(request.c_str(), request.size());
 }

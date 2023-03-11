@@ -17,6 +17,7 @@ src/ConsoleBuffer.cpp
 src/ConsoleInput.cpp
 src/ConsoleOutput.cpp
 src/WinPortHandle.cpp
+src/CustomPanic.cpp
 src/PathHelpers.cpp
 src/SavedScreen.cpp
 src/sudo/sudo_common.cpp
@@ -26,6 +27,7 @@ src/sudo/sudo_dispatcher.cpp
 src/sudo/sudo_askpass.cpp
 src/sudo/sudo_askpass_ipc.cpp
 src/Backend/WinPortMain.cpp
+src/Backend/WinPortRGB.cpp
 src/Backend/SudoAskpassImpl.cpp
 src/Backend/FSClipboardBackend.cpp
 src/Backend/TTY/TTYBackend.cpp
@@ -34,12 +36,12 @@ src/Backend/TTY/TTYInput.cpp
 src/Backend/TTY/TTYInputSequenceParser.cpp
 src/Backend/TTY/TTYOutput.cpp
 src/Backend/TTY/TTYFar2lClipboardBackend.cpp
+src/Backend/TTY/OSC52ClipboardBackend.cpp
 src/Backend/TTY/TTYNegotiateFar2l.cpp
 src/Backend/TTY/TTYXGlue.cpp
-src/Backend/TTY/IsUnstableWidthChar.cpp
 )
 
-add_library (WinPort ${SOURCES})
+add_library (WinPort STATIC ${SOURCES})
 
 target_include_directories(WinPort PRIVATE .)
 target_include_directories(WinPort PRIVATE src)
@@ -49,8 +51,11 @@ target_link_libraries(WinPort wineguts utils)
 
 find_package(Threads REQUIRED)
 if(THREADS_HAVE_PTHREAD_ARG)
-  target_compile_options(WinPort PUBLIC "-pthread")
+    target_compile_options(WinPort PUBLIC "-pthread")
 endif()
 if(CMAKE_THREAD_LIBS_INIT)
-  target_link_libraries(WinPort "${CMAKE_THREAD_LIBS_INIT}")
+    target_link_libraries(WinPort "${CMAKE_THREAD_LIBS_INIT}")
+endif()
+if(${CMAKE_SYSTEM_NAME} MATCHES "Haiku")
+    target_link_libraries(WinPort root)
 endif()
