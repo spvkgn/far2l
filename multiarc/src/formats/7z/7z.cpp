@@ -256,6 +256,18 @@ BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,
 	if( IsTarHeader(Data, DataSize) )
 		return FALSE;
 
+	// linux tar.gz tar.z tar.bz tar.xz format more powerfull
+	if( DataSize >= 2 ) {
+		if (Data[0]==0x1f && Data[1]==0x8b)
+			return FALSE; // GZ_FORMAT
+		else if (Data[0]==0x1f && Data[1]==0x9d)
+			return FALSE; // Z_FORMAT;
+		else if (Data[0]=='B' && Data[1]=='Z')
+			return FALSE; // BZ_FORMAT;
+		else if (DataSize>=6 && memcmp(Data, "\xFD\x37\x7A\x58\x5A\x00", 6) == 0)
+			return FALSE; // XZ_FORMAT;
+	}
+
 	// deb not fully supported 
 	const char *dot=(const char *)strrchr((char*)Name,'.');
 	if( dot!=NULL && (strcasecmp(dot,".deb")==0) )
