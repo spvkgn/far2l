@@ -252,13 +252,8 @@ static Traverser *s_selected_traverser = NULL;
 
 BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,int DataSize)
 {
-	if(s_selected_traverser ) {
-		if ( s_selected_traverser->IsSameFile(Name))
+	if( s_selected_traverser && s_selected_traverser->IsSameFile(Name) )
 			return TRUE;
-		delete s_selected_traverser;
-		s_selected_traverser = NULL;
-	}
-
 
 	// linux tar format more powerfull
 	if( IsTarHeader(Data, DataSize) )
