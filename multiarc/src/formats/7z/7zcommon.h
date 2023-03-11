@@ -14,3 +14,4 @@ uint64_t GetPackSize7z(void * _context, unsigned int _index);
 uint32_t GetCRC7z(void * _context, unsigned int _index);
 void GetCTime7z(void * _context, unsigned int _index, FILETIME & ftc);
 void GetMTime7z(void * _context, unsigned int _index, FILETIME & ftm);
+void PasswordError(const wchar_t * info);

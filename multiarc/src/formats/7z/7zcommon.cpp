@@ -123,7 +123,7 @@ public:
     Password.Empty();
   }
 
-  virtual ~COpenCallbackFar2l() {}
+  virtual ~COpenCallbackFar2l() {};
   
   void Init(const wchar_t * archive)
   {
@@ -216,7 +216,9 @@ void * OpenFile7z(const wchar_t *path, bool & passwordIsDefined)
 	openCallbackFar2l.Init(path);
 	HRESULT res = arcLink->Open_Strict(options, &openCallbackFar2l);
 	if( res != S_OK) {
-                Z_LOG("... arcLink->Open_Strict(%S) result 0x%08X\n", options.filePath.Ptr(), res);
+		Z_LOG("... arcLink->Open_Strict(%S) result 0x%08X PasswordIsDefined %d\n", options.filePath.Ptr(), res, openCallbackFar2l.PasswordIsDefined);
+		if( openCallbackFar2l.PasswordIsDefined )
+			PasswordError(options.filePath.Ptr());
 		return nullptr;
 	}
 
@@ -372,9 +374,4 @@ void GetMTime7z(void * _context, unsigned int _index, FILETIME & ftm)
 	if(GetCPropVariant(_context, _index, kpidMTime, prop) && prop.vt == VT_FILETIME)
 		ftm = prop.filetime;
 	return;
-}
-
-extern "C" int sevenz_main(int numargs, char *args[])
-{
-	return Main2(numargs, args);
 }

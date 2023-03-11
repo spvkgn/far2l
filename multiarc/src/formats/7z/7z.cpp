@@ -51,11 +51,9 @@ struct PluginStartupInfo   gInfo;
 
 class Traverser
 {
-	std::wstring _tmp_str;
 	unsigned int _index;
 	bool _valid, _passwordIsDefined;
 	void * _context;
-	static char ArchPassword[512];
 	struct stat _archStat;
 
 	bool GetFileStat(const char *path, struct stat * fileStat)
@@ -74,9 +72,8 @@ public:
 	{
 		if( !GetFileStat(path, &_archStat) )
 			return;
-		memset(ArchPassword, 0, sizeof(ArchPassword));
-                std::wstring dst;
-                MB2Wide(path, dst);
+        std::wstring dst;
+        MB2Wide(path, dst);
 		_context = OpenFile7z(dst.c_str(), _passwordIsDefined);
 		if ( _context != nullptr )
 			_valid = true;
@@ -99,7 +96,6 @@ public:
 	~Traverser()
 	{
 		if (_context) {
-			memset(ArchPassword, 0, sizeof(ArchPassword));
 			CloseFile7z(_context);
 			_context = nullptr;
 		}
@@ -141,6 +137,7 @@ public:
 		uint64_t packed_size = 0;
 		DWORD crc32 = 0;
 		FILETIME ftm = {}, ftc = {};
+		std::wstring _tmp_str;
 
 		is_dir = IsDir7z(_context, _index);
 		if ( !GetName7z(_context, _index, _tmp_str) )
@@ -190,18 +187,24 @@ public:
 };
 
 ///////////////////////////////////
-char Traverser::ArchPassword[512];
 int WINAPI GetPassword(char *Password,const char *FileName);
 std::wstring CryptoGetTextPassword(const wchar_t * archive)
 {
 	std::wstring pass;
-	if( !Traverser::ArchPassword[0] ) {
-		const std::string &title = StrWide2MB(std::wstring(archive));
-		if( !GetPassword(Traverser::ArchPassword,title.c_str()) )
-			return pass;
-	}
-	pass = MB2Wide(Traverser::ArchPassword);
+	char password[512];
+	const std::string &title = StrWide2MB(std::wstring(archive));
+	if( !GetPassword(password,title.c_str()) )
+		return pass;
+	pass = MB2Wide(password);
 	return pass;
+}
+
+void PasswordError(const wchar_t * info)
+{
+	const std::string &path = StrWide2MB(std::wstring(info));
+	const char *msgItems[] = {GetMsg(MAddPswNotMatch), path.c_str()};
+	gInfo.Message(gInfo.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, msgItems, ARRAYSIZE(msgItems), 0);
+	return;
 }
 
 ///////////////////////////////////
@@ -249,8 +252,13 @@ static Traverser *s_selected_traverser = NULL;
 
 BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,int DataSize)
 {
-	if(s_selected_traverser && s_selected_traverser->IsSameFile(Name))
-		return TRUE;
+	if(s_selected_traverser ) {
+		if ( s_selected_traverser->IsSameFile(Name))
+			return TRUE;
+		delete s_selected_traverser;
+		s_selected_traverser = NULL;
+	}
+
 
 	// linux tar format more powerfull
 	if( IsTarHeader(Data, DataSize) )
@@ -276,11 +284,14 @@ BOOL WINAPI _export SEVENZ_IsArchive(const char *Name,const unsigned char *Data,
 	Traverser *t = new Traverser(Name);
 	if (!t->Valid()) {
 		delete t;
-		s_selected_traverser = NULL;
 		return FALSE;
 	}
 
-	delete s_selected_traverser;
+	if(s_selected_traverser ) {
+		delete s_selected_traverser;
+		s_selected_traverser = NULL;
+	}
+
 	s_selected_traverser = t;
 	return TRUE;
 }
@@ -332,7 +343,7 @@ BOOL WINAPI _export SEVENZ_GetDefaultCommands(int Type,int Command,char *Dest)
   if (Type==0)
   {
     static const char *Commands[]={
-    /*Extract               */"^7z x -snld %%A %%FMq*4096",
+    /*Extract               */"^7z x -snld {-p%%P} %%A %%FMq*4096",
     /*Extract without paths */"^7z e -snld {-p%%P} %%A %%FMq*4096",
     /*Test                  */"^7z t %%A",
     /*Delete                */"^7z d {-p%%P} %%A @%%LN",
@@ -355,4 +366,9 @@ BOOL WINAPI _export SEVENZ_GetDefaultCommands(int Type,int Command,char *Dest)
     }
   }
   return(FALSE);
+}
+
+extern "C" int sevenz_main(int numargs, char *args[])
+{
+	return Main2(numargs, args);
 }
