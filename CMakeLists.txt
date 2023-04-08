@@ -1,8 +1,8 @@
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
-
 cmake_minimum_required (VERSION 3.0.2)
 
 project (far2l)
+
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 
 set(APP_NAME "far2l")
 set(APP_IDENTIFIER "com.far2l")
@@ -15,14 +15,14 @@ set(ColorRed "${Esc}[1;31m")
 include(GNUInstallDirs)
 
 # just to force reconfigure if packaging/version changed
-configure_file(${CMAKE_SOURCE_DIR}/packaging/version ${CMAKE_BINARY_DIR}/packaging/version @ONLY)
+configure_file(${PROJECT_SOURCE_DIR}/packaging/version ${CMAKE_BINARY_DIR}/packaging/version @ONLY)
 
 # reconfigure in case .git directory changed to update version correctly
-IF(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/.git)
+IF(EXISTS ${PROJECT_SOURCE_DIR}/.git)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/.git)
 endif()
 
-file(READ "${CMAKE_SOURCE_DIR}/packaging/version" VERSION)
+file(READ "${PROJECT_SOURCE_DIR}/packaging/version" VERSION)
 string(REGEX REPLACE "[\r\n\t ]$" "" VERSION "${VERSION}")
 string(REGEX REPLACE "^([0-9]+)\\..*" "\\1" VERSION_MAJOR "${VERSION}")
 string(REGEX REPLACE "^[0-9]+\\.([0-9]+).*" "\\1" VERSION_MINOR "${VERSION}")
@@ -38,7 +38,7 @@ find_package(Git)
 
 if(GIT_FOUND)
     execute_process(COMMAND "${GIT_EXECUTABLE}" describe --tag
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
         OUTPUT_VARIABLE GIT_TAG
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
@@ -46,7 +46,7 @@ endif()
 if(NOT "${GIT_TAG}" STREQUAL "v_${VERSION}")
     if(GIT_FOUND)
         execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
             OUTPUT_VARIABLE GIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
     endif()

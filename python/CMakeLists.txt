@@ -33,6 +33,8 @@ add_custom_command(TARGET python POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_BINARY_DIR}/far2lcffi.py" "${INSTALL_DIR}/Plugins/python/plug/far2l"
 )
 
+get_directory_property(PROJECT_SOURCE_DIR DIRECTORY ../ DEFINITION PROJECT_SOURCE_DIR)
+
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/far2lcffi.py
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/pythongen.py
     DEPENDS ../far2l/far2sdk/farplug-wide.h
@@ -41,5 +43,5 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/far2lcffi.py
     DEPENDS ../WinPort/windows.h
     DEPENDS ../WinPort/WinCompat.h
     DEPENDS ../WinPort/WinPort.h
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/src/prebuild.sh "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${PYTHON3}" "${CMAKE_C_COMPILER} ${CMAKE_C_FLAGS}"
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/src/prebuild.sh "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${PYTHON3}" "${CMAKE_C_COMPILER} ${CMAKE_C_FLAGS}"
 )
