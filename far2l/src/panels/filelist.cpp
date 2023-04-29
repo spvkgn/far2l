@@ -1718,15 +1718,11 @@ int FileList::ProcessKey(int Key)
 		case KEY_SHIFTF7: {
 
 			if (!wcscmp(WinPortBackend(), L"GUI")) {
+			
+				CurPtr = ListData[CurFile];
+				FARString strFileName = CurPtr->strName;
 
-				Panel *CurrentPanel = CtrlObject->Cp()->GetAnotherPanel(this);
-
-				if (CurrentPanel->GetType() == FILE_PANEL) {
-					FileList *CurrentFilePanel = (FileList *)CurrentPanel;
-					WINPORT(WinPortViewImg)(
-						CurrentFilePanel->ListData[CurrentFilePanel->CurFile]->strName.GetMB().c_str()
-					);
-				}
+				WINPORT(WinPortViewImg)(strFileName.GetMB().c_str());
 			}
 
 			return TRUE;
