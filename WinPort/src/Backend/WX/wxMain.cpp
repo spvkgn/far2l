@@ -1768,40 +1768,124 @@ void WinPortPanel::OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *Co
 
 class ImgFrame : public wxFrame {
 public:
-    ImgFrame(const wxString &title, const wxSize &size);
+	ImgFrame(const wxString &title, const wxSize &size);
 	void OnPaint(wxPaintEvent &event);
 	void OnPanelKeyDown(wxKeyEvent &event);
 
-    wxImage img;
-    wxBitmap bmp;
-    wxPanel *panel;
+	int degree = 0;
+	int brightness = 0;
+	int contrast = 0;
+	std::string path;
+	wxImage img;
+	wxBitmap bmp;
+	wxPanel *panel;
 };
 
 ImgFrame::ImgFrame(const wxString &title, const wxSize &size) : wxFrame(NULL, wxID_ANY, title, wxDefaultPosition, size, wxBORDER_NONE | wxSTAY_ON_TOP) {
-    panel = new wxPanel(this, wxID_ANY);
-    Connect(wxEVT_PAINT, wxPaintEventHandler(ImgFrame::OnPaint));
-    panel->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(ImgFrame::OnPanelKeyDown), NULL, this);
+	panel = new wxPanel(this, wxID_ANY);
+	Connect(wxEVT_PAINT, wxPaintEventHandler(ImgFrame::OnPaint));
+	panel->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(ImgFrame::OnPanelKeyDown), NULL, this);
 }
 
 void ImgFrame::OnPanelKeyDown(wxKeyEvent &event) {
-    Close(true);
+
+	char c[256];
+	char filename[] = "/tmp/far2l_temp.bmp";
+	int res;
+
+	if (
+		(event.GetKeyCode() == WXK_RIGHT) || (event.GetKeyCode() == WXK_LEFT) ||
+		(event.GetKeyCode() == WXK_UP) || (event.GetKeyCode() == WXK_DOWN)
+	) {
+
+		wxDisplay display;
+		wxRect screenRect = display.GetGeometry();
+
+		if (event.GetKeyCode() == WXK_RIGHT) {
+			degree += 90;
+		} else if (event.GetKeyCode() == WXK_LEFT) {
+			degree -= 90;
+		} else if ((event.GetKeyCode() == WXK_UP) && !event.ShiftDown()) {
+			brightness += 10;
+		} else if ((event.GetKeyCode() == WXK_DOWN) && !event.ShiftDown()) {
+			brightness -= 10;
+		} else if ((event.GetKeyCode() == WXK_UP) && event.ShiftDown()) {
+			contrast += 10;
+		} else if ((event.GetKeyCode() == WXK_DOWN) && event.ShiftDown()) {
+			contrast -= 10;
+		}
+
+		if (degree == 360) { degree = 0; }
+		if (degree == -360) { degree = 0; }
+
+		int res;
+		sprintf(c, "rm -rf \"%s\"", filename);
+		res = system(c);
+		fprintf(stderr, "res: %i \n", res);
+
+		sprintf(c, "convert \"%s\" -auto-orient -rotate %i -resize %ix%i\\> -brightness-contrast %ix%i \"%s\"",
+			path.c_str(), degree, screenRect.width, screenRect.height, brightness, contrast, filename);
+		fprintf(stderr, "c: %s \n", c);
+		res = system(c);
+		fprintf(stderr, "res: %i \n", res);
+
+		wxString filePath = filename;
+		img.LoadFile(filePath, wxBITMAP_TYPE_BMP);
+		bmp = wxBitmap(img);
+		SetSize(img.GetSize());
+
+		wxPaintDC dc(this);
+		dc.DrawBitmap(bmp, 0, 0, false);
+
+		Centre();
+		Refresh();
+
+	} else if (!event.RawControlDown() && !event.ShiftDown() &&
+		!event.MetaDown() && !event.AltDown() && !event.CmdDown()) {
+
+		sprintf(c, "rm -rf \"%s\"", filename);
+		res = system(c);
+		fprintf(stderr, "res: %i \n", res);
+
+		Close(true);
+	}
 }
 
 void ImgFrame::OnPaint(wxPaintEvent &event) {
-    wxPaintDC dc(this);
-    dc.DrawBitmap(bmp, 0, 0, false);
+	wxPaintDC dc(this);
+	dc.DrawBitmap(bmp, 0, 0, false);
 }
 
 void WinPortPanel::OnWinPortViewImg(const char *path)
 {
 #if defined (__HASX11__)
 
+	bool hasConvert = true;
+	FILE *fp;
+	char result[1024];
+	fp = popen("which convert", "r");
+	if (fp == NULL) {
+		hasConvert = false;
+	}
+	if (fgets(result, sizeof(result) - 1, fp) == NULL) {
+		hasConvert = false;
+	}
+	pclose(fp);
+	if (strstr(result, "/") == NULL) {
+		hasConvert = false;
+	}
+	if (!hasConvert) {
+		wxMessageBox(wxT("\"convert\" tool not found. You probably need to install imagemagick."),
+			wxT("Error"), wxOK | wxICON_ERROR);
+		return;
+	}
+
 	char filename[] = "/tmp/far2l_temp.bmp";
 
-    wxInitAllImageHandlers();
+	wxInitAllImageHandlers();
 
-    wxDisplay display;
-    wxRect screenRect = display.GetGeometry();
+	wxDisplay display;
+	wxRect screenRect = display.GetGeometry();
 
 	char c[256];
 
@@ -1810,23 +1894,25 @@ void WinPortPanel::OnWinPortViewImg(const char *path)
 	res = system(c);
 	fprintf(stderr, "res: %i \n", res);
 
-	sprintf(c, "convert \"%s\" -resize %ix%i\\> %s", path, screenRect.width, screenRect.height, filename);
+	sprintf(c, "convert \"%s\" -auto-orient -resize %ix%i\\> \"%s\"", path, screenRect.width, screenRect.height, filename);
 	res = system(c);
 	fprintf(stderr, "res: %i \n", res);
 
-    wxString filePath = filename;
+	wxString filePath = filename;
 	ImgFrame *frame = new ImgFrame("Image Viewer", wxDefaultSize);
-    frame->img.LoadFile(filePath, wxBITMAP_TYPE_BMP);
-    frame->bmp = wxBitmap(frame->img);
-    frame->SetSize(frame->img.GetSize());
-    frame->Centre();
-    frame->Raise();
-    frame->SetFocus();
-    frame->Show(true);
+	frame->path = path;
+	frame->img.LoadFile(filePath, wxBITMAP_TYPE_BMP);
+	frame->bmp = wxBitmap(frame->img);
+	frame->SetSize(frame->img.GetSize());
+	frame->Centre();
+	frame->Raise();
+	frame->SetFocus();
+	frame->Show(true);
 
-	sprintf(c, "rm -rf \"%s\"", filename);
-	res = system(c);
-	fprintf(stderr, "res: %i \n", res);
+	return;
 
 #endif
+	wxMessageBox(wxT("far2l is built without X11 libs, image viewer not available."),
+		wxT("Error"), wxOK | wxICON_ERROR);
+	return;
 }
