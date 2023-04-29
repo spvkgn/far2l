@@ -1781,11 +1781,13 @@ void WinPortPanel::OnWinPortViewImg(const char *path)
 	int screen_width = DisplayWidth(display, screen);
 	int screen_height = DisplayHeight(display, screen);
 
+	char c[256];
+
 	int res;
-	res = system("rm -rf far2l_temp.xpm");
+	sprintf(c, "rm -rf \"%s\"", filename);
+	res = system(c);
 	fprintf(stderr, "res: %i \n", res);
 
-	char c[256];
 	sprintf(c, "convert \"%s\" -resize %ix%i\\> %s", path, screen_width, screen_height, filename);
 	res = system(c);
 	fprintf(stderr, "res: %i \n", res);
@@ -1849,6 +1851,8 @@ void WinPortPanel::OnWinPortViewImg(const char *path)
 	XDestroyWindow(display, window);
 	XCloseDisplay(display);
 
-	res = system("rm -rf far2l_temp.xpm");
+	sprintf(c, "rm -rf \"%s\"", filename);
+	res = system(c);
+	fprintf(stderr, "res: %i \n", res);
 }
 
