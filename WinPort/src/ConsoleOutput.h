@@ -115,4 +115,6 @@ public:
 	virtual void OverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK);
 	virtual void RepaintsDeferStart();
 	virtual void RepaintsDeferFinish();
+
+	virtual void WinPortViewImg(const char *path);
 };

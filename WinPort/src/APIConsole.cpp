@@ -433,4 +433,9 @@ extern "C" {
 		}
 		return s_composite_chars.id2str[id];
 	}
+
+	WINPORT_DECL(WinPortViewImg, VOID, (const char *path))
+	{
+		g_winport_con_out->WinPortViewImg(path);
+	}
 }

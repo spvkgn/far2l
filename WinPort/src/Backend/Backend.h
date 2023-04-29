@@ -8,7 +8,7 @@
 ///   Something changed in code below.
 ///   "WinCompat.h" changed in a way affecting code below.
 ///   Behavior of backend's code changed in incompatible way.
-#define FAR2L_BACKEND_ABI_VERSION	0x05
+#define FAR2L_BACKEND_ABI_VERSION	0x06
 
 class IConsoleOutputBackend
 {
@@ -33,6 +33,7 @@ public:
 	virtual bool OnConsoleSetFKeyTitles(const char **titles) = 0;
 	virtual BYTE OnConsoleGetColorPalette() = 0;
 	virtual void OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK) = 0;
+	virtual void OnWinPortViewImg(const char *path) = 0;
 };
 
 class IClipboardBackend
@@ -191,6 +192,7 @@ public:
 	virtual void OverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK) = 0;
 	virtual void RepaintsDeferStart() = 0;
 	virtual void RepaintsDeferFinish() = 0;
+	virtual void WinPortViewImg(const char *path) = 0;
 
 	inline std::wstring GetTitle()
 	{

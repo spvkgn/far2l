@@ -783,3 +783,8 @@ void ConsoleOutput::Unlock()
 	_mutex.unlock();
 }
 
+void ConsoleOutput::WinPortViewImg(const char *path)
+{
+	if (_backend)
+		_backend->OnWinPortViewImg(path);
+}

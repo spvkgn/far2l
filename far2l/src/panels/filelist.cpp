@@ -1715,6 +1715,22 @@ int FileList::ProcessKey(int Key)
 
 			return TRUE;
 		}
+		case KEY_SHIFTF7: {
+
+			if (!wcscmp(WinPortBackend(), L"GUI")) {
+
+				Panel *CurrentPanel = CtrlObject->Cp()->GetAnotherPanel(this);
+
+				if (CurrentPanel->GetType() == FILE_PANEL) {
+					FileList *CurrentFilePanel = (FileList *)CurrentPanel;
+					WINPORT(WinPortViewImg)(
+						CurrentFilePanel->ListData[CurrentFilePanel->CurFile]->strName.GetMB().c_str()
+					);
+				}
+			}
+
+			return TRUE;
+		}
 		case KEY_F8:
 		case KEY_SHIFTDEL:
 		case KEY_SHIFTF8:

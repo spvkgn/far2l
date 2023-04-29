@@ -21,6 +21,8 @@ extern "C" {
 	void WinPortHelp();
 	const wchar_t *WinPortBackend();
 
+	WINPORT_DECL(WinPortViewImg, VOID, (const char *path));
+
 	///console API
 	WINPORT_DECL(GetLargestConsoleWindowSize,COORD,(HANDLE hConsoleOutput));
 	WINPORT_DECL(SetConsoleWindowInfo,BOOL,(HANDLE hConsoleOutput, BOOL bAbsolute, const SMALL_RECT *lpConsoleWindow));

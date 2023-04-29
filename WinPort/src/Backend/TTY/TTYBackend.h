@@ -132,6 +132,8 @@ protected:
 	virtual BYTE OnConsoleGetColorPalette();
 	virtual void OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK);
 
+	virtual void OnWinPortViewImg(const char *path);
+
 	// ITTYInputSpecialSequenceHandler
 	virtual void OnInspectKeyEvent(KEY_EVENT_RECORD &event);
 	virtual void OnFar2lEvent(StackSerializer &stk_ser);

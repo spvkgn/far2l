@@ -1,5 +1,13 @@
 #include "wxMain.h"
 
+#if defined (__HASX11__)
+//#include <stdio.h>
+//#include <stdlib.h>
+#include <unistd.h>
+#include <X11/Xlib.h>
+#include <X11/xpm.h>
+#endif
+
 #define AREAS_REDUCTION
 
 #define TIMER_ID     10
@@ -1751,3 +1759,96 @@ void WinPortPanel::OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *Co
 	auto fn = std::bind(&ConsoleOverrideColorInMain, Index, ColorFG, ColorBK);
 	CallInMainNoRet(fn);
 }
+
+void WinPortPanel::OnWinPortViewImg(const char *path)
+{
+
+	Display *display;
+	Window window;
+	XEvent event;
+	int screen;
+
+	display = XOpenDisplay(NULL);
+	if (display == NULL) {
+		fprintf(stderr, "Cannot open display\n");
+		return;
+	}
+
+	screen = DefaultScreen(display);
+
+	char filename[] = "/tmp/far2l_temp.xpm";
+
+	int screen_width = DisplayWidth(display, screen);
+	int screen_height = DisplayHeight(display, screen);
+
+	int res;
+	res = system("rm -rf far2l_temp.xpm");
+	fprintf(stderr, "res: %i \n", res);
+
+	char c[256];
+	sprintf(c, "convert \"%s\" -resize %ix%i\\> %s", path, screen_width, screen_height, filename);
+	res = system(c);
+	fprintf(stderr, "res: %i \n", res);
+
+	// Загрузка XPM-изображения из файла
+	XpmAttributes attributes_xpm;
+	Pixmap pixmap;
+	    	
+	int result = XpmReadFileToPixmap(display, DefaultRootWindow(display),
+		filename, &pixmap, NULL, &attributes_xpm);
+
+	if (result != XpmSuccess) {
+		fprintf(stderr, "Error loading XPM image from file: %s\n", filename);
+		return;
+	}
+
+	// Создание окна с размерами, соответствующими размерам изображения
+	window = XCreateSimpleWindow(display, RootWindow(display, screen),
+		0, 0, attributes_xpm.width, attributes_xpm.height, 1,
+		BlackPixel(display, screen), WhitePixel(display, screen));
+
+	XSetWindowAttributes attributes;
+	attributes.override_redirect = True;
+	XChangeWindowAttributes(display, window, CWOverrideRedirect, &attributes);
+
+	Atom atom_window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+	Atom atom_window_type_dock = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+	XChangeProperty(display, window, atom_window_type, 4, 32, PropModeReplace,
+		(unsigned char *) &atom_window_type_dock, 1);
+
+	XSelectInput(display, window, ExposureMask | KeyPressMask | FocusChangeMask);
+	XMapRaised(display, window);
+
+	// Устанавливаем фокус ввода на окно и ждем небольшую задержку
+	XSetInputFocus(display, window, RevertToParent, CurrentTime);
+	usleep(100000);
+
+	// Вывод изображения в окне
+	GC gc = XCreateGC(display, window, 0, NULL);
+	XCopyArea(display, pixmap, window, gc, 0, 0, attributes_xpm.width, attributes_xpm.height, 0, 0);
+	XFreeGC(display, gc);
+
+	while (1) {
+		XNextEvent(display, &event);
+
+		if (event.type == Expose) {
+			XCopyArea(display, pixmap, window, DefaultGC(display, screen), 0, 0,
+				attributes_xpm.width, attributes_xpm.height, 0, 0);
+		}
+
+		if (event.type == KeyPress) {
+			break;
+		}
+
+		if (event.type == FocusOut) {
+			XSetInputFocus(display, window, RevertToParent, CurrentTime);
+		}
+	}
+
+	XFreePixmap(display, pixmap);
+	XDestroyWindow(display, window);
+	XCloseDisplay(display);
+
+	res = system("rm -rf far2l_temp.xpm");
+}
+

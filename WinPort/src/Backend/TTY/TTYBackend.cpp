@@ -1179,3 +1179,8 @@ bool WinPortMainTTY(const char *full_exe_path, int std_in, int std_out, const ch
 
 	return true;
 }
+
+void TTYBackend::OnWinPortViewImg(const char *path)
+{
+}
+
