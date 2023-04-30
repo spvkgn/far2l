@@ -1715,18 +1715,6 @@ int FileList::ProcessKey(int Key)
 
 			return TRUE;
 		}
-		case KEY_SHIFTF7: {
-
-			if (!wcscmp(WinPortBackend(), L"GUI")) {
-			
-				CurPtr = ListData[CurFile];
-				FARString strFileName = CurPtr->strName;
-
-				WINPORT(WinPortViewImg)(strFileName.GetMB().c_str());
-			}
-
-			return TRUE;
-		}
 		case KEY_F8:
 		case KEY_SHIFTDEL:
 		case KEY_SHIFTF8:
@@ -2056,6 +2044,17 @@ int FileList::ProcessKey(int Key)
 		case KEY_CTRLNUMPAD3:
 			ProcessEnter(0, 0, !(Key & KEY_SHIFT), false, OFP_ALTERNATIVE);
 			return TRUE;
+
+		case KEY_ALTPGDN: {
+			if (!wcscmp(WinPortBackend(), L"GUI")) {
+
+				CurPtr = ListData[CurFile];
+				FARString strFileName = CurPtr->strName;
+
+				WINPORT(WinPortViewImg)(strFileName.GetMB().c_str());
+			}
+			return TRUE;
+		}
 
 		default:
 			if (((Key >= KEY_ALT_BASE + 0x01 && Key <= KEY_ALT_BASE + 65535)
