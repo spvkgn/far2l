@@ -79,6 +79,7 @@ bool VTCompletor::EnsureStarted()
 		dup2(pipe_out[1], STDERR_FILENO);
 		CheckedCloseFDPair(pipe_in);
 		CheckedCloseFDPair(pipe_out);
+		setsid();
 		execlp("bash", "bash", "--noprofile", "-i",  NULL);
 		perror("execlp");
 		_exit(0);
@@ -277,10 +278,20 @@ bool VTCompletor::GetPossibilities(const std::string &cmd, std::vector<std::stri
 	}
 
 	std::sort(possibilities.begin(), possibilities.end());
+	const size_t last_a_slash_pos = last_a.rfind('/');
+	const size_t args_orig_begin_slash_pos = cmd.find('/', args.back().orig_begin);
 
 	for (auto &possibility : possibilities) {
 		if (!whole_next_arg && StrStartsFrom(possibility, last_a.c_str())) {
 			possibility.insert(0, cmd.substr(0, args.back().orig_begin));
+
+		} else if (!whole_next_arg && last_a_slash_pos != std::string::npos
+				&& args_orig_begin_slash_pos != std::string::npos
+				&& last_a_slash_pos + 1 < last_a.size()
+				&& StrStartsFrom(possibility, last_a.substr(last_a_slash_pos + 1).c_str())) {
+			// #1660
+			possibility.insert(0, cmd.substr(0, args_orig_begin_slash_pos + 1));
+
 		} else {
 			possibility.insert(0, cmd);
 		}
