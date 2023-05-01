@@ -79,11 +79,6 @@ if(X11_FOUND)
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__HASX11__")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D__HASX11__")
-
-    if(NOT X11_Xpm_LIB)
-        message(FATAL_ERROR "Xpm library not found")
-    endif()
-    target_link_libraries(far2l_gui ${X11_Xpm_LIB})
 endif()
 
 set_target_properties(far2l_gui
