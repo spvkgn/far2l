@@ -191,15 +191,6 @@ if (NOT DEFINED USEUCD)
     set(USEUCD "YES")
 endif()
 
-find_package(X11)
-if(X11_FOUND)
-    link_directories(${X11_LIBRARIES})
-    include_directories(${X11_INCLUDE_DIR})
-
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__HASX11__")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D__HASX11__")
-endif()
-
 if (NOT USEUCD)
     message(STATUS "Building without libuchardet due to USEUCD=${USEUCD}")
 else()
@@ -256,7 +247,6 @@ else()
     target_link_libraries(far2l
     PRIVATE ${WINPORT}
         PRIVATE dl
-        PRIVATE ${X11_LIBRARIES}
         PRIVATE ${UCHARDET_LIBRARIES})
 endif()
 
