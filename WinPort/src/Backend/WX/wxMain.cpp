@@ -1,5 +1,9 @@
 #include "wxMain.h"
 
+#if defined (__HASX11__)
+#include <X11/Xlib.h>
+#endif
+
 #define AREAS_REDUCTION
 
 #define TIMER_ID     10
