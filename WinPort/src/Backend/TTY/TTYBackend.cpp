@@ -169,18 +169,41 @@ bool TTYBackend::Startup()
 	return true;
 }
 
+static wchar_t s_backend_identification[8] = L"TTY";
+
+static void AppendBackendIdentificationChar(char ch)
+{
+	const size_t l = wcslen(s_backend_identification);
+	if (l + 1 >= ARRAYSIZE(s_backend_identification)) {
+		abort();
+	}
+	s_backend_identification[l + 1] = 0;
+	s_backend_identification[l] = (unsigned char)ch;
+}
+
 void TTYBackend::UpdateBackendIdentification()
 {
-	if (_far2l_tty) {
-		g_winport_backend = L"TTY|F";
+	s_backend_identification[3] = 0;
 
-	} else if (_ttyx) {
-		g_winport_backend = _using_extension
-			? L"TTY|X+" : ( _ttyx->HasXi() ? L"TTY|Xi" : L"TTY|X" );
-
-	} else {
-		g_winport_backend = _using_extension ? L"TTY|+" : L"TTY";
+	if (_far2l_tty || _ttyx || _using_extension) {
+		AppendBackendIdentificationChar('|');
 	}
+
+	if (_far2l_tty) {
+		AppendBackendIdentificationChar('F');
+
+	} else if (_ttyx || _using_extension) {
+		if (_ttyx) {
+			AppendBackendIdentificationChar('X');
+		}
+		if (_using_extension) {
+			AppendBackendIdentificationChar(_using_extension);
+		} else if (_ttyx && _ttyx->HasXi()) {
+			AppendBackendIdentificationChar('i');
+		}
+	}
+
+	g_winport_backend = s_backend_identification;
 }
 
 void TTYBackend::ReaderThread()
@@ -228,6 +251,7 @@ void TTYBackend::ReaderThread()
 		} catch (const std::exception &e) {
 			fprintf(stderr, "ReaderLoop: %s <%d>\n", e.what(), errno);
 		}
+		OnUsingExtension(0);
 
 		OnInputBroken();
 
@@ -939,14 +963,17 @@ static void OnFar2lMouse(bool compact, StackSerializer &stk_ser)
 	}
 }
 
-void TTYBackend::OnInspectKeyEvent(KEY_EVENT_RECORD &event, char using_extension)
+void TTYBackend::OnUsingExtension(char extension)
 {
-	if (using_extension != _using_extension) {
-		_using_extension = using_extension;
+	if (_using_extension != extension) {
+		_using_extension = extension;
 		UpdateBackendIdentification();
 	}
+}
 
-	if (_ttyx && !using_extension) {
+void TTYBackend::OnInspectKeyEvent(KEY_EVENT_RECORD &event)
+{
+	if (_ttyx && !_using_extension) {
 		_ttyx->InspectKeyEvent(event);
 
 	} else {

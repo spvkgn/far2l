@@ -136,7 +136,8 @@ protected:
 	virtual void OnWinPortViewImg(const char *path);
 
 	// ITTYInputSpecialSequenceHandler
-	virtual void OnInspectKeyEvent(KEY_EVENT_RECORD &event, char using_extension);
+	virtual void OnUsingExtension(char extension);
+	virtual void OnInspectKeyEvent(KEY_EVENT_RECORD &event);
 	virtual void OnFar2lEvent(StackSerializer &stk_ser);
 	virtual void OnFar2lReply(StackSerializer &stk_ser);
 	virtual void OnInputBroken();

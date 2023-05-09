@@ -2610,15 +2610,15 @@ upd:"Administrator"
 
 ConfigAutoCompleteTitle
 l:
-"Настройка автозавершения"
-"AutoComplete settings"
-upd:"AutoComplete settings"
-upd:"AutoComplete settings"
-upd:"AutoComplete settings"
-upd:"AutoComplete settings"
-"Opciones de autocompletar"
-"Налаштування автозавершення"
-"Налады самазавяршэння"
+"Настройка автозавершения и истории"
+"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+"Opciones de autocompletar e historial"
+"Налаштування автозавершення та історії"
+"Налады самазавяршэння і гістарычных"
 
 ConfigAutoCompleteExceptions
 l:
@@ -13913,15 +13913,15 @@ upd:"Command line settings"
 "Налады &каманднага радка"
 
 MenuAutoCompleteSettings
-"На&стройки автозавершения"
-"AutoComplete settings"
-upd:"AutoComplete settings"
-upd:"AutoComplete settings"
-upd:"AutoComplete settings"
-upd:"AutoComplete settings"
-"Opciones de autocompletar"
-"На&лаштування автозавершення"
-"На&лады аўтазаканчэння"
+"На&стройки автозавершения и истории"
+"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+upd:"AutoComplete && History settings"
+"Opciones de autocompletar e historial"
+"На&лаштування автозавершення та історії"
+"На&лады аўтазаканчэння і гістарычных"
 
 MenuInfoPanelSettings
 "Нас&тройки информационной панели"
@@ -15686,7 +15686,7 @@ upd:"RRRRR%cMM%cDD gg%cmm%css%cms"
 "ГГГГГ%cММ%cДД чч%cмм%cсс%cмс"
 
 SetAttrBriefInfo
-"&Описание:"
+"Опи&сание:"
 "&Info:"
 upd:"&Info:"
 upd:"&Info:"
@@ -15696,16 +15696,38 @@ upd:"&Info:"
 "&Опис:"
 "&Апісанне:"
 
-SetAttrLinkDest
-"&Ссылка:"
+SetAttrSymlinkContent
+"&Ссылка: "
 "&Symlink:"
 upd:"&Symlink:"
 upd:"&Symlink:"
 upd:"&Symlink:"
 upd:"&Symlink:"
 upd:"&Symlink:"
-"По&силання:"
-"&Спасылка:"
+"По&сил..:"
+"&Спасыл.:"
+
+SetAttrSymlinkObject
+"Объект: "
+"Object: "
+upd:"Object: "
+upd:"Object: "
+upd:"Object: "
+upd:"Object: "
+upd:"Object: "
+"Об'єкт: "
+"Аб'ект: "
+
+SetAttrSymlinkObjectInfo
+"Опис-ие:"
+"Info:   "
+upd:"Info:   "
+upd:"Info:   "
+upd:"Info:   "
+upd:"Info:   "
+upd:"Info:   "
+"Опис:   "
+"Апіс..: "
 
 SetAttrSetting
 l:
