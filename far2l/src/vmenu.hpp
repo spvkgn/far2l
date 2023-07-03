@@ -95,22 +95,20 @@ class SaveScreen;
 struct MenuItemEx
 {
 	DWORD Flags;	// Флаги пункта
-
+	DWORD AccelKey;
 	FARString strName;
 
-	DWORD AccelKey;
-	int UserDataSize;				// Размер пользовательских данных
 	union							// Пользовательские данные:
 	{
 		char *UserData;				// - указатель!
 		char Str4[sizeof(char *)];	// - strlen(строка)+1 <= sizeof(char*)
 	};
 
-	short AmpPos;	// Позиция автоназначенной подсветки
-	short Len[2];	// размеры 2-х частей
-	short Idx2;		// начало 2-й части
-
+	int UserDataSize;				// Размер пользовательских данных
+	int PrefixLen;	// Length of 'grayed' unimportant prefix
 	int ShowPos;
+	short AmpPos;	// Позиция автоназначенной подсветки
+	bool FilteredOut;
 
 	DWORD SetCheck(int Value)
 	{
@@ -147,14 +145,13 @@ struct MenuItemEx
 	void Clear()
 	{
 		Flags = 0;
-		strName.Clear();
 		AccelKey = 0;
+		strName.Clear();
+		FilteredOut = false;
 		UserDataSize = 0;
 		UserData = nullptr;
 		AmpPos = 0;
-		Len[0] = 0;
-		Len[1] = 0;
-		Idx2 = 0;
+		PrefixLen = 0;
 		ShowPos = 0;
 	}
 
@@ -170,9 +167,7 @@ struct MenuItemEx
 			UserDataSize = 0;
 			UserData = nullptr;
 			AmpPos = srcMenu.AmpPos;
-			Len[0] = srcMenu.Len[0];
-			Len[1] = srcMenu.Len[1];
-			Idx2 = srcMenu.Idx2;
+			PrefixLen = srcMenu.PrefixLen;
 			ShowPos = srcMenu.ShowPos;
 		}
 
@@ -267,10 +262,12 @@ private:
 
 	int MaxLineWidth;
 	bool bRightBtnPressed;
+	int WrappedSeparatorIndex;
 
 private:
 	virtual void DisplayObject();
-	void ShowMenu(bool IsParent = false);
+	void ShowMenu(bool IsParent, bool ForceFrameRedraw);
+	void DrawEdges();
 	void DrawTitles();
 	int GetItemPosition(int Position);
 	static int _SetUserData(MenuItemEx *PItem, const void *Data, int Size);
@@ -282,6 +279,7 @@ private:
 	bool ItemCanHaveFocus(DWORD Flags);
 	bool ItemCanBeEntered(DWORD Flags);
 	bool ItemIsVisible(DWORD Flags);
+	bool ItemIsSeparator(DWORD Flags);
 	void UpdateMaxLengthFromTitles();
 	void UpdateMaxLength(int Length);
 	void UpdateItemFlags(int Pos, DWORD NewFlags);
@@ -300,7 +298,7 @@ public:
 
 	virtual ~VMenu();
 
-	void FastShow() { ShowMenu(); }
+	void FastShow() { ShowMenu(false, false); }
 	virtual void Show();
 	virtual void Hide();
 	void ResetCursor();

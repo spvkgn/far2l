@@ -1792,6 +1792,15 @@ available:
   Copy the text of the current command to the clipboard        #Ctrl-C#
   without closing the list                                or #Ctrl-Ins#
 
+  Toggle history view:                                         #Ctrl-T#
+             * with date lines (as in far3)
+             * with date lines + time column
+             * plain history (as in far2)
+
+  Show additional information                                      #F3#
+
+  Quick jump in panel to directory of command                #Ctrl-F10#
+
   Toggle to quick filtering                                #Ctrl-Alt-F#
   (shows only items containing the typing text)
 
@@ -1834,6 +1843,13 @@ shortcuts are available:
   Open a file in the ~viewer~@Viewer@                                        #F3#
                                                           or #Numpad 5#
 
+  Toggle history view:                                         #Ctrl-T#
+             * with date lines (as in far3)
+             * with date lines + time column
+             * plain history (as in far2)
+
+  Quick jump in panel to directory and file                  #Ctrl-F10#
+
   Toggle to quick filtering                                #Ctrl-Alt-F#
   (shows only items containing the typing text)
 
@@ -1849,7 +1865,7 @@ respective option in the ~system settings dialog~@SystemSettings@.
 
   Remarks:
 
-  1. ^<wrap>List refresh operation (Ctrl-R) can take a considerable amount
+  1. ^<wrap>List refresh operation (#Ctrl-R#) can take a considerable amount
 of time if a file was located on a currently unavailable remote resource.
 
   2. ^<wrap>Заблокированные пункты не будут удаляться при очистке или обновлении истории.
@@ -1877,6 +1893,13 @@ available:
   Copy the text of the current history item to the             #Ctrl-C#
   clipboard without closing the list                      or #Ctrl-Ins#
 
+  Toggle history view:                                         #Ctrl-T#
+             * with date lines (as in far3)
+             * with date lines + time column
+             * plain history (as in far2)
+
+  Quick jump in panel to directory (here #Enter# analog)       #Ctrl-F10#
+
   Toggle to quick filtering                                #Ctrl-Alt-F#
   (shows only items containing the typing text)
 
@@ -1892,7 +1915,7 @@ respective option in the ~system settings dialog~@SystemSettings@.
 
   Remarks:
 
-  1. ^<wrap>List refresh operation (Ctrl-R) can take a considerable amount
+  1. ^<wrap>List refresh operation (#Ctrl-R#) can take a considerable amount
 of time if a folder was located on a currently unavailable remote resource.
 
   2. ^<wrap>Заблокированные пункты не будут удаляться при очистке или обновлении истории.
@@ -2064,26 +2087,14 @@ $ #Special symbols#
     The following special symbols can be used in ~associated commands~@FileAssoc@,
 ~user menu~@UserMenu@ and the command ~"Apply command"~@ApplyCmd@:
 
-    #!!#       '!' character
-    #!#        Long file name without extension
-    #!~~#       Short file name without extension
-    #!`#       Long extension without file name (ext)
-    #!`~~#      Short extension without file name (ext)
-    #!.!#      Long file name with extension
-    #!-!#      Short file name with extension
-    #!+!#      Similar to !-! but if a long file name was lost
-             after performing the command, FAR2L will restore it
-    #!@@!#      Name of file with selected file names list
-    #!$!#      Name of file with selected short file names list
-    #!&#       List of selected files
-    #!&~~#      List of selected short file names
-    #!:#       Current drive in the format "C:"
-             For remote folders - "\\\\server\\share"
-    #!\\#       Current path
-    #!/#       Short name of the current path
-    #!=\\#      Current path considering ~symbolic links~@HardSymLink@.
-    #!=/#      Short name of the current path considering
-             ~symbolic links~@HardSymLink@.
+    #!!#          '!' character
+    #!#           File name without extension
+    #!`#          Extension without file name (ext)
+    #!.!#         File name with extension
+    #!@@!# or #!$!#  Name of file with selected file names list
+    #!&#          List of selected files
+    #!/#  or #!\\#   Current path
+    #!=/# or #!=\\#  Current path considering ~symbolic links~@HardSymLink@.
 
     #!?<title>?<init>!#
              This symbol is replaced by user input, when
@@ -2572,6 +2583,8 @@ $ #Viewer: control keys#
     #F2#                 Toggle line wrap/unwrap
     #Shift-F2#           Toggle wrap type (letters/words)
     #F4#                 Toggle text/hex mode
+     (hex mode does not support UTF-8 and other multibyte code pages
+      and switches the view to a single-byte code page)
     #F5#                 Toggle raw/processed mode
     #F6#                 Switch to ~editor~@Editor@
     #Alt-F5#             Print the file
@@ -2579,7 +2592,7 @@ $ #Viewer: control keys#
     #F7#                 ~Search~@ViewerSearch@
     #Shift-F7, Space#    Continue search
     #Alt-F7#             Continue search in "reverse" mode
-    #F8#                 Toggle OEM/ANSI code page
+    #F8#                 Toggle ~ANSI/OEM~@CodePagesSet@/UTF8 code page
     #Shift-F8#           Select code page
     #Alt-F8#             ~Change current position~@ViewerGotoPos@
     #Alt-F9#             Toggles the size of the FAR2L console window
@@ -2775,7 +2788,7 @@ behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
    #Ctrl-F7#                 ~Replace~@EditorSearch@
    #Shift-F7#                Continue search/replace
    #Alt-F7#                  Continue search/replace in "reverse" mode
-   #F8#                      Toggle OEM/ANSI code page
+   #F8#                      Toggle ~ANSI/OEM~@CodePagesSet@/UTF8 code page
    #Shift-F8#                Select code page
    #Alt-F8#                  ~Go to~@EditorGotoPos@ specified line and column
    #Alt-F9#                  Toggles the size of the FAR2L console window
@@ -2944,7 +2957,7 @@ $ #Code pages menu#
 
     #Automatic detection# - Far tries to autodetect the codepage of the text;
 
-    #System# - main 8-bit system codepages - ANSI and OEM;
+    #System# - main 8-bit system codepages - ~ANSI and OEM~@CodePagesSet@;
 
     #Unicode# - Unicode codepages;
 
@@ -2961,6 +2974,12 @@ codepage back. Клавиша #F4# позволяет изменять отоб�
 изменено имя помечаются символом #*# перед именем).
 
     Диалог ~Изменение имени кодовой страницы~@EditCodePageNameDlg@
+
+@CodePagesSet
+$ #ANSI and OEM codepage setting#
+  Switchable by #F8# and #Shift-F8# OEM and ANSI code pages are defined based on the file
+  #~~/.config/far2l/cp# (first line is #OEM#, second is #ANSI#)
+  or, if its absence, by environment variable #LC_CTYPE#
 
 @EditCodePageNameDlg
 $ #Изменение имени кодовой страницы#
@@ -3009,6 +3028,9 @@ directory of the selected drives (works only for disk drives and not for
 plugins).
 
     #Ctrl-R# allows to refresh the disk selection menu.
+
+    #Ctrl-Alt-F# to toggle to quick filtering
+(shows only items containing the typing text).
 
     #Alt-Shift-F9# allows you to ~configure plugins~@PluginsConfig@ (it works only if
 display of plugin items is enabled).
@@ -3204,16 +3226,19 @@ $ #Settings dialog: editor#
 
     Internal editor
 
-  #Do not expand tabs#      Do not convert tabs to spaces while
+  #Expand tabs#             (unchanged if file located in (sub)directory
+                          with .editorconfig file contains "indent_style")
+
+  - #Do not expand tabs#    Do not convert tabs to spaces while
                           editing the document.
 
-  #Expand newly entered#    While editing the document, convert each
-  #tabs to spaces#          newly entered #Tab# into the appropriate
+  - #Expand newly entered#  While editing the document, convert each
+    #tabs to spaces#        newly entered #Tab# into the appropriate
                           number of spaces. Other tabs won't be
                           converted.
 
-  #Expand all tabs to#      Upon opening the document, all tabs in
-  #spaces#                  the document will be automatically
+  - #Expand all tabs to#    Upon opening the document, all tabs in
+    #spaces#                the document will be automatically
                           converted to spaces.
 
   #Persistent blocks#       Do not remove block selection after
@@ -3241,7 +3266,9 @@ $ #Settings dialog: editor#
   #Cursor beyond#           Allow moving cursor beyond the end of line.
   #end of line#
 
-  #Tab size#                Number of spaces in a tab character.
+  #Tab size#                Number of spaces in a tab character
+                          (unchanged if file located in (sub)directory
+                          with .editorconfig file contains "indent_size").
 
   #Show scrollbar#          Show scrollbar.
 
@@ -3249,15 +3276,8 @@ $ #Settings dialog: editor#
                           поиска будет подставляться слово, на
                           котором стоит курсор.
 
-  #Auto detect#             ~Auto detect~@CodePage@ the code page of
-  #code page#               the file being edited.
-
-  #Edit files opened#       Allows to edit files that are opened
-  #for writing#             by other programs for writing. This mode
-                          is handy to edit a file opened for a long
-                          time, but it could be dangerous, if a file
-                          is being modified at the same time as
-                          editing.
+  #Use .editorconfig#       Processing .editorconfig parameters
+  #settings files#          (see https://editorconfig.org for details)
 
   #Lock editing of#         When a file with the Read-only attribute
   #read-only files#         is opened for editing, the editor also
@@ -3268,11 +3288,11 @@ $ #Settings dialog: editor#
   #read-only files#         is opened for editing, a warning message
                           will be shown.
 
-  #Use ANSI code page#      Use ANSI code page for editing files,
-  #by default#              instead of OEM.
+  #Auto detect#             ~Auto detect~@CodePage@ the code page of
+  #code page#               the file being edited.
 
-  #Use ANSI code page#      Use ANSI code page when creating new files,
-  #when creating new files# instead of OEM.
+  #Choose default#          Code page for new files,
+  #code page#               ususally UTF-8.
 
     If the external editor is assigned to #F4# key, it will be executed only if
 ~associated~@FileAssoc@ editor for the current file type is not defined.
@@ -3758,7 +3778,7 @@ fragmentation if it or original file will be overwritten in the future.
     #With symlink# combobox allows to chose from any of three possible ways of handling
 symlinks during copying:
     - Either all symlinks will be copied as is.
-    - Either far2l will check each symlink target to find out if it refers 'outer' file 
+    - Either far2l will check each symlink target to find out if it refers 'outer' file
 or some file also being copied. In first case link will be copied as file, in second
 it will be copied as symlink with possible adjusted destination, so it will refer copied
 target file.

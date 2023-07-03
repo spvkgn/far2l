@@ -1604,6 +1604,15 @@ $ #Parancs előzmények#
   A kiválasztott parancsot a vágólapra másolja,                #Ctrl-C#
     a lista legördítve marad                            vagy #Ctrl-Ins#
 
+  Toggle history view:                                         #Ctrl-T#
+             * with date lines (as in far3)
+             * with date lines + time column
+             * plain history (as in far2)
+
+  Show additional information                                      #F3#
+
+  Quick jump in panel to directory of command                #Ctrl-F10#
+
   Toggle to quick filtering                                #Ctrl-Alt-F#
   (shows only items containing the typing text)
 
@@ -1649,6 +1658,13 @@ $ #Előzmények: megnézett és szerkesztett fájlok előzménye#
   Fájl megnyitása a ~nézőkében~@Viewer@                                      #F3#
                                                         vagy #Numpad 5#
 
+  Toggle history view:                                         #Ctrl-T#
+             * with date lines (as in far3)
+             * with date lines + time column
+             * plain history (as in far2)
+
+  Quick jump in panel to directory and file                  #Ctrl-F10#
+
   Toggle to quick filtering                                #Ctrl-Alt-F#
   (shows only items containing the typing text)
 
@@ -1664,7 +1680,7 @@ $ #Előzmények: megnézett és szerkesztett fájlok előzménye#
 
   Megjegyzések:
 
-     1. A lista frissítése (Ctrl-R) hosszú időt vehet igénybe, ha
+     1. A lista frissítése (#Ctrl-R#) hosszú időt vehet igénybe, ha
         jelenleg nem elérhető távoli helyeket kell vizsgálnia.
 
      2. A zárolt előzményelemek nem törlődnek az előzménylista
@@ -1694,6 +1710,13 @@ $ #Előzmények: mappa előzmények#
   A kiválasztott mappa nevét a vágólapra másolja,              #Ctrl-C#
   a lista legördítve marad                              vagy #Ctrl-Ins#
 
+  Toggle history view:                                         #Ctrl-T#
+             * with date lines (as in far3)
+             * with date lines + time column
+             * plain history (as in far2)
+
+  Quick jump in panel to directory (here #Enter# analog)       #Ctrl-F10#
+
   Toggle to quick filtering                                #Ctrl-Alt-F#
   (shows only items containing the typing text)
 
@@ -1709,7 +1732,7 @@ $ #Előzmények: mappa előzmények#
 
   Megjegyzések:
 
-    1. A lista frissítése (Ctrl-R) hosszú időt vehet igénybe, ha
+    1. A lista frissítése (#Ctrl-R#) hosszú időt vehet igénybe, ha
        pillanatnyilag nem elérhető távoli helyeket kell vizsgálnia.
 
     2. A zárolt előzményelemek nem törlődnek az előzménylista
@@ -1887,27 +1910,16 @@ $ #Különleges szimbólumok#
 ~Parancs végrehajtása~@ApplyCmd@ menüben a következő különleges szimbólumokat
 használhatjuk:
 
-    #!!#       "!" karakter
-    #!#        Hosszú fájlnév, kiterjesztés nélkül
-    #!~~#       Rövid fájlnév, kiterjesztés nélkül
-    #!`#       Hosszú kiterjesztés fájlnév nélkül (ext)
-    #!`~~#      Rövid kiterjesztés fájlnév nélkül (ext)
-    #!.!#      Hosszú fájlnév, kiterjesztéssel
-    #!-!#      Rövid fájlnév, kiterjesztéssel
-    #!+!#      ^<wrap>Hasonló a !-!-hoz, de ha a hosszú fájlnév elveszett
-a parancs végrehajtása után, a FAR visszaállítja
-    #!@@!#      A fájl neve, a kijelölt fájlnevek listájával
-    #!$!#      A fájl neve, a kijelölt rövid fájlnevek listájával
-    #!&#       A kijelölt fájlok listája
-    #!&~~#      A kijelölt rövid fájlnevek listája
-    #!:#       Az aktuális meghajtó, "C:" formátumban, távoli mappáknál
-"\\\\server\\share"
-    #!\\#       Az aktuális elérési útvonal
-    #!/#       Az aktuális elérési út rövid neve
-    #!=\\#      Az aktuális elérési út, a ~szimbolikus linkeket~@HardSymLink@
+    #!!#            "!" karakter
+    #!#             Fájlnév, kiterjesztés nélkül
+    #!`#            Kiterjesztés fájlnév nélkül (ext)
+    #!.!#           Fájlnév, kiterjesztéssel
+    #!@@!# vagy #!$!#  A fájl neve, a kijelölt fájlnevek listájával
+    #!&#            A kijelölt fájlok listája
+    #!/#  vagy #!\\#   Az aktuális elérési útvonal
+    #!=/# vagy #!=\\#  Az aktuális elérési út, a ~szimbolikus linkeket~@HardSymLink@
 is figyelembe véve.
-    #!=/#      Az aktuális elérési út rövid neve,
-a ~szimbolikus linkeket~@HardSymLink@ is figyelembe véve.
+
     #!?<név>?<alapérték>!#   A parancs végrehajtásakor e szimbólum helyén
 egy felhasználói beviteli ablak jelenik meg. A <név> a beviteli mező neve, az
 <alapérték> pedig a szerkesztőmezőbe eredetileg kerülő karaktersor.
@@ -2282,13 +2294,15 @@ nincs bekapcsolva és a sorok túlnyúlnak a kép méretén)
     #F2#                 Sortörés be/ki
     #Shift-F2#           Betűtörés/szótörés átkapcsoló
     #F4#                 Szöveg/hexa mód átkapcsoló
+     (hex mode does not support UTF-8 and other multibyte code pages
+      and switches the view to a single-byte code page)
     #F6#                 Átvált ~szerkesztésre~@Editor@
     #Alt-F5#             ^<wrap>Fájl nyomtatása (a Nyomtatóvezérlő plugin
 segítségével)
     #F7#                 ~Keresés~@ViewerSearch@
     #Shift-F7, Szóköz#   Tovább keres
     #Alt-F7#             Tovább keres, de visszafelé
-    #F8#                 OEM/ANSI kódlap váltó
+    #F8#                 ~ANSI/OEM~@CodePagesSet@/UTF8 kódlap váltó
     #Shift-F8#           Kódlap kiválasztása
     #Alt-F8#             ~Ugrás~@ViewerGotoPos@ a jelenlegi
 szövegpozícióból másik pozícióba
@@ -2500,7 +2514,7 @@ kurzorpozícióba (csak maradó blokk módban)
    #Ctrl-F7#                 ~Keresés és csere~@EditorSearch@
    #Shift-F7#                Keresés és csere folytatása
    #Alt-F7#                  Keresés és csere folytatása, visszafelé
-   #F8#                      OEM/ANSI kódlap váltó
+   #F8#                      ~ANSI/OEM~@CodePagesSet@/UTF8 kódlap váltó
    #Shift-F8#                Kódlap kiválasztása
    #Alt-F8#                  ~Ugrás~@EditorGotoPos@ megadott sorra és oszlopra
    #Alt-F9#                  A FAR konzolablak méretének átváltása
@@ -2664,6 +2678,12 @@ megnyitott példány aktuális állapota írja felül és a külső program ált
 végrehajtott összes módosítás elvész.
 
 
+@CodePagesSet
+$ #ANSI and OEM codepage setting#
+  Switchable by #F8# and #Shift-F8# OEM and ANSI code pages are defined based on the file
+  #~~/.config/far2l/cp# (firts line is #OEM#, second is #ANSI#)
+  or, if its absence, by environment variable #LC_CTYPE#
+
 @DriveDlg
 $ #Meghajtóváltás (Meghajtók menü)#
     A Meghajtók menüben másik meghajtót választhatunk a panelhez,
@@ -2722,6 +2742,9 @@ kiválasztott meghajtó gyökerét (csak "valódi" meghajtóknál működik,
 pluginnel emulált fájlrendszereknél nem).
 
     A #Ctrl-R# frissíti a Meghajtók menü tartalmát.
+
+    #Ctrl-Alt-F# to toggle to quick filtering
+(shows only items containing the typing text).
 
     Ha a #CD meghajtó típusa# mód engedélyezve van (#Ctrl-8#), a FAR
 igyekszik felismerni az összes rendszerbe csatlakozó CD meghajtó
@@ -2918,15 +2941,15 @@ paneljei kikapcsolódjanak, kezdjük a parancssort #@@# karakterrel.
 
     Tabulátorból szóközök:
 
-    #Ne helyettesítse a#    A tabulátorokat nem konvertálja szóközzé
-    #tabulátorokat#         a szerkesztés során.
+    - #Ne helyettesítse a#  A tabulátorokat nem konvertálja szóközzé
+      #tabulátorokat#       a szerkesztés során.
 
-    #Újonnan beírt tabu-#   Szövegszerkesztés közben minden beírt
-    #látorokból szóközök#   ^<wrap>#Tab# karaktert megfelelő számú szóközzel
+    - #Újonnan beírt tabu-# Szövegszerkesztés közben minden beírt
+      #látorokból szóközök# ^<wrap>#Tab# karaktert megfelelő számú szóközzel
 helyettesít, de a korábbi tabulátorokat nem konvertálja.
 
-    #Minden tabulátorból#   A szöveg megnyitásakor automatikusan
-    #szóközök#              minden tabulátort szóközzé alakít.
+    - #Minden tabulátorból# A szöveg megnyitásakor automatikusan
+      #szóközök#            minden tabulátort szóközzé alakít.
 
 
   #Maradó blokkok#          ^<wrap>Nem veszi le a blokkokról a kijelölést,
@@ -2955,6 +2978,9 @@ elhelyezett könyvjelzőinket.
   #Gördítősáv mutatva#      ^<wrap>Az oldalsó gördítősáv megjelenítése a
 a belső szerkesztőben.
 
+
+  #Use .editorconfig#       Processing .editorconfig parameters
+  #settings files#          (see https://editorconfig.org for details)
 
   #Írásra megnyitott fáj-#  Lehetővé teszi a más programokban írásra
   #lok szerkeszthetők#      ^<wrap>megnyitott fájlok szerkesztését. Ez a

@@ -89,6 +89,7 @@ VMenu::VMenu(const wchar_t *Title,		// заголовок меню
 	ClearFlags(VMENU_SHOWAMPERSAND | VMENU_MOUSEDOWN);
 	GetCursorType(PrevCursorVisible, PrevCursorSize);
 	bRightBtnPressed = false;
+	WrappedSeparatorIndex = -1;
 
 	// инициализируем перед тем, как добавлять айтема
 	UpdateMaxLengthFromTitles();
@@ -162,6 +163,11 @@ bool VMenu::ItemCanBeEntered(DWORD Flags)
 bool VMenu::ItemIsVisible(DWORD Flags)
 {
 	return !(Flags & (LIF_HIDDEN));
+}
+
+bool VMenu::ItemIsSeparator(DWORD Flags)
+{
+	return !!(Flags & (LIF_SEPARATOR));
 }
 
 bool VMenu::UpdateRequired()
@@ -248,8 +254,13 @@ int VMenu::SetSelectPos(int Pos, int Direct)
 		if (ItemCanHaveFocus(Item[Pos]->Flags))
 			break;
 
-		if (Pass)
+		if (Pos == 0) {
+			TopPos = 0;
+		}
+
+		if (Pass) {
 			return SelectPos;
+		}
 
 		Pos+= Direct;
 
@@ -433,9 +444,7 @@ int VMenu::AddItem(const MenuItemEx *NewItem, int PosAdd)
 	_SetUserData(Item[PosAdd], NewItem->UserData, NewItem->UserDataSize);
 	// Item[PosAdd]->AmpPos = NewItem->AmpPos;
 	Item[PosAdd]->AmpPos = -1;
-	Item[PosAdd]->Len[0] = NewItem->Len[0];
-	Item[PosAdd]->Len[1] = NewItem->Len[1];
-	Item[PosAdd]->Idx2 = NewItem->Idx2;
+	Item[PosAdd]->PrefixLen = NewItem->PrefixLen;
 	// Item[PosAdd]->ShowPos = NewItem->ShowPos;
 	Item[PosAdd]->ShowPos = 0;
 
@@ -591,8 +600,9 @@ void VMenu::SetCheck(int Check, int Position)
 
 void VMenu::RestoreFilteredItems()
 {
-	for (int i = 0; i < ItemCount; i++) {
+	for (int i = 0; i < ItemCount; i++) if (Item[i]->FilteredOut) {
 		Item[i]->Flags&= ~LIF_HIDDEN;
+		Item[i]->FilteredOut = false;
 	}
 
 	ItemHiddenCount = 0;
@@ -607,8 +617,9 @@ void VMenu::FilterStringUpdated(bool bLonger)
 	if (bLonger) {
 		// строка фильтра увеличилась
 		for (int i = 0; i < ItemCount; i++) {
-			if (ItemIsVisible(Item[i]->Flags) && !StrStrI(Item[i]->strName, strFilter)) {
+			if (ItemIsVisible(Item[i]->Flags) && !ItemIsSeparator(Item[i]->Flags) && !StrStrI(Item[i]->strName, strFilter)) {
 				Item[i]->Flags|= LIF_HIDDEN;
+				Item[i]->FilteredOut = true;
 				ItemHiddenCount++;
 				if (SelectPos == i) {
 					Item[i]->Flags&= ~LIF_SELECTED;
@@ -619,10 +630,37 @@ void VMenu::FilterStringUpdated(bool bLonger)
 	} else {
 		// строка фильтра сократилась
 		for (int i = 0; i < ItemCount; i++) {
-			if (!ItemIsVisible(Item[i]->Flags) && StrStrI(Item[i]->strName, strFilter)) {
+			if (Item[i]->FilteredOut && !ItemIsSeparator(Item[i]->Flags) && StrStrI(Item[i]->strName, strFilter)) {
 				Item[i]->Flags&= ~LIF_HIDDEN;
+				Item[i]->FilteredOut = false;
 				ItemHiddenCount--;
 			}
+		}
+	}
+
+	// hide all separators that dont precede any visible menu items
+	for (int i = 0; i < ItemCount; i++) {
+		if (ItemIsSeparator(Item[i]->Flags)) {
+			bool PrecedesVisibleItems = false;
+			int j;
+			for (j = i + 1; j < ItemCount && !ItemIsSeparator(Item[j]->Flags); ++j) {
+				if (ItemIsVisible(Item[j]->Flags)) {
+					PrecedesVisibleItems = true;
+					break;
+				}
+			}
+			if (!PrecedesVisibleItems) {
+				if (ItemIsVisible(Item[i]->Flags)) {
+					Item[i]->Flags|= LIF_HIDDEN;
+					Item[i]->FilteredOut = true;
+					ItemHiddenCount++;
+				}
+			} else if (Item[i]->FilteredOut) {
+				Item[i]->Flags&= ~LIF_HIDDEN;
+				Item[i]->FilteredOut = false;
+				ItemHiddenCount--;
+			}
+			i = j - 1; // loop will ++
 		}
 	}
 
@@ -750,7 +788,7 @@ int64_t VMenu::VMProcess(int OpCode, void *vParam, int64_t iParam)
 					if (Res) {
 						SetSelectPos(I, 1);
 
-						ShowMenu(true);
+						ShowMenu(true, false);
 
 						return GetVisualPos(SelectPos) + 1;
 					}
@@ -852,7 +890,6 @@ int VMenu::ProcessKey(int Key)
 
 	if (Key == KEY_OP_PLAINTEXT) {
 		const wchar_t *str = eStackAsString();
-
 		if (!*str)
 			return FALSE;
 
@@ -862,7 +899,6 @@ int VMenu::ProcessKey(int Key)
 				RestoreFilteredItems();
 			else
 				FilterStringUpdated(true);
-
 			DisplayObject();
 
 			return TRUE;
@@ -927,7 +963,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_CTRLPGUP:
 		case KEY_CTRLNUMPAD9: {
 			SetSelectPos(0, 1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_END:
@@ -937,7 +973,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_CTRLPGDN:
 		case KEY_CTRLNUMPAD3: {
 			SetSelectPos(ItemCount - 1, -1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_PGUP:
@@ -950,7 +986,7 @@ int VMenu::ProcessKey(int Key)
 				p = 0;
 
 			SetSelectPos(p, 1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_PGDN:
@@ -964,7 +1000,7 @@ int VMenu::ProcessKey(int Key)
 				p = ItemCount - 1;
 
 			SetSelectPos(p, -1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_ALTHOME:
@@ -988,7 +1024,7 @@ int VMenu::ProcessKey(int Key)
 				}
 			}
 
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_ALTLEFT:
@@ -1007,7 +1043,7 @@ int VMenu::ProcessKey(int Key)
 					NeedRedraw = true;
 
 			if (NeedRedraw)
-				ShowMenu(true);
+				ShowMenu(true, false);
 
 			break;
 		}
@@ -1017,7 +1053,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_NUMPAD6 | KEY_ALT | KEY_SHIFT: {
 			if (ShiftItemShowPos(SelectPos,
 						(Key == KEY_ALTSHIFTLEFT || Key == (KEY_NUMPAD4 | KEY_ALT | KEY_SHIFT)) ? -1 : 1))
-				ShowMenu(true);
+				ShowMenu(true, false);
 
 			break;
 		}
@@ -1027,7 +1063,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_UP:
 		case KEY_NUMPAD8: {
 			SetSelectPos(SelectPos - 1, -1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_MSWHEEL_DOWN:	// $ 27.04.2001 VVM + Обработка KEY_MSWHEEL_XXXX
@@ -1036,7 +1072,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_DOWN:
 		case KEY_NUMPAD2: {
 			SetSelectPos(SelectPos + 1, 1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 			break;
 		}
 		case KEY_CTRLALTF: {
@@ -1127,7 +1163,7 @@ int VMenu::ProcessKey(int Key)
 			if (ParentDialog
 					&& SendDlgMessage((HANDLE)ParentDialog, DN_LISTHOTKEY, DialogItemID, SelectPos)) {
 				UpdateItemFlags(OldSelectPos, Item[OldSelectPos]->Flags | LIF_SELECTED);
-				ShowMenu(true);
+				ShowMenu(true, false);
 				EndLoop = FALSE;
 				break;
 			}
@@ -1191,7 +1227,7 @@ int VMenu::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 				if (SelectPos >= 0 && GetVisualPos(SelectPos))
 					ProcessKey(KEY_UP);
 
-				ShowMenu(true);
+				ShowMenu(true, false);
 			}
 
 			return TRUE;
@@ -1203,7 +1239,7 @@ int VMenu::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 				if (SelectPos >= 0 && GetVisualPos(SelectPos) != GetShowItemCount() - 1)
 					ProcessKey(KEY_DOWN);
 
-				ShowMenu(true);
+				ShowMenu(true, false);
 			}
 
 			return TRUE;
@@ -1229,7 +1265,7 @@ int VMenu::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 
 				SetSelectPos(VisualPosToReal(MsPos), Delta);
 
-				ShowMenu(true);
+				ShowMenu(true, false);
 			}
 
 			return TRUE;
@@ -1277,7 +1313,7 @@ int VMenu::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 					SetSelectPos(MsPos, 1);
 				}
 
-				ShowMenu(true);
+				ShowMenu(true, false);
 			}
 
 			/*
@@ -1431,7 +1467,7 @@ void VMenu::Show()
 			bool HasSubMenus = ItemSubMenusCount > 0;
 
 			if (X1 == -1) {
-				X1 = (ScrX - MaxLength - 4 - (HasSubMenus ? 2 : 0)) / 2;
+				X1 = (ScrX - MaxLength - 3 - (HasSubMenus ? 1 : 0)) / 2;
 				AutoCenter = true;
 			}
 
@@ -1439,12 +1475,12 @@ void VMenu::Show()
 				X1 = 2;
 
 			if (X2 <= 0)
-				X2 = X1 + MaxLength + 4 + (HasSubMenus ? 2 : 0);
+				X2 = X1 + MaxLength + 3 + (HasSubMenus ? 1 : 0);
 
 			if (!AutoCenter
-					&& X2 > ScrX - 4 + 2 * (BoxType == SHORT_DOUBLE_BOX || BoxType == SHORT_SINGLE_BOX)) {
-				X1+= ScrX - 4 - X2;
-				X2 = ScrX - 4;
+					&& X2 > ScrX - 3 + 2 * (BoxType == SHORT_DOUBLE_BOX || BoxType == SHORT_SINGLE_BOX)) {
+				X1+= ScrX - 3 - X2;
+				X2 = ScrX - 3;
 
 				if (X1 < 2) {
 					X1 = 2;
@@ -1528,6 +1564,11 @@ void VMenu::DisplayObject()
 			SaveScr = new SaveScreen(X1, Y1, X2 + 2, Y2 + 1);
 	}
 
+	ShowMenu(true, true);
+}
+
+void VMenu::DrawEdges()
+{
 	if (!CheckFlags(VMENU_DISABLEDRAWBACKGROUND) && !CheckFlags(VMENU_LISTBOX)) {
 		if (BoxType == SHORT_DOUBLE_BOX || BoxType == SHORT_SINGLE_BOX) {
 			Box(X1, Y1, X2, Y2, Colors[VMenuColorBox], BoxType);
@@ -1553,11 +1594,6 @@ void VMenu::DisplayObject()
 
 		// SetFlags(VMENU_DISABLEDRAWBACKGROUND);
 	}
-
-	if (!CheckFlags(VMENU_LISTBOX))
-		DrawTitles();
-
-	ShowMenu(true);
 }
 
 void VMenu::DrawTitles()
@@ -1567,18 +1603,27 @@ void VMenu::DrawTitles()
 	int MaxTitleLength = X2 - X1 - 2;
 	int WidthTitle;
 
-	if (!strTitle.IsEmpty() || bFilterEnabled) {
-		FARString strDisplayTitle = strTitle;
+	FARString strDisplayTitle = strTitle;
+	if (WrappedSeparatorIndex >= 0 && WrappedSeparatorIndex < ItemCount) {
+		if (!strDisplayTitle.IsEmpty()) {
+			strDisplayTitle+= L' ';
+			strDisplayTitle+= BoxSymbols[BS_H1];
+			strDisplayTitle+= L' ';
+		}
+		strDisplayTitle+= Item[WrappedSeparatorIndex]->strName;
+	}
 
+	if (!strDisplayTitle.IsEmpty() || bFilterEnabled) {
 		if (bFilterEnabled) {
-			if (bFilterLocked || strFilter.IsEmpty())
-				strDisplayTitle+= L" ";
+			if (bFilterLocked || strFilter.IsEmpty()
+				|| (int)strDisplayTitle.GetLength() + 3 + (int)strFilter.GetLength() < MaxTitleLength )
+				strDisplayTitle+= L' ';
 			else
 				strDisplayTitle.Clear();
 
-			strDisplayTitle+= bFilterLocked ? L"<" : L"[";
+			strDisplayTitle+= bFilterLocked ? L'<' : L'[';
 			strDisplayTitle+= strFilter;
-			strDisplayTitle+= bFilterLocked ? L">" : L"]";
+			strDisplayTitle+= bFilterLocked ? L'>' : L']';
 		}
 
 		WidthTitle = (int)strDisplayTitle.GetLength();
@@ -1605,7 +1650,7 @@ void VMenu::DrawTitles()
 	}
 }
 
-void VMenu::ShowMenu(bool IsParent)
+void VMenu::ShowMenu(bool IsParent, bool ForceFrameRedraw)
 {
 	CriticalSectionLock Lock(CS);
 	ChangePriority ChPriority(ChangePriority::NORMAL);
@@ -1632,10 +1677,10 @@ void VMenu::ShowMenu(bool IsParent)
 	if (BoxType != NO_BOX)
 		MaxLineWidth-= 2;	// frame
 
-	MaxLineWidth-= 2;		// check mark + left horz. scroll
+	MaxLineWidth-= 1;		// check mark
 
 	if (!CheckFlags(VMENU_COMBOBOX | VMENU_LISTBOX) && HasSubMenus)
-		MaxLineWidth-= 2;	// sub menu arrow
+		MaxLineWidth-= 1;	// sub menu arrow
 
 	if ((CheckFlags(VMENU_LISTBOX | VMENU_ALWAYSSCROLLBAR) || Opt.ShowMenuScrollbar) && BoxType == NO_BOX
 			&& ScrollBarRequired(Y2 - Y1 + 1, GetShowItemCount()))
@@ -1671,7 +1716,7 @@ void VMenu::ShowMenu(bool IsParent)
 		if (BoxType != NO_BOX)
 			Box(X1, Y1, X2, Y2, Colors[VMenuColorBox], BoxType);
 
-		DrawTitles();
+//		DrawTitles();
 	}
 
 	wchar_t BoxChar[2] = {0};
@@ -1691,9 +1736,6 @@ void VMenu::ShowMenu(bool IsParent)
 			*BoxChar = BoxSymbols[BS_V2];
 			break;
 	}
-
-	if (GetShowItemCount() <= 0)
-		return;
 
 	if (CheckFlags(VMENU_AUTOHIGHLIGHT | VMENU_REVERSEHIGHLIGHT))
 		AssignHighlights(CheckFlags(VMENU_REVERSEHIGHLIGHT));
@@ -1728,8 +1770,19 @@ void VMenu::ShowMenu(bool IsParent)
 
 	FARString strTmpStr;
 
-	for (int Y = Y1 + ((BoxType != NO_BOX) ? 1 : 0), I = TopPos; Y < ((BoxType != NO_BOX) ? Y2 : Y2 + 1);
-			Y++, I++) {
+	auto PrevWrappedSeparatorIndex = WrappedSeparatorIndex;
+	WrappedSeparatorIndex = -1;
+	for (int I = 0; I < TopPos && I < ItemCount; ++I) {
+		if ((Item[I]->Flags & LIF_SEPARATOR) != 0 && ItemIsVisible(Item[I]->Flags))
+			WrappedSeparatorIndex = I;
+	}
+
+	if (ForceFrameRedraw || PrevWrappedSeparatorIndex != WrappedSeparatorIndex) {
+		DrawEdges();
+	}
+
+	if (GetShowItemCount() > 0) for (int Y = Y1 + ((BoxType != NO_BOX) ? 1 : 0), I = TopPos;
+			Y < ((BoxType != NO_BOX) ? Y2 : Y2 + 1); Y++, I++) {
 		GotoXY(X1, Y);
 
 		if (I < ItemCount) {
@@ -1764,22 +1817,24 @@ void VMenu::ShowMenu(bool IsParent)
 								Correction = 1;
 
 							if (NextItem == BoxSymbols[BS_V1])
-								Ptr[J - Correction + (BoxType == NO_BOX ? 1 : 2)] = BoxSymbols[BS_C_H1V1];
+								Ptr[J - Correction + (BoxType == NO_BOX ? 0 : 1)] = BoxSymbols[BS_C_H1V1];
 							else
-								Ptr[J - Correction + (BoxType == NO_BOX ? 1 : 2)] = BoxSymbols[BS_B_H1V1];
+								Ptr[J - Correction + (BoxType == NO_BOX ? 0 : 1)] = BoxSymbols[BS_B_H1V1];
 						} else if (NextItem == BoxSymbols[BS_V1]) {
 							int Correction = 0;
 
 							if (!CheckFlags(VMENU_SHOWAMPERSAND) && wmemchr(Item[I + 1]->strName, L'&', J))
 								Correction = 1;
 
-							Ptr[J - Correction + (BoxType == NO_BOX ? 1 : 2)] = BoxSymbols[BS_T_H1V1];
+							Ptr[J - Correction + (BoxType == NO_BOX ? 0 : 1)] = BoxSymbols[BS_T_H1V1];
 						}
 					}
 				}
 
 				SetColor(Colors[VMenuColorSeparator]);
-				BoxText(TmpStr, FALSE);
+
+				strTmpStr.ReleaseBuffer();
+				BoxText(strTmpStr, FALSE);
 
 				if (!Item[I]->strName.IsEmpty()) {
 					int ItemWidth = (int)Item[I]->strName.GetLength();
@@ -1791,7 +1846,6 @@ void VMenu::ShowMenu(bool IsParent)
 					FS << L" " << fmt::LeftAlign() << fmt::Size(ItemWidth) << Item[I]->strName << L" ";
 				}
 
-				strTmpStr.ReleaseBuffer();
 			} else {
 				if (BoxType != NO_BOX) {
 					SetColor(Colors[VMenuColorBox]);
@@ -1805,35 +1859,17 @@ void VMenu::ShowMenu(bool IsParent)
 				else
 					GotoXY(X1, Y);
 
-				if ((Item[I]->Flags & LIF_SELECTED))
-					SetColor(VMenu::Colors
-									[Item[I]->Flags & LIF_GRAYED ? VMenuColorSelGrayed : VMenuColorSelected]);
-				else
-					SetColor(VMenu::Colors[Item[I]->Flags & LIF_DISABLE
-									? VMenuColorDisabled
-									: (Item[I]->Flags & LIF_GRAYED ? VMenuColorGrayed : VMenuColorText)]);
+				FARString strMenuLine, strMenuPrefix;
 
-				FARString strMenuLine;
-				wchar_t CheckMark = L' ';
-
-				if (Item[I]->Flags & LIF_CHECKED) {
-					if (!(Item[I]->Flags & 0x0000FFFF))
-						CheckMark = 0x221A;
-					else
-						CheckMark = static_cast<wchar_t>(Item[I]->Flags & 0x0000FFFF);
-				}
-
-				strMenuLine.Append(CheckMark);
-				strMenuLine.Append(L' ');	// left scroller (<<) placeholder
 				int ShowPos =
 						HiFindRealPos(Item[I]->strName, Item[I]->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
 				FARString strMItemPtr(Item[I]->strName.CPtr() + ShowPos);
-				int strMItemPtrLen;
+				const int strMItemPtrLen = CheckFlags(VMENU_SHOWAMPERSAND)
+					? static_cast<int>(strMItemPtr.CellsCount())
+					: HiStrCellsCount(strMItemPtr);
 
-				if (CheckFlags(VMENU_SHOWAMPERSAND))
-					strMItemPtrLen = static_cast<int>(strMItemPtr.CellsCount());
-				else
-					strMItemPtrLen = HiStrCellsCount(strMItemPtr);
+				const int strMItemPtrPrefixLen =
+					std::min(std::max(Item[I]->PrefixLen - ShowPos, 0), strMItemPtrLen);
 
 				// fit menu FARString into available space
 				if (strMItemPtrLen > MaxLineWidth)
@@ -1853,12 +1889,32 @@ void VMenu::ShowMenu(bool IsParent)
 					}
 				}
 
-				strMenuLine.Append(strMItemPtr);
+				wchar_t CheckMark[2] = {L' ', 0}; // checkmark placeholder
+				if (Item[I]->Flags & LIF_CHECKED) {
+					CheckMark[0] = wchar_t((Item[I]->Flags & 0xFFFF) ? Item[I]->Flags & 0xFFFF : 0x221A);
+				}
 
+				int Col;
+				if ((Item[I]->Flags & LIF_SELECTED))
+					Col = Colors[Item[I]->Flags & LIF_GRAYED ? VMenuColorSelGrayed : VMenuColorSelected];
+				else
+					Col = Colors[Item[I]->Flags & LIF_DISABLE
+							? VMenuColorDisabled
+							: (Item[I]->Flags & LIF_GRAYED ? VMenuColorGrayed : VMenuColorText)];
+
+				SetColor(Col);
+				Text(CheckMark);
 				// табуляции меняем только при показе!!!
 				// для сохранение оригинальной строки!!!
 				ReplaceTabsBySpaces(strMenuLine, 1);
-				int Col;
+				if (strMItemPtrPrefixLen) {
+					SetColor(VMenu::Colors[Item[I]->Flags & LIF_SELECTED ? VMenuColorSelGrayed : VMenuColorGrayed]);
+					FARString strPrefix(strMItemPtr, std::min(strMItemPtrPrefixLen, MaxLineWidth));
+					Text(strPrefix);
+					strMItemPtr.Remove(0, strPrefix.GetLength());
+					SetColor(Col);
+				}
+				strMenuLine.Append(strMItemPtr);
 
 				if (!(Item[I]->Flags & LIF_DISABLE)) {
 					if (Item[I]->Flags & LIF_SELECTED)
@@ -1882,7 +1938,7 @@ void VMenu::ShowMenu(bool IsParent)
 				}
 
 				if (Item[I]->Flags & MIF_SUBMENU) {
-					GotoXY(X1 + (BoxType != NO_BOX ? 1 : 0) + 2 + MaxLineWidth + (HasRightScroll ? 1 : 0) + 1,
+					GotoXY(X1 + (BoxType != NO_BOX ? 1 : 0) + MaxLineWidth + (HasRightScroll ? 1 : 0) + 1,
 							Y);
 					BoxText(L'\x25BA');		// sub menu arrow
 				}
@@ -1898,7 +1954,7 @@ void VMenu::ShowMenu(bool IsParent)
 				}
 
 				if (strMItemPtrLen > MaxLineWidth) {
-					GotoXY(X1 + (BoxType != NO_BOX ? 1 : 0) + 2 + MaxLineWidth, Y);
+					GotoXY(X1 + (BoxType != NO_BOX ? 1 : 0) + 1 + MaxLineWidth, Y);
 					BoxText(L'\xbb');	// '>>'
 				}
 			}
@@ -1927,6 +1983,10 @@ void VMenu::ShowMenu(bool IsParent)
 			ScrollBarEx(X2, Y1 + 1, Y2 - Y1 - 1, VisualTopPos, GetShowItemCount());
 		else
 			ScrollBarEx(X2, Y1, Y2 - Y1 + 1, VisualTopPos, GetShowItemCount());
+	}
+
+	if ( (ForceFrameRedraw || PrevWrappedSeparatorIndex != WrappedSeparatorIndex) && !CheckFlags(VMENU_LISTBOX)) {
+		DrawTitles();
 	}
 }
 
@@ -2012,8 +2072,9 @@ void VMenu::AssignHighlights(int Reverse)
 	for (size_t I = 0; I < ShuffledItem.size();) {
 		MenuItemEx *ItemI = ShuffledItem[I];
 		wchar_t Ch = 0;
-		int ShowPos = HiFindRealPos(ItemI->strName, ItemI->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
-		const wchar_t *Name = ItemI->strName.CPtr() + ShowPos;
+		const int ScanPos = std::max(ItemI->PrefixLen,
+			HiFindRealPos(ItemI->strName, ItemI->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND)));
+		const wchar_t *Name = ItemI->strName.CPtr() + ScanPos;
 		ItemI->AmpPos = -1;
 		// TODO: проверка на LIF_HIDDEN
 		const wchar_t *ChPtr = wcschr(Name, L'&');
@@ -2030,7 +2091,7 @@ void VMenu::AssignHighlights(int Reverse)
 		}
 
 		if (Ch && Used.Set(Ch)) {
-			ItemI->AmpPos = static_cast<short>(ChPtr - Name) + static_cast<short>(ShowPos);
+			ItemI->AmpPos = static_cast<short>(ChPtr - Name) + static_cast<short>(ScanPos);
 			ShuffledItem.erase(ShuffledItem.begin() + I);
 		} else
 			++I;
@@ -2044,8 +2105,9 @@ void VMenu::AssignHighlights(int Reverse)
 		size_t FailedsCount = 0;
 		for (size_t I = 0; I < ShuffledItem.size(); ++I) {
 			MenuItemEx *ItemI = ShuffledItem[I];
-			int ShowPos = HiFindRealPos(ItemI->strName, ItemI->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND));
-			const wchar_t *Name = ItemI->strName.CPtr() + ShowPos;
+			const int ScanPos = std::max(ItemI->PrefixLen,
+				HiFindRealPos(ItemI->strName, ItemI->ShowPos, CheckFlags(VMENU_SHOWAMPERSAND)));
+			const wchar_t *Name = ItemI->strName.CPtr() + ScanPos;
 			const wchar_t *ChPtr = wcschr(Name, L'&');
 
 			if (!ChPtr || CheckFlags(VMENU_SHOWAMPERSAND)) {
@@ -2055,7 +2117,7 @@ void VMenu::AssignHighlights(int Reverse)
 					wchar_t Ch = Name[J];
 
 					if ((Ch == L'&' || IsAlpha(Ch) || (Ch >= L'0' && Ch <= L'9')) && Used.Set(Ch)) {
-						ItemI->AmpPos = J + ShowPos;
+						ItemI->AmpPos = J + ScanPos;
 						break;
 					}
 				}
@@ -2100,7 +2162,7 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 				&& ((!Type && CurItem->AccelKey && Key == CurItem->AccelKey)
 						|| (Type && IsKeyHighlighted(CurItem->strName, Key, Translate, CurItem->AmpPos)))) {
 			SetSelectPos(I, 1);
-			ShowMenu(true);
+			ShowMenu(true, false);
 
 			if ((!ParentDialog || CheckFlags(VMENU_COMBOBOX)) && ItemCanBeEntered(Item[SelectPos]->Flags)) {
 				Modal::ExitCode = I;

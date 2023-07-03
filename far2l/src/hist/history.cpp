@@ -66,6 +66,7 @@ History::History(enumHISTORYTYPE TypeHistory, size_t HistoryCount, const std::st
 	EnableSave(EnableSave),
 	CurrentItem(nullptr)
 {
+	ASSERT(unsigned(TypeHistory) < ARRAYSIZE(Opt.HistoryShowTimes));
 	if (*EnableSave)
 		ReadHistory();
 }
@@ -90,7 +91,7 @@ static bool IsAllowedForHistory(const wchar_t *Str)
 	SaveForbid - принудительно запретить запись добавляемой строки.
 	Используется на панели плагина
 */
-void History::AddToHistory(const wchar_t *Str, int Type, const wchar_t *Prefix, bool SaveForbid)
+void History::AddToHistoryExtra(const wchar_t *Str, const wchar_t *Extra, int Type, const wchar_t *Prefix, bool SaveForbid)
 {
 	if (!EnableAdd)
 		return;
@@ -101,18 +102,24 @@ void History::AddToHistory(const wchar_t *Str, int Type, const wchar_t *Prefix, 
 	}
 
 	SyncChanges();
-	AddToHistoryLocal(Str, Prefix, Type);
+	AddToHistoryLocal(Str, Extra, Prefix, Type);
 
 	if (*EnableSave && !SaveForbid)
 		SaveHistory();
 }
 
-void History::AddToHistoryLocal(const wchar_t *Str, const wchar_t *Prefix, int Type)
+void History::AddToHistory(const wchar_t *Str, int Type, const wchar_t *Prefix, bool SaveForbid)
+{
+	AddToHistoryExtra(Str, nullptr, Type, Prefix, SaveForbid);
+}
+
+void History::AddToHistoryLocal(const wchar_t *Str, const wchar_t *Extra, const wchar_t *Prefix, int Type)
 {
 	if (!Str || !*Str)
 		return;
 
 	HistoryRecord AddRecord;
+	AddRecord.Type = Type;
 
 	if (TypeHistory == HISTORYTYPE_FOLDER && Prefix && *Prefix) {
 		AddRecord.strName = Prefix;
@@ -120,7 +127,9 @@ void History::AddToHistoryLocal(const wchar_t *Str, const wchar_t *Prefix, int T
 	}
 
 	AddRecord.strName+= Str;
-	AddRecord.Type = Type;
+	if (Extra) {
+		AddRecord.strExtra = Extra;
+	}
 
 	if (RemoveDups)		// удалять дубликаты?
 	{
@@ -155,6 +164,21 @@ void History::AddToHistoryLocal(const wchar_t *Str, const wchar_t *Prefix, int T
 	ResetPosition();
 }
 
+
+static void AppendWithLFSeparator(std::wstring &str, const FARString &ap, bool first)
+{
+	if (!first) {
+		str+= L'\n';
+	}
+	size_t p = str.size();
+	str.append(ap.CPtr(), ap.GetLength());
+	for (; p < str.size(); ++p) {
+		if (str[p] == L'\n') {
+			str[p] = L'\r';
+		}
+	}
+}
+
 bool History::SaveHistory()
 {
 	if (!*EnableSave)
@@ -183,22 +207,17 @@ bool History::SaveHistory()
 
 	bool ret = false;
 	try {
-		std::wstring strTypes, strLines, strLocks;
+		bool HasExtras = false;
+		std::wstring strTypes, strLines, strLocks, strExtras;
 		std::vector<FILETIME> vTimes;
 		int Position = -1;
 		size_t i = HistoryList.Count();
 		for (const HistoryRecord *HistoryItem = HistoryList.Last(); HistoryItem;
 				HistoryItem = HistoryList.Prev(HistoryItem)) {
-			if (i != HistoryList.Count())
-				strLines+= L'\n';
-
-			size_t p = strLines.size();
-
-			strLines.append(HistoryItem->strName.CPtr(), HistoryItem->strName.GetLength());
-
-			for (; p < strLines.size(); ++p) {
-				if (strLines[p] == L'\n')
-					strLines[p] = L'\r';
+			AppendWithLFSeparator(strLines, HistoryItem->strName, i == HistoryList.Count());
+			AppendWithLFSeparator(strExtras, HistoryItem->strExtra, i == HistoryList.Count());
+			if (!HistoryItem->strExtra.IsEmpty()) {
+				HasExtras = true;
 			}
 
 			if (SaveType)
@@ -215,6 +234,11 @@ bool History::SaveHistory()
 
 		ConfigWriter cfg_writer(strRegKey);
 		cfg_writer.SetString("Lines", strLines.c_str());
+		if (HasExtras) {
+			cfg_writer.SetString("Extras", strExtras.c_str());
+		} else {
+			cfg_writer.RemoveKey("Extras");
+		}
 		if (SaveType) {
 			cfg_writer.SetString("Types", strTypes.c_str());
 		}
@@ -255,7 +279,7 @@ bool History::ReadLastItem(const char *RegKey, FARString &strStr)
 bool History::ReadHistory(bool bOnlyLines)
 {
 	int Position = -1;
-	FARString strLines, strLocks, strTypes;
+	FARString strLines, strExtras, strLocks, strTypes;
 	std::vector<unsigned char> vTimes;
 
 	ConfigReader cfg_reader(strRegKey);
@@ -268,17 +292,23 @@ bool History::ReadHistory(bool bOnlyLines)
 		cfg_reader.GetBytes(vTimes, "Times");
 		cfg_reader.GetString(strLocks, "Locks", L"");
 		cfg_reader.GetString(strTypes, "Types", L"");
+		cfg_reader.GetString(strExtras, "Extras", L"");
 	}
 
-	size_t StrPos = 0, LinesPos = 0, TypesPos = 0, LocksPos = 0, TimePos = 0;
+	size_t StrPos = 0, LinesPos = 0, TypesPos = 0, LocksPos = 0, TimePos = 0, ExtrasPos = 0;
 	while (LinesPos < strLines.GetLength() && StrPos < HistoryCount) {
-		size_t LineEnd;
+		size_t LineEnd, ExtraEnd;
 		if (!strLines.Pos(LineEnd, L'\n', LinesPos))
 			LineEnd = strLines.GetLength();
+
+		if (!strExtras.Pos(ExtraEnd, L'\n', ExtrasPos))
+			ExtraEnd = strExtras.GetLength();
 
 		HistoryRecord *AddRecord = HistoryList.Unshift();
 		AddRecord->strName = strLines.SubStr(LinesPos, LineEnd - LinesPos);
 		LinesPos = LineEnd + 1;
+		AddRecord->strExtra = strExtras.SubStr(ExtrasPos, ExtraEnd - ExtrasPos);
+		ExtrasPos = ExtraEnd + 1;
 
 		if (TypesPos < strTypes.GetLength()) {
 			if (iswdigit(strTypes[TypesPos])) {
@@ -369,6 +399,8 @@ int History::Select(VMenu &HistoryMenu, int Height, Dialog *Dlg, FARString &strS
    5 - F4
    6 - Ctrl-Shift-Enter
    7 - Ctrl-Alt-Enter
+   8 - F3 / Ctr-F10 (command history): GoTo Dir / Run-up
+   9 - Ctrl-F10 (view/edit history): jump in panel to directory & file
 */
 int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &HistoryMenu, int Height, int &Type,
 		Dialog *Dlg)
@@ -385,12 +417,15 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 	if (TypeHistory == HISTORYTYPE_DIALOG && HistoryList.Empty())
 		return 0;
 
+	FILETIME ItemFT{};
+	SYSTEMTIME NowST{}, ItemST{}, PrevST{};
+	WINPORT(GetLocalTime)(&NowST);
+
 	while (!Done) {
 		bool IsUpdate = false;
 		HistoryMenu.DeleteItems();
 		HistoryMenu.Modal::ClearDone();
 		HistoryMenu.SetBottomTitle(Msg::HistoryFooter);
-
 		// заполнение пунктов меню
 		for (const HistoryRecord *HistoryItem =
 						TypeHistory == HISTORYTYPE_DIALOG ? HistoryList.Last() : HistoryList.First();
@@ -398,7 +433,27 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 						? HistoryList.Prev(HistoryItem)
 						: HistoryList.Next(HistoryItem)) {
 			FARString strRecord = HistoryItem->strName;
+			int StrPrefixLen = 0;
 			strRecord.Clear();
+			if (Opt.HistoryShowTimes[TypeHistory] != 2
+					&& WINPORT(FileTimeToLocalFileTime)(&HistoryItem->Timestamp, &ItemFT)
+					&& WINPORT(FileTimeToSystemTime(&ItemFT, &ItemST))) {
+
+				if (PrevST.wYear != ItemST.wYear || PrevST.wMonth != ItemST.wMonth || PrevST.wDay != ItemST.wDay) {
+					MenuItemEx DateSeparator;
+					DateSeparator.strName.Format(L"%04u-%02u-%02u",
+						(unsigned)ItemST.wYear, (unsigned)ItemST.wMonth, (unsigned)ItemST.wDay);
+					DateSeparator.Flags|= LIF_SEPARATOR;
+					HistoryMenu.AddItem(&DateSeparator);
+				}
+
+				if (Opt.HistoryShowTimes[TypeHistory] == 1) {
+					strRecord.AppendFormat(L"%02u:%02u.%02u ",
+						(unsigned)ItemST.wHour, (unsigned)ItemST.wMinute, (unsigned)ItemST.wSecond);
+					StrPrefixLen = strRecord.GetLength();
+				}
+				PrevST = ItemST;
+			}
 
 			if (TypeHistory == HISTORYTYPE_VIEW) {
 				strRecord+= GetTitle(HistoryItem->Type);
@@ -414,18 +469,20 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 				strRecord += дату и время
 			*/
 			strRecord+= HistoryItem->strName;
-			;
-
 			if (TypeHistory != HISTORYTYPE_DIALOG)
 				ReplaceStrings(strRecord, L"&", L"&&", -1);
 
 			MenuItem.Clear();
 			MenuItem.strName = strRecord;
 			MenuItem.SetCheck(HistoryItem->Lock ? 1 : 0);
+			MenuItem.PrefixLen = StrPrefixLen;
 
-			if (!SetUpMenuPos)
-				MenuItem.SetSelect(
-						CurrentItem == HistoryItem || (!CurrentItem && HistoryItem == HistoryList.Last()));
+			if (CurrentItem == HistoryItem || (!CurrentItem && HistoryItem == HistoryList.Last())) {
+				MenuItem.SetSelect(true);
+				if (SetUpMenuPos) {
+					Pos.SelectPos = HistoryMenu.GetItemCount();
+				}
+			}
 
 			// NB: here is really should be used sizeof(HistoryItem), not sizeof(*HistoryItem)
 			// cuz sizeof(void *) has special meaning in SetUserData!
@@ -444,8 +501,7 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 			HistoryMenu.SetPosition(-1, -1, 0, 0);
 
 		if (SetUpMenuPos) {
-			Pos.SelectPos =
-					Pos.SelectPos < (int)HistoryList.Count() ? Pos.SelectPos : (int)HistoryList.Count() - 1;
+			Pos.SelectPos = Min(Pos.SelectPos, HistoryMenu.GetItemCount() - 1);
 			Pos.TopPos = Min(Pos.TopPos, HistoryMenu.GetItemCount() - Height);
 			HistoryMenu.SetSelectPos(&Pos);
 			SetUpMenuPos = false;
@@ -536,6 +592,48 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 					break;
 				}
 				case KEY_F3:
+					if (TypeHistory == HISTORYTYPE_CMD && CurrentRecord) {
+						FARString strCmd = CurrentRecord->strName;
+						FARString strDir = CurrentRecord->strExtra;
+						TruncStrFromCenter(strCmd, std::max(ScrX - 32, 32));
+						TruncStrFromCenter(strDir, std::max(ScrX - 32, 32));
+						strCmd.Insert(0, Msg::HistoryCommandLine);
+						strDir.Insert(0, Msg::HistoryCommandDir);
+						if ( CurrentRecord->strExtra.IsEmpty() ) // STUB for old records
+							Message(MSG_LEFTALIGN, 1, Msg::HistoryCommandTitle, strCmd,
+									L"--- Directory --- No Information ---",
+									Msg::HistoryCommandClose);
+						else {
+							int i = Message(MSG_LEFTALIGN, 3, Msg::HistoryCommandTitle, strCmd, strDir,
+									Msg::HistoryCommandClose, Msg::HistoryCommandChDir, Msg::HistoryCommandRunUp);
+							switch (i) {
+								case 1: // ToDir
+								case 2: // Run-up
+									bool b1, b2;
+									size_t p1 = 0, p2 = 0;
+									// directory
+									strStr = CurrentRecord->strExtra;
+									// try get filename from command
+									strStr+= L'\n';
+									b1 = CurrentRecord->strName.Pos(p1, L"./"); // not need ./ from start of command filename
+									b2 = CurrentRecord->strName.Pos(p2, L' '); // assume that in command filename end by first space
+									if( b1 || b2 )
+										strStr+= CurrentRecord->strName.SubStr(
+											!b1 || (b2 && p1+2>=p2) ? 0 : p1+2,
+											b2 && p2>0 ? p2 : -1);
+									else
+										strStr+= CurrentRecord->strName; // all command has not ./ and spaces
+									if (i==2) { // Run-up
+										// command to command line
+										strStr+= L'\n';
+										strStr+= CurrentRecord->strName;
+									}
+									Type = CurrentRecord->Type;
+									return 8;
+							}
+						}
+						break;
+					} // else fall through
 				case KEY_F4:
 				case KEY_NUMPAD5:
 				case KEY_SHIFTNUMPAD5: {
@@ -562,9 +660,9 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 				case KEY_NUMPAD0: {
 					if (HistoryMenu.GetItemCount() /* > 1*/) {
 						CurrentItem = CurrentRecord;
-						CurrentItem->Lock = CurrentItem->Lock ? false : true;
+						CurrentItem->Lock = !CurrentItem->Lock;
 						HistoryMenu.Hide();
-						ResetPosition();
+//						ResetPosition();
 						SaveHistory();
 						HistoryMenu.Modal::SetExitCode(Pos.SelectPos);
 						HistoryMenu.SetUpdateRequired(TRUE);
@@ -579,8 +677,8 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 					if (HistoryMenu.GetItemCount() /* > 1*/) {
 						if (!CurrentRecord->Lock) {
 							HistoryMenu.Hide();
-							HistoryList.Delete(CurrentRecord);
-							ResetPosition();
+							CurrentItem = HistoryList.Delete(CurrentRecord);
+							//ResetPosition();
 							SaveHistory();
 							HistoryMenu.Modal::SetExitCode(Pos.SelectPos);
 							HistoryMenu.SetUpdateRequired(TRUE);
@@ -623,6 +721,47 @@ int History::ProcessMenu(FARString &strStr, const wchar_t *Title, VMenu &History
 
 					break;
 				}
+				case KEY_CTRLT: {
+					if (++Opt.HistoryShowTimes[TypeHistory] == 3) {
+						Opt.HistoryShowTimes[TypeHistory] = 0;
+					}
+					HistoryMenu.Modal::SetExitCode(Pos.SelectPos);
+					HistoryMenu.SetUpdateRequired(TRUE);
+					IsUpdate = true;
+					SetUpMenuPos = true;
+					CurrentItem = CurrentRecord;
+					break;
+				}
+			case KEY_CTRLF10: {
+					if (TypeHistory == HISTORYTYPE_CMD && CurrentRecord && !CurrentRecord->strExtra.IsEmpty() ) {
+						bool b1, b2;
+						size_t p1 = 0, p2 = 0;
+						// directory
+						strStr = CurrentRecord->strExtra;
+						// try get filename from command
+						strStr+= L'\n';
+						b1 = CurrentRecord->strName.Pos(p1, L"./"); // not need ./ from start of command filename
+						b2 = CurrentRecord->strName.Pos(p2, L' '); // assume that in command filename end by first space
+						if( b1 || b2 )
+							strStr+= CurrentRecord->strName.SubStr(
+								!b1 || (b2 && p1+2>=p2) ? 0 : p1+2,
+								b2 && p2>0 ? p2 : -1);
+						else
+							strStr+= CurrentRecord->strName; // all command has not ./ and spaces
+						Type = CurrentRecord->Type;
+						return 8; // for command is equivalent to Go To Directory
+					}
+					if (TypeHistory == HISTORYTYPE_VIEW && CurrentRecord) {
+						strStr = CurrentRecord->strName;
+						return 9; // for files: Go To Directory & postion to file
+					}
+					if (TypeHistory == HISTORYTYPE_FOLDER && CurrentRecord) {
+						strStr = CurrentRecord->strName;
+						return 1; // for directory is equialent to ENTER
+					}
+					break;
+				}
+
 				default:
 					HistoryMenu.ProcessInput();
 					break;
