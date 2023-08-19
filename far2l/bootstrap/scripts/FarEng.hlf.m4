@@ -99,6 +99,7 @@ displayed. In such case #cursor keys# can be used to scroll text.
 pressing #F5# "#Zoom#", pressing #F5# again will restore the window to the
 previous size.
 
+   #Ctrl-Alt-Shift#   Temporarily hide help window (as long as these keys are held down).
 
 @About
 $ # FAR2L: about#
@@ -123,7 +124,6 @@ transforms your commands into the corresponding external archiver calls.
 
 @Far2lGettingStarted
 $ #FAR2L features - Getting Started#
-
     FAR2L is Linux port FAR Manager v2 (see ~About FAR2L~@About@)
     FAR2L official site: ~https://github.com/elfmz/far2l~@https://github.com/elfmz/far2l@
 
@@ -133,40 +133,48 @@ $ #FAR2L features - Getting Started#
         - #GUI#: uses wxWidgets, works in graphics mode, ideal UX, requires a lot of X11 dependencies;
         - #TTYXi#: works in terminal mode, requires a dependency on pair X11 libraries (to access clipboard and to get state of keyboard modifiers), almost perfect UX;
         - #TTY#: plain terminal mode, no X11 dependencies, UX with some restrictions (works fully when running in the relevant terminal emulators, using their advanced keyboard-protocols, see list below).
-    If you have FAR2L-GUI installed, than when you run FAR2L it will try to use GUI mode.
+    If you have FAR2L-GUI installed, then when you run FAR2L it will try to use GUI mode.
     To force run in terminal mode use #--tty# in command line: #far2l --tty# or #far2l --tty --ee# (see details in ~Command line switches~@CmdLine@ or #far2l --help#).
 
 
- #Keyboards shortcuts exclusively capturing by desktop environment#
-    Some keyboards shortcuts #Alt-F1#, #Alt-F2#, #Alt-F7#, #Ctrl-arrows# etc. are exclusively uses in desktop environment GNOME, KDE, Xfce, macOS etc. To work with these keys in FAR2L, you need to release keyboards shortcuts in the environment settings.
-    Terminal emulators also often do not pass some of the key combinations to applications, or do not distinguish between pressing various combinations of modifiers (#Ctrl#, #Alt# etc.).
+ #Keyboard shortcuts are exclusively captured by desktop environment#
+    Some keyboard shortcuts #Alt-F1#, #Alt-F2#, #Alt-F7#, #Ctrl-arrows# etc. are exclusively used in desktop environment GNOME, KDE, Xfce, macOS etc. To work with these keys in FAR2L, you need to release keyboard shortcuts in the environment settings.
+    Terminal emulators also do not often pass some of the key combinations to applications, or do not distinguish pressing various combinations of modifiers (#Ctrl#, #Alt# etc.).
 
 
- #FAR2L in Wayland#
-    For adequate working in Wayland it helps to start FAR2L in mode xWayland by set an environment variable #GDK_BACKEND=x11#:
+ #FAR2L within Wayland or within WSL+WSLg (fix clipboard and/or some keys processing in FAR2L-GUI/TTYX)#
+    For adequate work in Wayland it helps to start FAR2L in mode #xWayland# by setting the environment variable #GDK_BACKEND=x11#, because FAR2L (GUI and TTYX modes) uses X11 features to work with the clipboard and get extended keyboard shortcuts that may not be fully compatible in plain Wayland:
     - running from console: #GDK_BACKEND=x11 far2l#;
     - inside desktop entry #/usr/share/applications/far2l.desktop# replace #Exec=far2l# with #Exec=env GDK_BACKEND=x11 far2l#
 
 
- #Paste feature in terminals#
-    The keyboard shortcuts #terminal paste# (terminal simulates keyboard input) and #FAR2L paste# (FAR2L itself does paste) are different. Note that paste keyboard shortcut in different terminals is different (and may overlap the standard FAR2L's paste #Shift-Ins# or #Ctrl-V#).
-    In FAR2L without TTYX (and without enabled OSC 52 both in FAR2L and in terminal) FAR2L's paste uses its #internal clipboard# (because FAR2L does not access the system clipboard), terminal paste uses #system clipboard#.
-
-
- #Changing font for FAR2L GUI#
+ #Changing font for FAR2L-GUI#
     - Menu(#F9#)->Options->Interface settings->[ Change font ]
 
 
+ #Pasting feature in terminals#
+    The keyboard shortcut of the #terminal pasting# (terminal simulates keyboard input) and #FAR2L pasting# (FAR2L itself does paste) are different. Note that pasting keyboard shortcut in different terminals is various (and may overlap the standard FAR2L's pasting #Shift-Ins# or #Ctrl-V#).
+    In FAR2L without TTYX (and without enabled OSC 52 both in FAR2L and in terminal) FAR2L's pasting uses its #internal clipboard# (because FAR2L does not access the system clipboard), terminal pasting uses #system clipboard#.
+
+
  #Access to remote FAR2L#
-    When the session is terminated, remote FAR2L does not die, but it remains to wait for reconnection (the behavior changes by ~command line switches~@CmdLine@ #--immortal# and #--mortal#), and during the next time FAR2L runs, it will find the previous instance and try to reconnect.
-    To transfer extended keyboard shortcuts and the clipboard to the remote FAR2L, you must initiate a connection from clients that can do this (see below).
+    When the session is terminated, remote FAR2L does not die, but it remains to wait for reconnection (the behavior changed by ~command line switches~@CmdLine@ #--immortal# and #--mortal#), and the next time FAR2L runs, it will find the previous instance and try to reconnect.
+    To transfer extended keyboard shortcuts and the clipboard to the remote FAR2L, you must initiate the connection from clients that can do this (see list below).
+
+
+ #Special options for configuring FAR2L running in terminal emulators#
+    - Menu(#F9#)->Options->Interface settings->#Use OSC52 to set clipboard data#
+(shown in the menu only if FAR2L run in TTY/TTYX mode and all other options for clipboard access are unavailable).
+You can run #far2l --tty --nodetect# to force not use others clipboard options.
+    - Menu(#F9#)->Options->Interface settings->#Override base colors palette#
+(shown in the menu only if FAR2L run in TTY/TTYX mode) allows far2l to adjust terminal palette colors.
+If your terminal doesn't support OSC4 sequence you may turn it off to avoid show artifacts sequence in terminal after exit from far2l.
 
 
  #Full-function work with the system clipboard in a plain terminal version FAR2L TTY#
     To interact with the system clipboard, you must not forget to enable #OSC 52# in both the #FAR2L settings#
-(option OSC 52 show in Menu(#F9#)->Options->Interface settings only when all other options for clipboard access are not available;
-you can run #far2l --tty --nodetect# to not use others options),
-and in #terminal settings must be allowed OSC 52#
+(see details above),
+and in #terminal settings# option #OSC 52 must be allowed#
 (by default, OSC 52 is disabled in some terminals for security reasons; OSC 52 in many terminals is implemented only for the copy mode, and paste from the terminal goes by bracketed paste mode).
 
 
@@ -176,30 +184,30 @@ see ~UI backends~@UIBackends@ and in help of #NetRocks plugin# section #Command 
 (keys and clipboard by FAR2L TTY extensions support)
 
     - kovidgoyal's kitty (Linux, macOS, *BSD): ~https://github.com/kovidgoyal/kitty~@https://github.com/kovidgoyal/kitty@ & ~https://sw.kovidgoyal.net/kitty~@https://sw.kovidgoyal.net/kitty@
-(keys by kovidgoyal's kitty keyboard protocol, for clipboard need turn on OSC 52)
+(keys by kovidgoyal's kitty keyboard protocol; for clipboard need turn on OSC 52)
 
     - Wez's Terminal Emulator (Linux, FreeBSD, Windows): ~https://github.com/wez/wezterm~@https://github.com/wez/wezterm@ & ~https://wezfurlong.org/wezterm~@https://wezfurlong.org/wezterm@
-(keys by kovidgoyal's kitty keyboard protocol, for clipboard need turn on OSC 52)
-[in macOS in wezterm the kitty keyboard protocol support not working]
+(keys in Linux, FreeBSD by kovidgoyal's kitty keyboard protocol; keys in Windows by win32-input-mode which enable by default; for clipboard need turn on OSC 52)
+[in macOS & in Windows in wezterm the kitty keyboard protocol support not working]
 
     - iTerm2 (macOS): ~https://gitlab.com/gnachman/iterm2~@https://gitlab.com/gnachman/iterm2@ & ~https://iterm2.com~@https://iterm2.com@
-(keys by iTerm2 "raw keyboard" protocol, for clipboard need turn on OSC 52)
+(keys by iTerm2 "raw keyboard" protocol; for clipboard need turn on OSC 52)
 
     - Windows Terminal
-(keys by win32-input-mode, for clipboard need turn on OSC 52, has mouse bug: ~https://github.com/microsoft/terminal/issues/15083~@https://github.com/microsoft/terminal/issues/15083@)
+(keys by win32-input-mode; for clipboard need turn on OSC 52; has mouse bug: ~https://github.com/microsoft/terminal/issues/15083~@https://github.com/microsoft/terminal/issues/15083@)
 
-    - putty4far2l (Windows ssh-клиент): ~https://github.com/unxed/putty4far2l~@https://github.com/unxed/putty4far2l@ & ~https://github.com/ivanshatsky/putty4far2l/releases~@https://github.com/ivanshatsky/putty4far2l/releases@
+    - putty4far2l (Windows ssh-client): ~https://github.com/ivanshatsky/putty4far2l/releases~@https://github.com/ivanshatsky/putty4far2l/releases@ & ~https://github.com/unxed/putty4far2l~@https://github.com/unxed/putty4far2l@
 (keys and clipboard by FAR2L TTY extensions support)
 
-    - cyd01's KiTTY (Windows ssh-клиент): ~https://github.com/cyd01/KiTTY~@https://github.com/cyd01/KiTTY@ & ~https://www.9bis.net/kitty~@https://www.9bis.net/kitty@
+    - cyd01's KiTTY (Windows ssh-client): ~https://github.com/cyd01/KiTTY~@https://github.com/cyd01/KiTTY@ & ~https://www.9bis.net/kitty~@https://www.9bis.net/kitty@
 (keys and clipboard by FAR2L TTY extensions support)
 
-    - putty-nd (Windows ssh-клиент): ~https://sourceforge.net/projects/putty-nd~@https://sourceforge.net/projects/putty-nd@ & ~https://github.com/noodle1983/putty-nd~@https://github.com/noodle1983/putty-nd@
+    - putty-nd (Windows ssh-client): ~https://sourceforge.net/projects/putty-nd~@https://sourceforge.net/projects/putty-nd@ & ~https://github.com/noodle1983/putty-nd~@https://github.com/noodle1983/putty-nd@
 (keys and clipboard by FAR2L TTY extensions support)
 
 
  #Location of FAR2L settings and history#
-    - FAR2L by default works with settings located in #~~/.config/far2l/# or in #$XDG_CONFIG_HOME/far2l#
+    - FAR2L by default works with settings located in #~~/.config/far2l/# or in #$XDG_CONFIG_HOME/far2l/#
     - command line switch #-u# (or #$FARSETTINGS# environment variable) allows to specify arbitrary settings location:
         #-u <path>#: in #path/.config/# (if path or $FARSETTINGS is full path)
         #-u <identity>#: in #~~/.config/far2l/custom/identity/# or in #$XDG_CONFIG_HOME/far2l/custom/identity/#
@@ -2715,7 +2723,7 @@ $ #Viewer: control keys#
     #F7#                 ~Search~@ViewerSearch@
     #Shift-F7, Space#    Continue search
     #Alt-F7#             Continue search in "reverse" mode
-    #F8#                 Toggle ~ANSI/OEM~@CodePagesSet@/UTF8 code page
+    #F8#                 Toggle UTF8/~ANSI/OEM~@CodePagesSet@ code page
     #Shift-F8#           Select code page
     #Alt-F8#             ~Change current position~@ViewerGotoPos@
     #Alt-F9#             Toggles the size of the FAR2L console window
@@ -2844,7 +2852,7 @@ will be shown.
     2. ^<wrap>When trying to reload a file already opened in the editor the
 "~reloading a file~@EditorReload@" warning message will be shown.
 
-    3. ^<wrap>The WIN encoding is used by default when creating new files, this
+    3. ^<wrap>The UTF-8 encoding is used by default when creating new files, this
 behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
 
   #Control keys#
@@ -2893,10 +2901,10 @@ behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
    #Ctrl-D#                  Delete block
    #Ctrl-P#                  ^<wrap>Copy block to current cursor position (in persistent blocks mode only)
    #Ctrl-M#                  ^<wrap>Move block to current cursor position (in persistent blocks mode only)
-   #Alt-U#                   Shift block left by 1 space
-   #Alt-I#                   Shift block right by 1 space
-   #Shift-Tab#               Shift block left by Tab (or by indent size if expand tabs is configured)
-   #Tab#                     Shift block right by Tab (or by indent size if expand tabs is configured)
+   #Alt-U#                   Shift block left
+   #Alt-I#                   Shift block right
+   #Shift-Tab#               Shift block left by Tab or by indent size (processed by SimpleIndent plugin)
+   #Tab#                     Shift block right by Tab or by indent size (processed by SimpleIndent plugin)
 
   Other operations
 
@@ -2913,7 +2921,7 @@ behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
    #Ctrl-F7#                 ~Replace~@EditorSearch@
    #Shift-F7#                Continue search/replace
    #Alt-F7#                  Continue search/replace in "reverse" mode
-   #F8#                      Toggle ~ANSI/OEM~@CodePagesSet@/UTF8 code page
+   #F8#                      Toggle UTF8/~ANSI/OEM~@CodePagesSet@ code page
    #Shift-F8#                Select code page
    #Alt-F8#                  ~Go to~@EditorGotoPos@ specified line and column
    #Alt-F9#                  Toggles the size of the FAR2L console window

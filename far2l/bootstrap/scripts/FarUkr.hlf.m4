@@ -99,6 +99,7 @@ $ # FAR: як користуватися допомогою #
 за допомогою клавіші #F5# "#Размер#", повторне натискання #F5# поверне розмір вікна в
 первісний стан.
 
+   #Ctrl-Alt-Shift#   Temporarily hide help window (as long as these keys are held down).
 
 @About
 $ # FAR: що це таке #
@@ -2637,7 +2638,7 @@ $ #Програма перегляду: клавіші керування#
  #F7# ~Пошук~@ViewerSearch@
  #Shift-F7, Space# Продовжити пошук
  #Alt-F7# Продовжити пошук у зворотному напрямку
- #F8# Перемикання ~ANSI/OEM~@CodePagesSet@/UTF8 кодової сторінки
+ #F8# Перемикання UTF8/~ANSI/OEM~@CodePagesSet@ кодової сторінки
  #Shift-F8# Вибір кодової сторінки
  #Alt-F8# ~Змінити поточну позицію~@ViewerGotoPos@
  #Alt-F9# Зміна розмірів вікна FAR2L
@@ -2823,8 +2824,9 @@ $ #Редактор#
  #Ctrl-M# ^<wrap>Перенести блок на поточну позицію курсора (тільки в режимі постійних блоків, Буфер Обміну не змінюється)
  #Alt-U# Зсунути блок ліворуч
  #Alt-I# Зсунути блок праворуч
- #Shift-Tab# Shift block left by Tab (or indent size if expand tabs is configured)
- #Tab#       Shift block right by Tab (or indent size if expand tabs is configured)
+ #Shift-Tab# Shift block left by Tab or by indent size (processed by SimpleIndent plugin)
+ #Tab#       Shift block right by Tab or by indent size (processed by SimpleIndent plugin)
+
 
  Інші операції
 
@@ -2841,7 +2843,7 @@ $ #Редактор#
  #Ctrl-F7# ~Заміна~@EditorSearch@
  #Shift-F7# Продовжити пошук/заміну
  #Alt-F7# Продовжити пошук/заміну у зворотному напрямку
- #F8# Перемикання ~ANSI/OEM~@CodePagesSet@/UTF8 кодової сторінки
+ #F8# Перемикання UTF8/~ANSI/OEM~@CodePagesSet@ кодової сторінки
  #Shift-F8# Вибір кодової сторінки
  #Alt-F8# ~Перейти~@EditorGotoPos@ на вказаний рядок та позицію
  #Alt-F9# Зміна розмірів вікна FAR2L

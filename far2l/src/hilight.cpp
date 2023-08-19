@@ -259,7 +259,7 @@ void HighlightFiles::ClearData()
 static const DWORD FarColor[] = {COL_PANELTEXT, COL_PANELSELECTEDTEXT, COL_PANELCURSOR,
 		COL_PANELSELECTEDCURSOR};
 
-static const HighlightDataColor DefaultStartingColors =
+const HighlightDataColor DefaultStartingColors =
 	{
 		{0xFF00, 0xFF00, 0xFF00, 0xFF00, // Color[0]
 		0xFF00, 0xFF00, 0xFF00, 0xFF00}, // Color[1]
@@ -296,12 +296,12 @@ static void ApplyColors(HighlightDataColor *DestColors, HighlightDataColor *SrcC
 			// то унаследуем их в Dest.
 			if (!(SrcColors->Color[j][i] & 0xF000)) {
 				DestColors->Color[j][i] =
-						(DestColors->Color[j][i] & 0xFFFFFF0000000F0F) | (SrcColors->Color[j][i] & 0x000000FFFFFFF0F0);
+						(DestColors->Color[j][i] & 0x000000FFFFFF0F0F) | (SrcColors->Color[j][i] & 0xFFFFFF000000F0F0);
 			}
 
 			if (!(SrcColors->Color[j][i] & 0x0F00)) {
 				DestColors->Color[j][i] =
-						(DestColors->Color[j][i] & 0x000000FFFFFFF0F0) | (SrcColors->Color[j][i] & 0xFFFFFF0000000F0F);
+						(DestColors->Color[j][i] & 0xFFFFFF000000F0F0) | (SrcColors->Color[j][i] & 0x000000FFFFFF0F0F);
 			}
 		}
 	}
