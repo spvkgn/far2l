@@ -6,7 +6,7 @@
 
 if( NOT ASMC_ASM_TOOL )
     file(GLOB ASMC_ASM_TOOL "${CMAKE_CURRENT_BINARY_DIR}/tools/asmc64")
-    execute_process(COMMAND sh -c "mkdir -p \"${CMAKE_CURRENT_BINARY_DIR}/tools\" && wget https://github.com/essentialkaos/asmc/raw/79e8d8e2dbc1d120eabb7ab3d1db0607b9ceb97b/bin/asmc64 -O\"${CMAKE_CURRENT_BINARY_DIR}/tools/asmc64\" 1>/dev/null 2>&1 && chmod +x \"${CMAKE_CURRENT_BINARY_DIR}/tools/asmc64\"")
+    execute_process(COMMAND sh -c "mkdir -p \"${CMAKE_CURRENT_BINARY_DIR}/tools\" && wget https://github.com/essentialkaos/asmc/raw/3f6a19842cc5fdfb11b160b6e250f7b9e200fc99/bin/asmc64 -O\"${CMAKE_CURRENT_BINARY_DIR}/tools/asmc64\" 1>/dev/null 2>&1 && chmod +x \"${CMAKE_CURRENT_BINARY_DIR}/tools/asmc64\"")
     file(GLOB ASMC_ASM_TOOL "${CMAKE_CURRENT_BINARY_DIR}/tools/asmc64")
 endif()
 
