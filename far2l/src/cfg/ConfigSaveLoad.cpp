@@ -227,6 +227,92 @@ public:
 		}
 	}
 
+	void GetMaxLengthSectKeys(size_t &len_sections, size_t &len_keys, size_t &len_sections_keys) const
+	{
+		size_t tmp1, tmp2;
+		tmp1 = strlen(_section);
+		if (tmp1 > len_sections )
+			len_sections = tmp1;
+		tmp2 = strlen(_key);
+		if (tmp2 > len_keys )
+			len_keys = tmp2;
+		tmp1 += 1 + tmp2;
+		if (tmp1 > len_sections_keys )
+			len_sections_keys = tmp1;
+	}
+
+	void MenuListAppend(VMenu &vm,
+					size_t len_sections, size_t len_keys, size_t len_sections_keys,
+					bool bHideUnchanged, bool bAlignDot) const
+	{
+		MenuItemEx mi;
+		FARString fsn;
+		if (bAlignDot)
+		 fsn.Format(L"%*s.%-*s", len_sections, _section, len_keys, _key);
+		else {
+			mi.strName.Format(L"%s.%s", _section, _key);
+			fsn.Format(L"%-*ls", len_sections_keys, mi.strName.CPtr());
+		}
+		switch (_type)
+		{
+			case T_BOOL:
+				mi.strName.Format(L"%s %ls |  bool|%s", (*_value.b == _default.b ? " " : "*"), fsn.CPtr(), (_value.b ? "true" : "false"));
+				break;
+			case T_INT:
+				mi.strName.Format(L"%s %ls |   int|%d = 0x%x", (*_value.i == _default.i ? " " : "*"), fsn.CPtr(), *_value.i, *_value.i);
+				break;
+			case T_DWORD:
+				mi.strName.Format(L"%s %ls | dword|%u = 0x%x", (*_value.dw == _default.dw ? " " : "*"), fsn.CPtr(), *_value.dw, *_value.dw);
+				break;
+			case T_STR:
+				mi.strName.Format(L"%s %ls |string|%ls", (*_value.str == _default.str ? " " : "*"), fsn.CPtr(), _value.str->CPtr());
+				break;
+			case T_BIN:
+				mi.strName.Format(L"%s %ls |binary|(binary has length %u bytes)",
+					(_default.bin == nullptr || _value.bin == nullptr ? "?"
+						: ( memcmp(_value.bin, _default.bin, _bin_size) == 0 ? " " : "*")),
+					fsn.CPtr(), _bin_size );
+				break;
+		}
+		if (bHideUnchanged && mi.strName.At(0)==L' ')
+			mi.Flags |= LIF_HIDDEN;
+		vm.AddItem(&mi);
+	}
+
+	void Msg(const wchar_t *title) const
+	{
+		FARString fs, fs2;
+		Message(MSG_LEFTALIGN, 1, fs.Format(L"%ls - %s.%s", title, _section, _key),
+			fs.Format(L"        Section: %s", _section),
+			fs.Format(L"            Key: %s", _key),
+			fs.Format(L" to config file: %s", (_save ? "saved" : "never")),
+			fs.Format(L"           Type: %s",
+				( _type == T_BOOL ? "bool"
+				: ( _type == T_INT ?  "int"
+				: ( _type == T_DWORD ? "dword"
+				: ( _type == T_STR ? "string"
+				: ( _type == T_BIN ? "binary"
+				: "???") ) ) ) ) ),
+			fs.Format(L"  Default value: %ls",
+				( _type == T_BOOL ? (_default.b ? L"true" : L"false")
+				: ( _type == T_INT ? fs2.Format(L"%d = 0x%x", _default.i, _default.i).CPtr()
+				: ( _type == T_DWORD ? fs2.Format(L"%d = 0x%x", _default.dw, _default.dw).CPtr()
+				: ( _type == T_STR ? _default.str
+				: ( _type == T_BIN ? ( _default.bin == nullptr ? L"(no default value set)" : fs2.Format(L"(binary has length %u bytes)", _bin_size).CPtr() )
+				: L"???"	) ) ) ) )
+				),
+			fs.Format(L"  Current value: %ls",
+				( _type == T_BOOL ? (*_value.b ? L"true" : L"false")
+				: ( _type == T_INT ? fs2.Format(L"%d = 0x%x", *_value.i, *_value.i).CPtr()
+				: ( _type == T_DWORD ? fs2.Format(L"%d = 0x%x", *_value.dw, *_value.dw).CPtr()
+				: ( _type == T_STR ? _value.str->CPtr()
+				: ( _type == T_BIN ? fs2.Format(L"(binary has length %u bytes)", _bin_size).CPtr()
+				: L"???" ) ) ) ) )
+				),
+			Msg::Ok);
+
+	}
+
 } s_opt_serializers[] =
 {
 	{true,  NSecColors, "CurrentPalette", SIZE_ARRAY_PALETTE, Palette, DefaultPalette},
@@ -241,11 +327,13 @@ public:
 	{true,  NSecCmdline, "UsePromptFormat", &Opt.CmdLine.UsePromptFormat, 0},
 	{true,  NSecCmdline, "PromptFormat", &Opt.CmdLine.strPromptFormat, L"$p$# "},
 	{true,  NSecCmdline, "UseShell", &Opt.CmdLine.UseShell, 0},
-	{true,  NSecCmdline, "Shell", &Opt.CmdLine.strShell, L"/bin/bash"},
+	{true,  NSecCmdline, "ShellCmd", &Opt.CmdLine.strShell, L"bash -i"},
 	{true,  NSecCmdline, "DelRemovesBlocks", &Opt.CmdLine.DelRemovesBlocks, 1},
 	{true,  NSecCmdline, "EditBlock", &Opt.CmdLine.EditBlock, 0},
 	{true,  NSecCmdline, "AutoComplete", &Opt.CmdLine.AutoComplete, 1},
+	{true,  NSecCmdline, "Splitter", &Opt.CmdLine.Splitter, 1},
 	{true,  NSecCmdline, "WaitKeypress", &Opt.CmdLine.WaitKeypress, 1},
+	{true,  NSecCmdline, "VTLogLimit", &Opt.CmdLine.VTLogLimit, 5000},
 
 	{true,  NSecInterface, "Mouse", &Opt.Mouse, 1},
 	{false, NSecInterface, "UseVk_oem_x", &Opt.UseVk_oem_x, 1},
@@ -274,7 +362,7 @@ public:
 	{true,  NSecInterface, "CopyShowTotal", &Opt.CMOpt.CopyShowTotal, 1},
 	{true,  NSecInterface, "DelShowTotal", &Opt.DelOpt.DelShowTotal, 0},
 	{true,  NSecInterface, "WindowTitle", &Opt.strWindowTitle, L"%State - FAR2L %Ver %Backend %User@%Host"}, // %Platform 
-	{true,  NSecInterfaceCompletion, "Exceptions", &Opt.AutoComplete.Exceptions, L"git*reset*--hard;*://*:*@*"},
+	{true,  NSecInterfaceCompletion, "Exceptions", &Opt.AutoComplete.Exceptions, L"git*reset*--hard;*://*:*@*;\" *\""},
 	{true,  NSecInterfaceCompletion, "ShowList", &Opt.AutoComplete.ShowList, 1},
 	{true,  NSecInterfaceCompletion, "ModalList", &Opt.AutoComplete.ModalList, 0},
 	{true,  NSecInterfaceCompletion, "Append", &Opt.AutoComplete.AppendCompletion, 0},
@@ -321,7 +409,6 @@ public:
 	{false, NSecEditor, "EditorUndoSize", &Opt.EdOpt.UndoSize, 0}, // $ 03.12.2001 IS размер буфера undo в редакторе
 	{false, NSecEditor, "WordDiv", &Opt.strWordDiv, WordDiv0},
 	{false, NSecEditor, "BSLikeDel", &Opt.EdOpt.BSLikeDel, 1},
-	{false, NSecEditor, "EditorF7Rules", &Opt.EdOpt.F7Rules, 1},
 	{false, NSecEditor, "FileSizeLimit", &Opt.EdOpt.FileSizeLimitLo, 0},
 	{false, NSecEditor, "FileSizeLimitHi", &Opt.EdOpt.FileSizeLimitHi, 0},
 	{false, NSecEditor, "CharCodeBase", &Opt.EdOpt.CharCodeBase, 1},
@@ -371,7 +458,7 @@ public:
 	{true,  NSecSystem, "CopyXAttr", &Opt.CMOpt.CopyXAttr, 0},
 	{false, NSecSystem, "CopyAccessMode", &Opt.CMOpt.CopyAccessMode, 1},
 	{true,  NSecSystem, "MultiCopy", &Opt.CMOpt.MultiCopy, 0},
-	{true,  NSecSystem, "CopyTimeRule",  &Opt.CMOpt.CopyTimeRule, 3},
+	{true,  NSecSystem, "CopyTimeRule", &Opt.CMOpt.CopyTimeRule, 3},
 
 	{true,  NSecSystem, "InactivityExit", &Opt.InactivityExit, 0},
 	{true,  NSecSystem, "InactivityExitTime", &Opt.InactivityExitTime, 15},
@@ -398,8 +485,8 @@ public:
 	{false, NSecSystem, "SetAttrFolderRules", &Opt.SetAttrFolderRules, 1},
 	{false, NSecSystem, "MaxPositionCache", &Opt.MaxPositionCache, POSCACHE_MAX_ELEMENTS},
 	{false, NSecSystem, "ConsoleDetachKey", &strKeyNameConsoleDetachKey, L"CtrlAltTab"},
-	{false, NSecSystem, "SilentLoadPlugin",  &Opt.LoadPlug.SilentLoadPlugin, 0},
-	{true,  NSecSystem, "ScanSymlinks",  &Opt.LoadPlug.ScanSymlinks, 1},
+	{false, NSecSystem, "SilentLoadPlugin", &Opt.LoadPlug.SilentLoadPlugin, 0},
+	{true,  NSecSystem, "ScanSymlinks", &Opt.LoadPlug.ScanSymlinks, 1},
 	{true,  NSecSystem, "MultiMakeDir", &Opt.MultiMakeDir, 0},
 	{false, NSecSystem, "MsWheelDelta", &Opt.MsWheelDelta, 1},
 	{false, NSecSystem, "MsWheelDeltaView", &Opt.MsWheelDeltaView, 1},
@@ -448,8 +535,7 @@ public:
 	{true,  NSecConfirmations, "DeleteFolder", &Opt.Confirm.DeleteFolder, 1},
 	{true,  NSecConfirmations, "Esc", &Opt.Confirm.Esc, 1},
 	{true,  NSecConfirmations, "RemoveConnection", &Opt.Confirm.RemoveConnection, 1},
-	{true,  NSecConfirmations, "RemoveSUBST", &Opt.Confirm.RemoveSUBST, 1},
-	{true,  NSecConfirmations, "DetachVHD", &Opt.Confirm.DetachVHD, 1},
+	{true,  NSecConfirmations, "ClearVT", &Opt.Confirm.ClearVT, 1},
 	{true,  NSecConfirmations, "RemoveHotPlug", &Opt.Confirm.RemoveHotPlug, 1},
 	{true,  NSecConfirmations, "AllowReedit", &Opt.Confirm.AllowReedit, 1},
 	{true,  NSecConfirmations, "HistoryClear", &Opt.Confirm.HistoryClear, 1},
@@ -543,6 +629,7 @@ public:
 	{true,  NSecVMenu, "LBtnClick", &Opt.VMenu.LBtnClick, VMENUCLICK_CANCEL},
 	{true,  NSecVMenu, "RBtnClick", &Opt.VMenu.RBtnClick, VMENUCLICK_CANCEL},
 	{true,  NSecVMenu, "MBtnClick", &Opt.VMenu.MBtnClick, VMENUCLICK_APPLY},
+	{true,  NSecVMenu, "HistShowTimes", ARRAYSIZE(Opt.HistoryShowTimes), Opt.HistoryShowTimes, nullptr},
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -569,11 +656,12 @@ static void SanitizeXlat()
 
 static void SanitizePalette()
 {
-	//   Уточняем алгоритм "взятия" палитры.
-	for (size_t I = COL_PRIVATEPOSITION_FOR_DIF165ABOVE - COL_FIRSTPALETTECOLOR + 1;
-	        I < (COL_LASTPALETTECOLOR - COL_FIRSTPALETTECOLOR);
-	        ++I)
-	{
+	// Уточняем алгоритм "взятия" палитры.
+	for (
+		size_t I = COL_PRIVATEPOSITION_FOR_DIF165ABOVE - COL_FIRSTPALETTECOLOR + 1;
+		I < (COL_LASTPALETTECOLOR - COL_FIRSTPALETTECOLOR);
+		++I
+	) {
 		if (!Palette[I])
 		{
 			if (!Palette[COL_PRIVATEPOSITION_FOR_DIF165ABOVE - COL_FIRSTPALETTECOLOR])
@@ -582,9 +670,9 @@ static void SanitizePalette()
 				Palette[I] = BlackPalette[I];
 
 			/*
-			else
-			  в других случаях нифига ничего не делаем, т.к.
-			  есть другие палитры...
+				else
+					в других случаях нифига ничего не делаем, т.к.
+					есть другие палитры...
 			*/
 		}
 	}
@@ -740,3 +828,57 @@ void SaveConfig(int Ask)
 	/* *************************************************** </ПОСТПРОЦЕССЫ> */
 }
 
+void AdvancedConfig()
+{
+	size_t len_sections = 0, len_keys = 0, len_sections_keys = 0;
+	bool bHideUnchanged = false, bAlignDot = false;
+	FARString title = L"far:config";
+
+	VMenu ListConfig(title + (bHideUnchanged ? L" *" : L""),nullptr,0,ScrY-4);
+	ListConfig.SetFlags(VMENU_SHOWAMPERSAND);
+	//ListConfig.SetFlags(VMENU_WRAPMODE);
+	//ListConfig.ClearFlags(VMENU_MOUSEDOWN);
+	//ListConfig.SetHelp(L"FarConfig");
+
+	ListConfig.SetBottomTitle(L"ESC or F10 to close, Ctrl-Alt-F - filtering, Ctrl-H - changed/all, Ctrl-A - names left/dot");
+
+	for (const auto &opt_ser : s_opt_serializers)
+		opt_ser.GetMaxLengthSectKeys(len_sections, len_keys, len_sections_keys);
+	for (const auto &opt_ser : s_opt_serializers)
+		opt_ser.MenuListAppend(ListConfig, len_sections, len_keys, len_sections_keys, bHideUnchanged, bAlignDot);
+
+	ListConfig.SetPosition(-1, -1, 0, 0);
+	//ListConfig.Process();
+	ListConfig.Show();
+	while (!ListConfig.Done()) {
+		int Key = ListConfig.ReadInput();
+		switch (Key) {
+			case KEY_ENTER:
+			case KEY_NUMENTER: {
+				int i = ListConfig.GetSelectPos();
+				if (i>=0)
+					s_opt_serializers[i].Msg(title);
+				}
+				continue;
+			case KEY_CTRLH:
+				bHideUnchanged = !bHideUnchanged;
+				ListConfig.SetTitle(title + (bHideUnchanged ? L" *" : L""));
+				break;
+			case KEY_CTRLA:
+				bAlignDot = !bAlignDot;
+				break;
+			default:
+				ListConfig.ProcessInput();
+				continue;
+		}
+
+		// regenerate items in loop only if not was contunue
+		int sel_pos = ListConfig.GetSelectPos();
+		ListConfig.DeleteItems();
+		for (const auto &opt_ser : s_opt_serializers)
+			opt_ser.MenuListAppend(ListConfig, len_sections, len_keys, len_sections_keys, bHideUnchanged, bAlignDot);
+		ListConfig.SetSelectPos(sel_pos,0);
+		ListConfig.SetPosition(-1, -1, 0, 0);
+		ListConfig.Show();
+	}
+}

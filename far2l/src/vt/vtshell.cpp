@@ -43,8 +43,6 @@
 const char *VT_TranslateSpecialKey(const WORD key, bool ctrl, bool alt, bool shift, unsigned char keypad = 0,
 	WCHAR uc = 0);
 
-int FarDispatchAnsiApplicationProtocolCommand(const char *str);
-
 #if 0 //change to 1 to enable verbose I/O reports to stderr
 static void DbgPrintEscaped(const char *info, const char *s, size_t l)
 {
@@ -65,7 +63,22 @@ static void DbgPrintEscaped(const char *info, const char *s, size_t l)
 # define DbgPrintEscaped(i, s, l) 
 #endif
 
-int VTShell_Leader(const char *shell, const char *pty);
+int VTShell_Leader(char *const shell_argv[], const char *pty);
+
+std::string VTSanitizeHistcontrol()
+{
+	std::string hc_override;
+	const char *hc = getenv("HISTCONTROL");
+	if (!hc || (!strstr(hc, "ignorespace") && !strstr(hc, "ignoreboth"))) {
+		hc_override = "ignorespace";
+		if (hc && *hc) {
+			hc_override+= ':';
+			hc_override+= hc;
+		}
+		fprintf(stderr, "Override HISTCONTROL='%s'\n", hc_override.c_str());
+	}
+	return hc_override;
+}
 
 class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 {
@@ -79,6 +92,7 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 	std::string _slavename;
 	std::atomic<unsigned char> _keypad{0};
 	std::atomic<bool> _bracketed_paste_expected{false};
+	std::atomic<bool> _win32_input_mode_expected{false};
 	INPUT_RECORD _last_window_info_ir;
 	std::unique_ptr<VTFar2lExtensios> _far2l_exts;
 	std::unique_ptr<VTMouse> _mouse;
@@ -89,41 +103,49 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 	unsigned int _exit_code;
 	bool _allow_osc_clipset{false};
 
+	static const char *GetSystemShell()
+	{
+		const char *env_shell = getenv("SHELL");
+		if (!env_shell || !*env_shell) {
+			return "/bin/sh";
+		}
+
+		const char *slash = strrchr(env_shell, '/');
+		// avoid using fish and csh for a while, it requires changes in Opt.strQuotedSymbols and some others
+		if (strcmp(slash ? slash + 1 : env_shell, "fish") == 0
+		 || strcmp(slash ? slash + 1 : env_shell, "csh") == 0
+		 || strcmp(slash ? slash + 1 : env_shell, "tcsh") == 0 ) {
+			return "bash";
+		}
+
+		return env_shell;
+	}
+
 	int ExecLeaderProcess()
 	{
 		std::string home = GetMyHome();
 
 		std::string far2l_exename = g_strFarModuleName.GetMB();
 
-		std::string force_shell = Wide2MB(Opt.CmdLine.strShell);
-		const char *shell = Opt.CmdLine.UseShell ? force_shell.c_str() : nullptr;
-
-		if (!shell || !*shell) {
-			shell = getenv("SHELL");
-			if (!shell) {
-				shell = "/bin/sh";
-			}
-			const char *slash = strrchr(shell, '/');
-			// avoid using fish and csh for a while, it requires changes in Opt.strQuotedSymbols and some others
-			if (strcmp(slash ? slash + 1 : shell, "fish") == 0
-			 || strcmp(slash ? slash + 1 : shell, "csh") == 0
-			 || strcmp(slash ? slash + 1 : shell, "tcsh") == 0 ) {
-				shell = "bash";
-			}
+		Environment::ExplodeCommandLine shell_exploded;
+		if (Opt.CmdLine.UseShell) {
+			shell_exploded.Parse(Opt.CmdLine.strShell.GetMB());
 		}
+
+		if (shell_exploded.empty() || shell_exploded.front().empty()) {
+			shell_exploded.Parse(GetSystemShell());
+			shell_exploded.emplace_back("-i");
+		}
+
+		std::vector<char *> shell_argv;
+		for (const auto &arg : shell_exploded) {
+			shell_argv.emplace_back((char *)arg.c_str());
+		}
+		shell_argv.emplace_back(nullptr);
 
 		// Will need to ensure that HISTCONTROL prevents adding to history commands that start by space
 		// to avoid shell history pollution by far2l's intermediate script execution commands
-		std::string hc_override;
-		const char *hc = getenv("HISTCONTROL");
-		if (!hc || (!strstr(hc, "ignorespace") && !strstr(hc, "ignoreboth"))) {
-			hc_override = "ignorespace";
-			if (hc && *hc) {
-				hc_override+= ':';
-				hc_override+= hc;
-			}
-			fprintf(stderr, "Override HISTCONTROL='%s'\n", hc_override.c_str());
-		}
+		const std::string &hc_override = VTSanitizeHistcontrol();
 
 		const BYTE col = FarColorToReal(COL_COMMANDLINEUSERSCREEN);
 		char colorfgbg[32];
@@ -183,9 +205,9 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 			CheckedCloseFD(_pipes_fallback_out);
 		}
 
-		r = VTShell_Leader(shell, _slavename.c_str());
+		r = VTShell_Leader(shell_argv.data(), _slavename.c_str());
 		fprintf(stderr, "%s: VTShell_Leader('%s', '%s') returned %d errno %u\n",
-			__FUNCTION__, shell, _slavename.c_str(), r, errno);
+			__FUNCTION__, shell_argv[0], _slavename.c_str(), r, errno);
 
 		int err = errno;
 		_exit(err);
@@ -337,11 +359,11 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 		}
 
 		if (MouseEvent.dwEventFlags & MOUSE_WHEELED) {
-			if (HIWORD(MouseEvent.dwButtonState) > 0) {
+			if (short(HIWORD(MouseEvent.dwButtonState)) > 0) {
 				OnConsoleLog(CLK_VIEW_AUTOCLOSE);
 			}
 		} else if ( (MouseEvent.dwButtonState&FROM_LEFT_1ST_BUTTON_PRESSED) != 0 &&
-			(MouseEvent.dwEventFlags & (MOUSE_HWHEELED|MOUSE_MOVED|DOUBLE_CLICK)) == 0 ) {
+				(MouseEvent.dwEventFlags & (MOUSE_HWHEELED | MOUSE_MOVED | DOUBLE_CLICK)) == 0 ) {
 			WINPORT(BeginConsoleAdhocQuickEdit)();
 		}
 	}
@@ -386,11 +408,12 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 				return;
 		}
 
-		if (!KeyEvent.bKeyDown)
-			return;
-
 		DWORD dw;
 		const std::string &translated = TranslateKeyEvent(KeyEvent);
+
+		if (!KeyEvent.bKeyDown && !_win32_input_mode_expected)
+			return;
+
 		if (!translated.empty()) {
 			if (_slavename.empty() && KeyEvent.uChar.UnicodeChar) {//pipes fallback
 				WINPORT(WriteConsole)( NULL, &KeyEvent.uChar.UnicodeChar, 1, &dw, NULL );
@@ -435,9 +458,9 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 
 		SetFarConsoleMode(TRUE);
 		if (kind == CLK_EDIT)
-			ModalEditConsoleHistory(true);
+			EditConsoleHistory(true);
 		else
-			ModalViewConsoleHistory(true, kind == CLK_VIEW_AUTOCLOSE);
+			ViewConsoleHistory(true, kind == CLK_VIEW_AUTOCLOSE);
 
 		CtrlObject->CmdLine->ShowBackground();
 		ScrBuf.Flush();
@@ -487,6 +510,11 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 	virtual void OnBracketedPasteExpectation(bool enabled)
 	{
 		_bracketed_paste_expected = enabled;
+	}
+
+	virtual void OnWin32InputMode(bool enabled)
+	{
+		_win32_input_mode_expected = enabled;
 	}
 
 	virtual void OnApplicationProtocolCommand(const char *str)//NB: called not from main thread!
@@ -550,7 +578,8 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 						_vta.EnableOutput();
 					}
 					else if (!_exit_marker.empty()
-					  && strncmp(&str[6], _exit_marker.c_str(), _exit_marker.size()) == 0) {
+						&& strncmp(&str[6], _exit_marker.c_str(), _exit_marker.size()) == 0)
+					{
 						_exit_code = atoi(&str[6 + _exit_marker.size()]);
 						_exit_marker.clear();
 //						fprintf(stderr, "_exit_marker=%s _exit_code=%d\n", &str[6], _exit_code);
@@ -654,39 +683,58 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 	std::string TranslateKeyEvent(const KEY_EVENT_RECORD &KeyEvent)
 	{
 		if (KeyEvent.wVirtualKeyCode) {
+
 			const bool ctrl = (KeyEvent.dwControlKeyState & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)) != 0;
 			const bool alt = (KeyEvent.dwControlKeyState & (RIGHT_ALT_PRESSED|LEFT_ALT_PRESSED)) != 0;
 			const bool shift = (KeyEvent.dwControlKeyState & (SHIFT_PRESSED)) != 0;
-			
-			if (!ctrl && !shift && !alt && KeyEvent.wVirtualKeyCode==VK_BACK) {
-				//WCM has a setting for that, so probably in some cases backspace should be returned as is
-				char backspace[] = {127, 0};
-				return backspace;
-			}
-			
-			if ((ctrl && shift && !alt && KeyEvent.wVirtualKeyCode=='V') ||
-					(!ctrl && shift && !alt && KeyEvent.wVirtualKeyCode==VK_INSERT) ) {
-				return StringFromClipboard();
-			}
-			
-			if (ctrl && !shift && KeyEvent.wVirtualKeyCode=='C') {
-				OnCtrlC(alt);
-			} 
-			
-			if (ctrl && !shift && alt && KeyEvent.wVirtualKeyCode=='Z') {
-				WINPORT(ConsoleBackgroundMode)(TRUE);
-				return "";
+
+			if (KeyEvent.bKeyDown) {
+
+				if (!ctrl && !shift && !alt && KeyEvent.wVirtualKeyCode==VK_BACK) {
+					//WCM has a setting for that, so probably in some cases backspace should be returned as is
+					char backspace[] = {127, 0};
+					return backspace;
+				}
+
+				if ((ctrl && shift && !alt && KeyEvent.wVirtualKeyCode=='V') ||
+						(!ctrl && shift && !alt && KeyEvent.wVirtualKeyCode==VK_INSERT) ) {
+					return StringFromClipboard();
+				}
+
+				if (ctrl && !shift && KeyEvent.wVirtualKeyCode=='C') {
+					OnCtrlC(alt);
+				}
+
+				if (ctrl && !shift && alt && KeyEvent.wVirtualKeyCode=='Z') {
+					WINPORT(ConsoleBackgroundMode)(TRUE);
+					return "";
+				}
+
+				if (ctrl && shift && KeyEvent.wVirtualKeyCode==VK_F4) {
+					OnConsoleLog(CLK_EDIT);
+					return "";
+				}
+
+				if (ctrl && shift && KeyEvent.wVirtualKeyCode==VK_F3) {
+					OnConsoleLog(CLK_VIEW);
+					return "";
+				}
 			}
 
-			if (ctrl && shift && KeyEvent.wVirtualKeyCode==VK_F4) {
-				OnConsoleLog(CLK_EDIT);
-				return "";
-			} 
+			if (_win32_input_mode_expected) {
+				char buffer[64];
+				sprintf(buffer, "\x1B[%i;%i;%i;%i;%i;%i_",
+						KeyEvent.wVirtualKeyCode,
+						KeyEvent.wVirtualScanCode,
+						KeyEvent.uChar.UnicodeChar,
+						KeyEvent.bKeyDown,
+						KeyEvent.dwControlKeyState,
+						KeyEvent.wRepeatCount
+					);
+				return buffer;
+			}
 
-			if (ctrl && shift && KeyEvent.wVirtualKeyCode==VK_F3) {
-				OnConsoleLog(CLK_VIEW);
-				return "";
-			} 
+			if (!KeyEvent.bKeyDown) { return ""; }
 
 			const char *spec = VT_TranslateSpecialKey(
 				KeyEvent.wVirtualKeyCode, ctrl, alt, shift, _keypad, KeyEvent.uChar.UnicodeChar);

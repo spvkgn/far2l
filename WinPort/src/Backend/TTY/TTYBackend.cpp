@@ -9,7 +9,7 @@
 # include <termios.h>
 # include <linux/kd.h>
 # include <linux/keyboard.h>
-#elif defined(__FreeBSD__)
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
 # include <sys/ioctl.h>
 # include <sys/kbio.h>
 #endif
@@ -30,6 +30,9 @@
 
 static volatile long s_terminal_size_change_id = 0;
 static TTYBackend * g_vtb = nullptr;
+
+long _iterm2_cmd_ts = 0;
+bool _iterm2_cmd_state = 0;
 
 static void OnSigHup(int signo);
 
@@ -76,10 +79,12 @@ static WORD WChar2WinVKeyCode(WCHAR wc)
 }
 
 
-TTYBackend::TTYBackend(const char *full_exe_path, int std_in, int std_out, const char *nodetect, bool far2l_tty, unsigned int esc_expiration, int notify_pipe, int *result) :
+TTYBackend::TTYBackend(const char *full_exe_path, int std_in, int std_out, bool ext_clipboard, bool norgb, const char *nodetect, bool far2l_tty, unsigned int esc_expiration, int notify_pipe, int *result) :
 	_full_exe_path(full_exe_path),
 	_stdin(std_in),
 	_stdout(std_out),
+	_ext_clipboard(ext_clipboard),
+	_norgb(norgb),
 	_nodetect(nodetect),
 	_far2l_tty(far2l_tty),
 	_esc_expiration(esc_expiration),
@@ -166,6 +171,43 @@ bool TTYBackend::Startup()
 	return true;
 }
 
+static wchar_t s_backend_identification[8] = L"TTY";
+
+static void AppendBackendIdentificationChar(char ch)
+{
+	const size_t l = wcslen(s_backend_identification);
+	if (l + 1 >= ARRAYSIZE(s_backend_identification)) {
+		abort();
+	}
+	s_backend_identification[l + 1] = 0;
+	s_backend_identification[l] = (unsigned char)ch;
+}
+
+void TTYBackend::UpdateBackendIdentification()
+{
+	s_backend_identification[3] = 0;
+
+	if (_far2l_tty || _ttyx || _using_extension) {
+		AppendBackendIdentificationChar('|');
+	}
+
+	if (_far2l_tty) {
+		AppendBackendIdentificationChar('F');
+
+	} else if (_ttyx || _using_extension) {
+		if (_ttyx) {
+			AppendBackendIdentificationChar('X');
+		}
+		if (_using_extension) {
+			AppendBackendIdentificationChar(_using_extension);
+		} else if (_ttyx && _ttyx->HasXi()) {
+			AppendBackendIdentificationChar('i');
+		}
+	}
+
+	g_winport_backend = s_backend_identification;
+}
+
 void TTYBackend::ReaderThread()
 {
 	bool prev_far2l_tty = false;
@@ -174,8 +216,7 @@ void TTYBackend::ReaderThread()
 		_fkeys_support = _far2l_tty ? FKS_UNKNOWN : FKS_NOT_SUPPORTED;
 
 		if (_far2l_tty) {
-			g_winport_backend = L"TTY|F";
-			if (!prev_far2l_tty) {
+			if (!prev_far2l_tty && !_ext_clipboard) {
 				IFar2lInterractor *interractor = this;
 				_clipboard_backend_setter.Set<TTYFar2lClipboardBackend>(interractor);
 			}
@@ -185,14 +226,15 @@ void TTYBackend::ReaderThread()
 				_ttyx = StartTTYX(_full_exe_path, !strstr(_nodetect, "xi"));
 			}
 			if (_ttyx) {
-				g_winport_backend = _ttyx->HasXi() ? L"TTY|Xi" : L"TTY|X";
-				_clipboard_backend_setter.Set<TTYXClipboard>(_ttyx);
+				if (!_ext_clipboard) {
+					_clipboard_backend_setter.Set<TTYXClipboard>(_ttyx);
+				}
 
 			} else {
-				g_winport_backend = L"TTY";
 				ChooseSimpleClipboardBackend();
 			}
 		}
+		UpdateBackendIdentification();
 		prev_far2l_tty = _far2l_tty;
 
 		{
@@ -203,7 +245,7 @@ void TTYBackend::ReaderThread()
 
 
 		pthread_t writer_trd = 0;
-		if (pthread_create(&writer_trd, nullptr, sWriterThread, this) == -1) {
+		if (pthread_create(&writer_trd, nullptr, sWriterThread, this) != 0) {
 			break;
 		}
 
@@ -213,6 +255,7 @@ void TTYBackend::ReaderThread()
 		} catch (const std::exception &e) {
 			fprintf(stderr, "ReaderLoop: %s <%d>\n", e.what(), errno);
 		}
+		OnUsingExtension(0);
 
 		OnInputBroken();
 
@@ -290,6 +333,13 @@ void TTYBackend::ReaderLoop()
 			}
 			//fprintf(stderr, "ReaderThread: CHAR 0x%x\n", (unsigned char)c);
 			tty_in->OnInput(buf, (size_t)rd);
+
+			// iTerm2 cmd+v workaround
+			if (_iterm2_cmd_state || _iterm2_cmd_ts) {
+				std::unique_lock<std::mutex> lock(_async_mutex);
+				_ae.flags.output = true;
+				_async_cond.notify_all();
+			}
 		}
 
 		if (FD_ISSET(_stdin, &fde)) {
@@ -318,7 +368,7 @@ void TTYBackend::WriterThread()
 {
 	bool gone_background = false;
 	try {
-		TTYOutput tty_out(_stdout, _far2l_tty);
+		TTYOutput tty_out(_stdout, _far2l_tty, _norgb);
 		DispatchPalette(tty_out);
 //		DispatchTermResized(tty_out);
 		while (!_exiting && !_deadio) {
@@ -359,6 +409,11 @@ void TTYBackend::WriterThread()
 
 			if (ae.flags.osc52clip_set) {
 				DispatchOSC52ClipSet(tty_out);
+			}
+
+			// iTerm2 cmd+v workaround
+			if (_iterm2_cmd_state || _iterm2_cmd_ts) {
+				tty_out.CheckiTerm2Hack();
 			}
 
 			tty_out.Flush();
@@ -664,6 +719,10 @@ bool TTYBackend::OnConsoleSetFKeyTitles(const char **titles)
 
 BYTE TTYBackend::OnConsoleGetColorPalette()
 {
+	if (_norgb) {
+		return 4;
+	}
+
 	if (_far2l_tty) try {
 		StackSerializer stk_ser;
 		stk_ser.PushNum(FARTTY_INTERRACT_GET_COLOR_PALETTE);
@@ -783,6 +842,10 @@ void TTYBackend::OnConsoleSetMaximized(bool maximized)
 
 void TTYBackend::ChooseSimpleClipboardBackend()
 {
+	if (_ext_clipboard) {
+		return;
+	}
+
 	if (_osc52clip_set) {
 		IOSC52Interractor *interractor = this;
 		_clipboard_backend_setter.Set<OSC52ClipboardBackend>(interractor);
@@ -874,6 +937,7 @@ static void OnFar2lKeyCompact(bool down, StackSerializer &stk_ser)
 		ir.Event.KeyEvent.uChar.UnicodeChar = (wchar_t)(uint32_t)stk_ser.PopU16();
 		ir.Event.KeyEvent.dwControlKeyState = stk_ser.PopU16();
 		ir.Event.KeyEvent.wVirtualKeyCode = stk_ser.PopU8();
+		ir.Event.KeyEvent.wVirtualScanCode = WINPORT(MapVirtualKey)(ir.Event.KeyEvent.wVirtualKeyCode, MAPVK_VK_TO_VSC);
 		g_winport_con_in->Enqueue(&ir, 1);
 
 	} catch (std::exception &e) {
@@ -911,14 +975,23 @@ static void OnFar2lMouse(bool compact, StackSerializer &stk_ser)
 	}
 }
 
+void TTYBackend::OnUsingExtension(char extension)
+{
+	if (_using_extension != extension) {
+		_using_extension = extension;
+		UpdateBackendIdentification();
+	}
+}
+
 void TTYBackend::OnInspectKeyEvent(KEY_EVENT_RECORD &event)
 {
-	if (_ttyx) {
+	if (_ttyx && !_using_extension) {
 		_ttyx->InspectKeyEvent(event);
 
 	} else {
 		event.dwControlKeyState|= QueryControlKeys();
 	}
+
 	if (!event.wVirtualKeyCode) {
 		if (event.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED | LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) {
 			event.wVirtualKeyCode = WChar2WinVKeyCode(event.uChar.UnicodeChar);
@@ -1032,7 +1105,7 @@ DWORD TTYBackend::QueryControlKeys()
 	}
 #endif
 
-#if defined(__FreeBSD__) || defined(__linux__)
+#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__linux__)
 	unsigned long int leds = 0;
 	if (ioctl(_stdin, KDGETLED, &leds) == 0) {
 		if (leds & 1) {
@@ -1136,9 +1209,9 @@ static void OnSigHup(int signo)
 }
 
 
-bool WinPortMainTTY(const char *full_exe_path, int std_in, int std_out, const char *nodetect, bool far2l_tty, unsigned int esc_expiration, int notify_pipe, int argc, char **argv, int(*AppMain)(int argc, char **argv), int *result)
+bool WinPortMainTTY(const char *full_exe_path, int std_in, int std_out, bool ext_clipboard, bool norgb, const char *nodetect, bool far2l_tty, unsigned int esc_expiration, int notify_pipe, int argc, char **argv, int(*AppMain)(int argc, char **argv), int *result)
 {
-	TTYBackend vtb(full_exe_path, std_in, std_out, nodetect, far2l_tty, esc_expiration, notify_pipe, result);
+	TTYBackend vtb(full_exe_path, std_in, std_out, ext_clipboard, norgb, nodetect, far2l_tty, esc_expiration, notify_pipe, result);
 
 	if (!vtb.Startup()) {
 		return false;
@@ -1148,7 +1221,7 @@ bool WinPortMainTTY(const char *full_exe_path, int std_in, int std_out, const ch
 	g_std_out = std_out;
 	g_far2l_tty = far2l_tty;
 
-	auto orig_winch = signal(SIGWINCH,  OnSigWinch);
+	auto orig_winch = signal(SIGWINCH, OnSigWinch);
 	auto orig_tstp = signal(SIGTSTP, OnSigTstp);
 	auto orig_cont = signal(SIGCONT, OnSigCont);
 	auto orig_hup = signal(SIGHUP, (notify_pipe != -1) ? OnSigHup : SIG_DFL); // notify_pipe == -1 means --mortal specified

@@ -7,7 +7,7 @@
 # include <termios.h>
 # include <linux/kd.h>
 # include <linux/keyboard.h>
-#elif defined(__FreeBSD__)
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
 # include <sys/ioctl.h>
 # include <sys/kbio.h>
 #endif
@@ -66,6 +66,9 @@ template <DWORD64 R, DWORD64 G, DWORD64 B>
 
 void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
 {
+	if (_norgb) {
+		attr&= ~(FOREGROUND_TRUECOLOR | BACKGROUND_TRUECOLOR);
+	}
 	const DWORD64 xa = _prev_attr_valid ? attr ^ _prev_attr : (DWORD64)-1;
 	if (xa == 0) {
 		return;
@@ -92,7 +95,8 @@ void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
 		((attr & BACKGROUND_TRUECOLOR) != 0 && (GET_RGB_BACK(xa) != 0 || (xa & BACKGROUND_TRUECOLOR) != 0));
 
 	if ( ((xa & (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)) != 0)
-	  || ((_prev_attr & FOREGROUND_TRUECOLOR) != 0 && (attr & FOREGROUND_TRUECOLOR) == 0) ) {
+		|| ((_prev_attr & FOREGROUND_TRUECOLOR) != 0 && (attr & FOREGROUND_TRUECOLOR) == 0) )
+	{
 		_tmp_attrs+= (attr & FOREGROUND_INTENSITY) ? '9' : '3';
 		AppendAnsiColorSuffix<FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE>(_tmp_attrs, attr);
 		if ((attr & FOREGROUND_TRUECOLOR) != 0) {
@@ -101,7 +105,8 @@ void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
 	}
 
 	if ( ((xa & (BACKGROUND_BLUE | BACKGROUND_GREEN | BACKGROUND_RED | BACKGROUND_INTENSITY)) != 0)
-	  || ((_prev_attr & BACKGROUND_TRUECOLOR) != 0 && (attr & BACKGROUND_TRUECOLOR) == 0) ) {
+		|| ((_prev_attr & BACKGROUND_TRUECOLOR) != 0 && (attr & BACKGROUND_TRUECOLOR) == 0) )
+	{
 		if (attr & BACKGROUND_INTENSITY) {
 			_tmp_attrs+= "10";
 		} else {
@@ -135,7 +140,10 @@ void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
 		_tmp_attrs+= (attr & COMMON_LVB_REVERSE_VIDEO) ? "7;" : "27;";
 	}
 
-	assert(!_tmp_attrs.empty() && _tmp_attrs.back() == ';');
+	if (_tmp_attrs.back() != ';') {
+		return;
+	}
+
 	_tmp_attrs.back() = 'm';
 	_prev_attr = attr;
 	_prev_attr_valid = true;
@@ -145,11 +153,13 @@ void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
 
 ///////////////////////
 
-TTYOutput::TTYOutput(int out, bool far2l_tty)
+TTYOutput::TTYOutput(int out, bool far2l_tty, bool norgb)
 	:
-	_out(out), _far2l_tty(far2l_tty), _kernel_tty(false)
+	_out(out), _far2l_tty(far2l_tty), _norgb(norgb), _kernel_tty(false)
 {
-#if defined(__linux__) || defined(__FreeBSD__)
+	const char *env = getenv("TERM");
+	_screen_tty = (env && strncmp(env, "screen", 6) == 0); // TERM=screen.xterm-256color
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
 	unsigned long int leds = 0;
 	if (ioctl(out, KDGETLED, &leds) == 0) {
 		// running under linux 'real' TTY, such kind of terminal cannot be dropped due to lost connection etc
@@ -160,6 +170,9 @@ TTYOutput::TTYOutput(int out, bool far2l_tty)
 #endif
 
 	Format(ESC "7" ESC "[?47h" ESC "[?1049h" ESC "[?2004h");
+	Format(ESC "[?9001h"); // win32-input-mode on
+	Format(ESC "[?1337h"); // iTerm2 input mode on
+	Format(ESC "[=15;1u"); // kovidgoyal's kitty mode on
 	ChangeKeypad(true);
 	ChangeMouse(true);
 
@@ -183,7 +196,10 @@ TTYOutput::~TTYOutput()
 		if (!_kernel_tty) {
 			Format(ESC "[0 q");
 		}
+		Format(ESC "[=0;1u" "\r"); // kovidgoyal's kitty mode off
 		Format(ESC "[0m" ESC "[?1049l" ESC "[?47l" ESC "8" ESC "[?2004l" "\r\n");
+		Format(ESC "[?9001l"); // win32-input-mode off
+		Format(ESC "[?1337l"); // iTerm2 input mode off
 		TTYBasePalette def_palette;
 		ChangePalette(def_palette);
 		Flush();
@@ -244,9 +260,9 @@ void TTYOutput::FinalizeSameChars()
 
 	// When have queued enough count of same characters:
 	// - Use repeat last char sequence when (#925 #929) terminal is far2l that definately supports it
-	// - Under other terminals and if repeated char is space - use erase chars + move cursor forward
+	// - Under other terminals except screen and if repeated char is space - use erase chars + move cursor forward
 	// - Otherwise just output copies of repeated char sequence
-	if (_same_chars.count <= 5
+	if (_screen_tty || _same_chars.count <= 5
 			|| (!_far2l_tty && (_same_chars.wch != L' ' || _same_chars.count <= 8))) {
 
 		// output plain <count> copies of repeated char sequence
@@ -378,8 +394,10 @@ void TTYOutput::MoveCursorStrict(unsigned int y, unsigned int x)
 	if (x == 1) {
 		if (y == 1) {
 			Write(ESC "[H", 3);
-		} else {
+		} else if (_far2l_tty) { // many other terminals support this too, but not all (see #1725)
 			Format(ESC "[%dH", y);
+		} else {
+			Format(ESC "[%d;H", y);
 		}
 	} else {
 		Format(ESC "[%d;%dH", y, x);
@@ -501,4 +519,18 @@ void TTYOutput::SendOSC52ClipSet(const std::string &clip_data)
 	base64_encode(request, (const unsigned char *)clip_data.data(), clip_data.size());
 	request+= '\a';
 	Write(request.c_str(), request.size());
+}
+
+// iTerm2 cmd+v workaround
+void TTYOutput::CheckiTerm2Hack() {
+	if (_iterm2_cmd_state) {
+		_iterm2_cmd_state = 0;
+		const char it2off[] = "\x1b[?1337l";
+		WriteReally(it2off, sizeof(it2off));
+	}
+	if (!_iterm2_cmd_state && _iterm2_cmd_ts && (time(NULL) - _iterm2_cmd_ts) >= 2) {
+		_iterm2_cmd_ts = 0;
+		const char it2on[] = "\x1b[?1337h";
+		WriteReally(it2on, sizeof(it2on));
+	}
 }

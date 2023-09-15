@@ -30,10 +30,12 @@ src/Backend/WinPortMain.cpp
 src/Backend/WinPortRGB.cpp
 src/Backend/SudoAskpassImpl.cpp
 src/Backend/FSClipboardBackend.cpp
+src/Backend/ExtClipboardBackend.cpp
 src/Backend/TTY/TTYBackend.cpp
 src/Backend/TTY/TTYRevive.cpp
 src/Backend/TTY/TTYInput.cpp
 src/Backend/TTY/TTYInputSequenceParser.cpp
+src/Backend/TTY/TTYInputSequenceParserExts.cpp
 src/Backend/TTY/TTYOutput.cpp
 src/Backend/TTY/TTYFar2lClipboardBackend.cpp
 src/Backend/TTY/OSC52ClipboardBackend.cpp

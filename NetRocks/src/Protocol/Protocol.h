@@ -1,6 +1,6 @@
 #pragma once
 #include <memory>
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__DragonFly__)
 # include <sys/types.h>
 #endif
 #include "Erroring.h"
@@ -95,7 +95,6 @@ struct IProtocol
 		{ throw ProtocolUnsupportedError(""); }
 };
 
-
 #define FILENAME_ENUMERABLE(PSZ) ((PSZ)[0] != 0 && ((PSZ)[0] != '.' || ((PSZ)[1] != 0 && ((PSZ)[1] != '.' || (PSZ)[2] != 0)) ))
 
 struct ProtocolInfo
@@ -105,6 +104,7 @@ struct ProtocolInfo
 	int default_port; // -1 if port cannot be represented/changed
 	bool require_server; // false if protocol can be instantiated with empty server
 	bool support_creds; // false if protocol doesnt support username:password authentification
+	bool inaccurate_timestamps; // true if should use OPIF_COMPAREFATTIME flag when opened file in such protocol
 	void (*Configure)(std::string &options);
 };
 

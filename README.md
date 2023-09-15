@@ -1,19 +1,3 @@
-
-# Собственно что хотелось добавить
- * [решено] вдруг выяснилось, что far2l не поддерживает запароленные 7z архивы (в целом понятно почему - в исходниках только Си шные файлы для распаковки)
- * [решено] см. [sqlplugin](https://github.com/VPROFi/sqlplugin)   SQLite - очень часто нужно при разработке залезть в SQLite db в фаре и что-нибудь быстро просмотреть - плагин SQLite DB Browser не работает в far2l
- * [решено] см. [netcfgplugin](https://github.com/VPROFi/netcfgplugin) Плагин позволяет просматривать, редактировать информацию о сетевых интерфейсах, а так же сохранять трафик на интерфейсе в файл (tcpdump), просматривать, создавать, редактировать и удалять информацию о маршрутизации arp, ipv4(ipv6) + multicast
- * В дополнение, в SQLite неплохо бы хранить настройки, историю и возможно логи, как это сделано в far3 - отпадают вопросы синхронизации
-# По архиватору 7z в данном форке внесены следующие изменения
- * исправлена поддержка запароленных архивов
- * в far2l полностью перекочевал 7z функционал от 21.07 версии архиватора и far2l более не нуждается в отдельно установленном p7zip-full (7z бинарнике), со всеми поддерживаемыми им форматами файлов и т.п.
- * 7z часть multiarc "всеядна", т.е. если может открыть файл, не важно какое расширение, то пытается это сделать, но отфильтровано открытие deb и tar.gz (libarch лучше это умеет делать)
- * добавлена поддержка симлинков и хардлинков по дефолту + небольшой патч 7z (версия 21.07 более настороженно работает с симлинками)
- * 7z по возможности собирается с asm вставками для ускорения работы
-# Разное
- * если перед командой ввести пробел, то такая команда не попадет в историю far2l
-# far2l
-=======
 [![Cirrus Build Status](https://api.cirrus-ci.com/github/elfmz/far2l.svg)](https://cirrus-ci.com/github/elfmz/far2l) [![Coverage Status](https://codecov.io/gh/elfmz/far2l/coverage.svg?branch=master)](https://codecov.io/gh/elfmz/far2l?branch=master) [![Coverity Scan](https://scan.coverity.com/projects/27038/badge.svg)](https://scan.coverity.com/projects/elfmz-far2l) [![Language Grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/elfmz/far2l.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/elfmz/far2l/context:cpp) [![Packages](https://repology.org/badge/tiny-repos/far2l.svg)](https://repology.org/project/far2l)
 
 # far2l [![tag](https://img.shields.io/github/tag/elfmz/far2l.svg)](https://github.com/elfmz/far2l/tags)
@@ -41,29 +25,27 @@ FreeBSD/MacOS (Cirrus CI): [![Cirrus](https://api.cirrus-ci.com/github/elfmz/far
 ## Contributing, Hacking
 #### Required dependencies
 
-* gawk
-* m4
-* libwxgtk3.0-gtk3-dev (in new distributives - libwxgtk3.2-dev, in old distributives - libwxgtk3.0-dev)  (needed for GUI backend, not needed with -DUSEWX=no)
+* libwxgtk3.0-gtk3-dev (or libwxgtk3.2-dev in newer distributions, or libwxgtk3.0-dev in older ones, optional - needed for GUI backend, not needed with -DUSEWX=no)
 * libx11-dev (optional - needed for X11 extension that provides better UX for TTY backend wherever X11 is available)
 * libxi-dev (optional - needed for X11/Xi extension that provides best UX for TTY backend wherever X11 Xi extension is available)
-* libxerces-c-dev
-* libspdlog-dev
-* libuchardet-dev
-* libssh-dev (needed for NetRocks/SFTP)
-* libssl-dev (needed for NetRocks/FTPS)
-* libsmbclient-dev (needed for NetRocks/SMB)
-* libnfs-dev (needed for NetRocks/NFS)
-* libneon27-dev (or later, needed for NetRocks/WebDAV)
-* libarchive-dev (needed for better archives support in multiarc)
-* libunrar-dev (optionally needed for RAR archives support in multiarc - see UNRAR command line option)
-* libpcre3-dev (or in older distributives - libpcre2-dev) (needed for custom archives support in multiarc)
+* libxerces-c-dev (optional - needed for Colorer plugin, not needed with -DCOLORER=no)
+* libuchardet-dev (optional - needed for auto charset detection, not needed with -DUSEUCD=no)
+* libssh-dev (optional - needed for NetRocks/SFTP)
+* libssl-dev (optional - needed for NetRocks/FTPS)
+* libsmbclient-dev (optional - needed for NetRocks/SMB)
+* libnfs-dev (optional - needed for NetRocks/NFS)
+* libneon27-dev (or later, optional - needed for NetRocks/WebDAV)
+* libarchive-dev (optional - needed for better archives support in multiarc)
+* libunrar-dev (optional - needed for RAR archives support in multiarc, see UNRAR command line option)
+* libpcre3-dev (or libpcre2-dev in older distributions, optional - needed for advanced custom archive formats support in multiarc)
 * cmake ( >= 3.2.2 )
+* pkg-config
 * g++
 * git (needed for downloading source code)
 
 #### Or simply on Debian/Ubuntu:
 ``` sh
-apt-get install gawk m4 libwxgtk3.0-gtk3-dev libx11-dev libxi-dev libpcre3-dev libxerces-c-dev libspdlog-dev libuchardet-dev libssh-dev libssl-dev libsmbclient-dev libnfs-dev libneon27-dev libarchive-dev cmake g++ git
+apt-get install libwxgtk3.0-gtk3-dev libx11-dev libxi-dev libpcre3-dev libxerces-c-dev libuchardet-dev libssh-dev libssl-dev libsmbclient-dev libnfs-dev libneon27-dev libarchive-dev cmake pkg-config g++ git
 ```
 
 On Debian unstable/sid:
@@ -81,7 +63,7 @@ debuild
 # cd .. and install your self built far2l*.deb
 ```
 
-In older distributives: use libpcre2-dev and libwxgtk3.0-dev instead of libpcre3-dev and libwxgtk3.0-gtk3-dev
+In older distributions: use libpcre2-dev and libwxgtk3.0-dev instead of libpcre3-dev and libwxgtk3.0-gtk3-dev
 
 #### Clone and Build
  * Clone current master `git clone https://github.com/elfmz/far2l`
@@ -162,11 +144,13 @@ cd far2l
 ```
  * Install needed dependencies with MacPorts:
 ``` sh
-sudo port install cmake gawk pkgconfig wxWidgets-3.2 libssh openssl xercesc3 libfmt spdlog uchardet neon
+sudo port install cmake pkgconfig wxWidgets-3.2 libssh openssl xercesc3 libfmt uchardet neon
+export PKG_CONFIG_PATH=/opt/local/lib/pkgconfig
 ```
  * OR if you prefer to use brew packages, then:
 ```sh
 brew bundle -v
+export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$(brew --prefix)/opt/openssl/lib/pkgconfig:$(brew --prefix)/opt/libarchive/lib/pkgconfig"
 ```
  * After dependencies installed - you can build far2l:
 _with make:_
@@ -191,7 +175,7 @@ After .dmg successfully created, you may install it by running `open ...path/to/
 #### Building on Gentoo (and derivatives)
 For absolute minimum you need:
 ```
-emerge -avn dev-libs/xerces-c app-i18n/uchardet dev-util/cmake dev-libs/spdlog
+emerge -avn dev-libs/xerces-c app-i18n/uchardet dev-util/cmake
 ```
 If you want to build far2l with wxGTK support also install it:
 ```
@@ -236,7 +220,7 @@ You can import the project into your favourite IDE like QtCreator, CodeLite, or 
  * putty-nd, one more putty fork with extensions support: https://sourceforge.net/p/putty-nd/
  * Turbo Vision, TUI framework supporting far2l terminal extensions: https://github.com/magiblot/tvision
  * turbo, text editor supporting far2l terminal extensions: https://github.com/magiblot/turbo
- * Tool to import color schemes from windows FAR manager 2 .reg format: https://github.com/unxed/far2l-deb/blob/master/far2l_import.pl
+ * Tool to import color schemes from windows FAR manager 2 .reg format: https://github.com/unxed/far2l-deb/blob/master/misc/far2l_import.pl
 
 ## Notes on porting and FAR Plugin API changes
  * See HACKING.md

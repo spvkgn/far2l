@@ -18,6 +18,8 @@ class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2
 {
 	const char *_full_exe_path;
 	int _stdin = 0, _stdout = 1;
+	bool _ext_clipboard;
+	bool _norgb;
 	const char *_nodetect = "";
 	bool _far2l_tty = false;
 	bool _osc52clip_set = false;
@@ -54,11 +56,12 @@ class TTYBackend : IConsoleOutputBackend, ITTYInputSpecialSequenceHandler, IFar2
 	void ReaderThread();
 	void ReaderLoop();
 	void WriterThread();
-
+	void UpdateBackendIdentification();
 
 	std::condition_variable _async_cond;
 	std::mutex _async_mutex;
 	ITTYXGluePtr _ttyx;
+	char _using_extension = 0;
 
 	COORD _largest_window_size{};
 	std::atomic<bool> _largest_window_size_ready{false};
@@ -133,6 +136,7 @@ protected:
 	virtual void OnConsoleOverrideColor(DWORD Index, DWORD *ColorFG, DWORD *ColorBK);
 
 	// ITTYInputSpecialSequenceHandler
+	virtual void OnUsingExtension(char extension);
 	virtual void OnInspectKeyEvent(KEY_EVENT_RECORD &event);
 	virtual void OnFar2lEvent(StackSerializer &stk_ser);
 	virtual void OnFar2lReply(StackSerializer &stk_ser);
@@ -141,7 +145,7 @@ protected:
 	DWORD QueryControlKeys();
 
 public:
-	TTYBackend(const char *full_exe_path, int std_in, int std_out, const char *nodetect, bool far2l_tty, unsigned int esc_expiration, int notify_pipe, int *result);
+	TTYBackend(const char *full_exe_path, int std_in, int std_out, bool ext_clipboard, bool norgb, const char *nodetect, bool far2l_tty, unsigned int esc_expiration, int notify_pipe, int *result);
 	~TTYBackend();
 	void KickAss(bool flush_input_queue = false);
 	bool Startup();

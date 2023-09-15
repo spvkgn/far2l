@@ -92,6 +92,10 @@ if (NOT DEFINED UNRAR)
     set(UNRAR "bundled")
 endif()
 
+if (NOT DEFINED USESPDLOG)
+    set(USESPDLOG "NO")
+endif()
+
 # EACP disabled by default for now as FAR's GetCodePageInfo rejects all multibyte charsets due to BUGBUG.
 # Uncomment EACP-stuff here when that will be fixed. See https://github.com/elfmz/far2l/issues/1179
 #if (NOT DEFINED EACP)
@@ -111,24 +115,7 @@ endif()
 #   message(STATUS "${ColorRed}Building without East Asian codepages support due to EACP=${EACP}${ColorNormal}")
 #endif()
 
-if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-    set(M4_NAME gm4)
-else()
-    set(M4_NAME m4)
-endif()
-
-find_program(M4_PROG NAMES ${M4_NAME})
-
-if(NOT M4_PROG)
-    message(FATAL_ERROR "${ColorRed}${M4_NAME} not found - please install it${ColorNormal}")
-endif ()
-set(M4 ${M4_PROG} -P "-DARCH=${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}" "-DMAJOR=${VERSION_MAJOR}" "-DMINOR=${VERSION_MINOR}" "-DPATCH=${VERSION_PATCH}")
-
 # set(RM rm) actually not needed: use $(CMAKE_COMMAND) -E remove
-find_program (GAWK NAMES gawk)
-if(NOT GAWK)
-  message(FATAL_ERROR "${ColorRed}gawk not found - please install it${ColorNormal}")
-endif ()
 
 if(MUSL)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__MUSL__")
@@ -388,22 +375,15 @@ endif()
 
 if (NOT DEFINED MULTIARC OR MULTIARC)
     message(STATUS "MULTIARC plugin enabled")
-    # workaround for brew's/macports' libarchive
-    if(IS_DIRECTORY "/usr/local/opt/libarchive/include")
-        set(LibArchive_INCLUDE_DIR "/usr/local/opt/libarchive/include")
-        set(LibArchive_LIBRARY "/usr/local/opt/libarchive/lib/libarchive.dylib")
-    elseif(EXISTS "/opt/local/lib/libarchive.dylib")
-        set(LibArchive_LIBRARY "/opt/local/lib/libarchive.dylib")
-    endif()
-
-    find_package(LibArchive)
+    find_package(PkgConfig REQUIRED)
+    pkg_search_module(LibArchive QUIET libarchive)
     if(NOT LibArchive_FOUND)
         message(WARNING "${ColorRed}libarchive not found, multiarc will have weaker archives support. Its recommended to install libarchive-dev and reconfigure far2l.${ColorNormal}")
     endif()
 
-    find_package(PCRE)
+    pkg_search_module(PCRE QUIET libpcre)
     if(NOT PCRE_FOUND)
-        message(WARNING "${ColorRed}libpcre not found, multiarc will have no custom archives support. Install libpcre and reconfigure far2l if you need that functionality.${ColorNormal}")
+        message(WARNING "${ColorRed}libpcre not found, multiarc will have no regexp support in custom archive format descriptions. Install libpcre and reconfigure far2l if you need that functionality.${ColorNormal}")
     endif()
 
     add_subdirectory (multiarc)
@@ -416,17 +396,6 @@ endif()
 
 if (NOT DEFINED NETROCKS OR NETROCKS)
     message(STATUS "NETROCKS plugin enabled")
-    if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        # workaround for brew/macports vs system openssl conflicts
-        if(IS_DIRECTORY "/usr/local/opt/openssl@1.1/include" AND IS_DIRECTORY "/usr/local/opt/openssl@1.1/lib")
-            set(OPENSSL_LIBRARIES "/usr/local/opt/openssl@1.1/lib/libcrypto.dylib;/usr/local/opt/openssl@1.1/lib/libssl.dylib")
-            set(OPENSSL_INCLUDE_DIRS "/usr/local/opt/openssl@1.1/include")
-        elseif(EXISTS "/opt/local/lib/libssl.dylib" AND IS_DIRECTORY "/opt/local/include/openssl")
-            set(OPENSSL_LIBRARIES "/opt/local//lib/libcrypto.dylib;/opt/local/lib/libssl.dylib")
-            set(OPENSSL_INCLUDE_DIRS "/opt/local/include")
-        endif()
-    endif()
-
     find_package(OpenSSL)
     if(OPENSSL_FOUND)
         message(STATUS "OpenSSL found -> enjoy FTPS support in NetRocks")
@@ -470,45 +439,49 @@ else()
         " COMPONENT system)
 endif()
 
-if (DEFINED PYTHON AND PYTHON)
-    find_package(PythonLibs 3.0)
-
-    if(PYTHONLIBS_FOUND)
-        find_program (PYTHON3 NAMES python3)
-        if(PYTHON3)
-            message(STATUS "PYTHON plugin enabled")
-            add_subdirectory (python)
-        else()
-            message(WARNING "${ColorRed}PYTHON plugin disabled due to missing python3 ${ColorNormal}")
-        endif ()
-    else()
-        message(WARNING "${ColorRed}PYTHON plugin disabled due to Python libraries not found${ColorNormal}")
-    endif()
-
-    install(CODE "
-        execute_process(COMMAND echo Python: preparing virtual environment)
-        " COMPONENT system)
-    install(CODE "
-        execute_process(COMMAND ${PYTHON3} -m venv --system-site-packages ${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/python/plug/python)
-        " COMPONENT system)
-    install(CODE "
-        execute_process(COMMAND echo Python: installing packages)
-        " COMPONENT system)
-    install(CODE "
-        execute_process(COMMAND ${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/python/plug/python/bin/python -m pip install cffi debugpy)
-        " COMPONENT system)
-
+if (DEFINED VIRTUAL_PYTHON)
+    message(STATUS "PYTHON plugin with interpreter from virtualenv enabled")
+    add_subdirectory (python)
     # Copy this explicitly cuz generic copier command excludes 'far2l'
     install(DIRECTORY "${INSTALL_DIR}/Plugins/python/plug/far2l"
-        DESTINATION "share/far2l/Plugins/python/plug/" USE_SOURCE_PERMISSIONS
+        DESTINATION "lib/far2l/Plugins/python/plug/" USE_SOURCE_PERMISSIONS
         COMPONENT base FILES_MATCHING
         PATTERN "*")
-
 else()
-    message(STATUS "${ColorRed}PYTHON plugin disabled, use -DPYTHON=yes if you need it${ColorNormal}")
-    install(CODE "
-        execute_process(COMMAND rm -f ${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/python/plug/python.far-plug-wide)
-        " COMPONENT system)
+    if (DEFINED PYTHON AND PYTHON)
+        find_package(Python3 COMPONENTS Interpreter Development)
+
+        if(Python3_FOUND AND Python3_Development_FOUND)
+            message(STATUS "PYTHON plugin enabled")
+            add_subdirectory (python)
+            install(CODE "
+                execute_process(COMMAND echo Python: preparing virtual environment)
+                " COMPONENT system)
+            install(CODE "
+                execute_process(COMMAND ${Python3_EXECUTABLE} -m venv --system-site-packages ${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/python/plug/python)
+                " COMPONENT system)
+            install(CODE "
+                execute_process(COMMAND echo Python: installing packages)
+                " COMPONENT system)
+            install(CODE "
+                execute_process(COMMAND ${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/python/plug/python/bin/python -m pip install cffi debugpy)
+                " COMPONENT system)
+
+            # Copy this explicitly cuz generic copier command excludes 'far2l'
+            install(DIRECTORY "${INSTALL_DIR}/Plugins/python/plug/far2l"
+                DESTINATION "lib/far2l/Plugins/python/plug/" USE_SOURCE_PERMISSIONS
+                COMPONENT base FILES_MATCHING
+                PATTERN "*")
+        else()
+            message(WARNING "${ColorRed}PYTHON plugin disabled due to missing python3 environment${ColorNormal}")
+        endif ()
+
+    else()
+        message(STATUS "${ColorRed}PYTHON plugin disabled, use -DPYTHON=yes if you need it${ColorNormal}")
+        install(CODE "
+            execute_process(COMMAND rm -f ${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/python/plug/python.far-plug-wide)
+            " COMPONENT system)
+    endif()
 endif()
 
 if (NOT DEFINED SIMPLEINDENT OR SIMPLEINDENT)
@@ -540,7 +513,7 @@ add_subdirectory(man)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(FIXUP_SCRIPT packaging/osx/FixupBundle.cmake)
-    configure_file(${FIXUP_SCRIPT} ${PROJECT_BINARY_DIR}/${FIXUP_SCRIPT} @ONLY)
+    configure_file(${FIXUP_SCRIPT}.in ${PROJECT_BINARY_DIR}/${FIXUP_SCRIPT} @ONLY)
     install(DIRECTORY ${APP_DIR}/${APP_NAME}.app DESTINATION . USE_SOURCE_PERMISSIONS COMPONENT app EXCLUDE_FROM_ALL)
     install(SCRIPT ${PROJECT_BINARY_DIR}/${FIXUP_SCRIPT} COMPONENT app EXCLUDE_FROM_ALL)
 endif()
@@ -556,6 +529,7 @@ install(DIRECTORY "${INSTALL_DIR}/" DESTINATION "lib/far2l" USE_SOURCE_PERMISSIO
 
 install(DIRECTORY "${INSTALL_DIR}/" DESTINATION "share/far2l" USE_SOURCE_PERMISSIONS COMPONENT base FILES_MATCHING
     PATTERN "${EXECUTABLE_NAME}" EXCLUDE
+    PATTERN "far2ledit" EXCLUDE
     PATTERN "far2l_*" EXCLUDE
     PATTERN "*.far-plug-*" EXCLUDE
     PATTERN "*.broker" EXCLUDE
@@ -563,10 +537,12 @@ install(DIRECTORY "${INSTALL_DIR}/" DESTINATION "share/far2l" USE_SOURCE_PERMISS
     PATTERN "*")
 
 # setup some symlinks and remove deprecated stuff from previous installation
-execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ../../bin/far2l ${PROJECT_BINARY_DIR}/far2l_askpass)
-execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ../../bin/far2l ${PROJECT_BINARY_DIR}/far2l_sudoapp)
-install(FILES "${PROJECT_BINARY_DIR}/far2l_askpass" DESTINATION "lib/far2l" COMPONENT system)
-install(FILES "${PROJECT_BINARY_DIR}/far2l_sudoapp" DESTINATION "lib/far2l" COMPONENT system)
+execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ../../bin/far2l ${PROJECT_BINARY_DIR}/far2l/far2l_askpass)
+execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ../../bin/far2l ${PROJECT_BINARY_DIR}/far2l/far2l_sudoapp)
+execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink far2l ${PROJECT_BINARY_DIR}/far2l/far2ledit)
+install(FILES "${PROJECT_BINARY_DIR}/far2l/far2l_askpass" DESTINATION "lib/far2l" COMPONENT system)
+install(FILES "${PROJECT_BINARY_DIR}/far2l/far2l_sudoapp" DESTINATION "lib/far2l" COMPONENT system)
+install(FILES "${PROJECT_BINARY_DIR}/far2l/far2ledit" DESTINATION "bin" COMPONENT base)
 install(CODE "
     execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f \"\${CMAKE_INSTALL_PREFIX}/lib/far2l/Plugins/objinfo/plug/objinfo.far-plug-mb\")
     " COMPONENT system)

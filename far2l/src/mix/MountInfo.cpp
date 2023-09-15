@@ -6,8 +6,8 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <fcntl.h>
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__CYGWIN__)
-# if defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__CYGWIN__)
+# if defined(__APPLE__) || defined(__FreeBSD__)  || defined(__DragonFly__)
 #  include <sys/param.h>
 #  include <sys/ucred.h>
 # endif
@@ -42,7 +42,7 @@ static struct FSMagic {
 {"AUTOFS",	0x0187},
 {"CODA",	0x73757245},
 {"CRAMFS",		0x28cd3d45},	/* some random number */
-{"CRAMFS",	0x453dcd28},	/* magic number with the wrong endianess */
+{"CRAMFS",	0x453dcd28},		/* magic number with the wrong endianess */
 {"DEBUGFS",          0x64626720},
 {"SECURITYFS",	0x73636673},
 {"SELINUX",		0xf97cff8c},
@@ -81,8 +81,8 @@ static struct FSMagic {
 {"QNX6",	0x68191122},	/* qnx6 fs detection */
 
 {"REISERFS",	0x52654973},	/* used by gcc */
-					/* used by file system utilities that
-	                                   look at the superblock, etc.  */
+								/* used by file system utilities that
+								look at the superblock, etc.  */
 {"SMB",		0x517B},
 {"CGROUP",	0x27e0eb},
 
@@ -130,7 +130,7 @@ class ThreadedStatFS : Threaded
 
 	void *ThreadProc()
 	{
-		struct statfs s = {};
+		struct statfs s{};
 		int r = statfs((*_mps)[_mpi].path.c_str(), &s);
 		if (r == 0) {
 			(*_mps)[_mpi].total = ((unsigned long long)s.f_blocks) * s.f_bsize; //f_frsize;
@@ -224,7 +224,8 @@ MountInfo::MountInfo(bool for_location_menu)
 				Environment::UnescapeCLikeSequences(part);
 			}
 			if (parts.size() > 1 && StrStartsFrom(parts[1], "/")
-			  && (!for_location_menu || !lme.Match(parts[1].c_str()))) {
+				&& (!for_location_menu || !lme.Match(parts[1].c_str())))
+			{
 				bool multi_thread_friendly;
 				if (for_location_menu) {
 					// Location menu doesn't care about this, so dont waist time
@@ -267,7 +268,7 @@ MountInfo::MountInfo(bool for_location_menu)
 		}
 	}
 
-#elif defined(__APPLE__) || defined(__FreeBSD__)
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__DragonFly__)
 
 	int r = getfsstat(nullptr, 0, MNT_NOWAIT);
 	if (r > 0) {

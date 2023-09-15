@@ -1,6 +1,7 @@
 #include <mutex>
 #include <map>
 #include <vector>
+#include <stdexcept>
 
 #include "WinPort.h"
 #include "Backend.h"
@@ -206,9 +207,52 @@ extern "C" {
 		return TRUE;
 	}
 
+	WINPORT_DECL(CheckForKeyPress,DWORD,(HANDLE hConsoleInput, const WORD *KeyCodes, DWORD KeyCodesCount, DWORD Flags))
+	{
+		std::vector<INPUT_RECORD> backlog;
+		DWORD out = 0;
+		while (g_winport_con_in->WaitForNonEmptyWithTimeout(0)) {
+			INPUT_RECORD rec;
+			if (!g_winport_con_in->Dequeue(&rec, 1)) {
+				break;
+			}
+			if (rec.EventType == KEY_EVENT) {
+				DWORD i;
+				for (i = 0; i != KeyCodesCount; ++i) {
+					if (KeyCodes[i] == rec.Event.KeyEvent.wVirtualKeyCode) {
+						if (rec.Event.KeyEvent.bKeyDown && out == 0) {
+							out = i + 1;
+						}
+						break;
+					}
+				}
+				if (i == KeyCodesCount && (Flags & CFKP_KEEP_UNMATCHED_KEY_EVENTS) != 0) {
+					backlog.emplace_back(rec);
+				}
+				if (i != KeyCodesCount && (Flags & CFKP_KEEP_MATCHED_KEY_EVENTS) != 0) {
+					backlog.emplace_back(rec);
+				}
+			} else if (rec.EventType == MOUSE_EVENT) {
+				if ((Flags & CFKP_KEEP_MOUSE_EVENTS) != 0) {
+					backlog.emplace_back(rec);
+				}
+			} else if ((Flags & CFKP_KEEP_OTHER_EVENTS) != 0) {
+				backlog.emplace_back(rec);
+			}
+		}
+		if (!backlog.empty()) {
+			g_winport_con_in->Enqueue(backlog.data(), backlog.size());
+		}
+		return out;
+	}
+
 	WINPORT_DECL(WaitConsoleInput,BOOL,(DWORD dwTimeout))
 	{
-		return g_winport_con_in->WaitForNonEmpty((dwTimeout == INFINITE) ? -1 : dwTimeout) ? TRUE : FALSE;
+		if (dwTimeout == INFINITE) {
+			g_winport_con_in->WaitForNonEmpty();
+			return TRUE;
+		}
+		return g_winport_con_in->WaitForNonEmptyWithTimeout(dwTimeout) ? TRUE : FALSE;
 	}
 
 	WINPORT_DECL(WriteConsoleInput,BOOL,(HANDLE hConsoleInput, const INPUT_RECORD *lpBuffer, DWORD nLength, LPDWORD lpNumberOfEventsWritten))
@@ -375,7 +419,7 @@ extern "C" {
 	{
 		if ((CompositeChar & COMPOSITE_CHAR_MARK) == 0) {
 			fprintf(stderr, "%s: invoked for not composite-char 0x%llx\n",
-				__FUNCTION__,  (unsigned long long)CompositeChar);
+				__FUNCTION__, (unsigned long long)CompositeChar);
 			return L"\u2022";
 		}
 
@@ -384,7 +428,7 @@ extern "C" {
 		std::lock_guard<std::mutex> lock(s_composite_chars.mtx);
 		if (id >= (COMP_CHAR)s_composite_chars.id2str.size()) {
 			fprintf(stderr, "%s: out of range composite-char 0x%llx\n",
-				__FUNCTION__,  (unsigned long long)CompositeChar);
+				__FUNCTION__, (unsigned long long)CompositeChar);
 			return L"\u2022";
 		}
 		return s_composite_chars.id2str[id];

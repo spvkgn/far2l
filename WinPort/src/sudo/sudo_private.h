@@ -56,7 +56,7 @@ namespace Sudo
 
 		void RecvBuf(void *buf, size_t len);
 		void RecvStr(std::string &str);
-		template <class POD>  void RecvPOD(POD &v) { RecvBuf(&v, sizeof(v)); }
+		template <class POD> void RecvPOD(POD &v) { RecvBuf(&v, sizeof(v)); }
 		int RecvInt();
 		inline int RecvFD() { return _sock.RecvFD(); }
 		inline void RecvErrno() { errno = RecvInt(); }
@@ -94,7 +94,7 @@ namespace Sudo
 		~ClientReconstructCurDir();
 	};
 
-#if !defined(__APPLE__) && !defined(__FreeBSD__)
+#if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(__DragonFly__)
 	int bugaware_ioctl_pint(int fd, unsigned long req, unsigned long *v);
 #endif
 

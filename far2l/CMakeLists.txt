@@ -3,6 +3,7 @@ project(far2l)
 add_subdirectory (bootstrap)
 
 set(SOURCES
+src/farversion.cpp
 src/cache.cpp
 src/clipboard.cpp
 src/cmdline.cpp
@@ -68,6 +69,7 @@ src/execute_oscmd.cpp
 src/ViewerStrings.cpp
 src/ViewerPrinter.cpp
 src/fileholder.cpp
+src/GrepFile.cpp
 
 src/panels/panel.cpp
 src/panels/filelist.cpp
@@ -251,7 +253,8 @@ endif()
 
 add_custom_command(TARGET far2l POST_BUILD
     COMMAND ln -sf ${EXECUTABLE_NAME} ${INSTALL_DIR}/far2l_askpass
-    COMMAND ln -sf ${EXECUTABLE_NAME} ${INSTALL_DIR}/far2l_sudoapp)
+    COMMAND ln -sf ${EXECUTABLE_NAME} ${INSTALL_DIR}/far2l_sudoapp
+    COMMAND ln -sf ${EXECUTABLE_NAME} ${INSTALL_DIR}/far2ledit)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 #TODO
@@ -259,5 +262,9 @@ else()
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/DE/far2l.desktop" "${CMAKE_CURRENT_BINARY_DIR}/DE/far2l.desktop")
 
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/DE/icons" DESTINATION "share" USE_SOURCE_PERMISSIONS COMPONENT desktop FILES_MATCHING PATTERN "*")
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/DE/far2l.desktop" DESTINATION "share/applications" COMPONENT desktop)
+
+	# Have to make desktop file executable, see:
+	# https://wiki.ubuntu.com/SecurityTeam/Policies#Execute-Permission_Bit_Required
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/DE/far2l.desktop" DESTINATION "share/applications" COMPONENT desktop
+        PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_READ WORLD_EXECUTE)
 endif()
