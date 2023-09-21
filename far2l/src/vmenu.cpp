@@ -1330,8 +1330,13 @@ int VMenu::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 							& (FROM_LEFT_1ST_BUTTON_PRESSED | RIGHTMOST_BUTTON_PRESSED))
 					&& CheckFlags(VMENU_MOUSEDOWN)) {
 				ClearFlags(VMENU_MOUSEDOWN);
-				ProcessKey(KEY_ENTER);
+				if (CheckFlags(VMENU_IGNORE_SINGLECLICK))
+					SetSelectPos(MsPos, 1);
+				else
+					ProcessKey(KEY_ENTER);
 			}
+			if (MouseEvent->dwEventFlags==DOUBLE_CLICK) // need if VMENU_IGNORE_SINGLECLICK disable ENTER by click
+					ProcessKey(KEY_ENTER);
 		}
 
 		return TRUE;
@@ -1604,7 +1609,7 @@ void VMenu::DrawTitles()
 	int WidthTitle;
 
 	FARString strDisplayTitle = strTitle;
-	if (WrappedSeparatorIndex >= 0 && WrappedSeparatorIndex < ItemCount) {
+	if (WrappedSeparatorIndex >= 0 && WrappedSeparatorIndex < ItemCount && !Item[WrappedSeparatorIndex]->strName.IsEmpty()) {
 		if (!strDisplayTitle.IsEmpty()) {
 			strDisplayTitle+= L' ';
 			strDisplayTitle+= BoxSymbols[BS_H1];
