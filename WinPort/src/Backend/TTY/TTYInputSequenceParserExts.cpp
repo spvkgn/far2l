@@ -291,6 +291,8 @@ size_t TTYInputSequenceParser::TryParseAsKittyEscapeSequence(const char *s, size
 	return i+1;
 }
 
+bool _win32_accumulate = false;
+
 size_t TTYInputSequenceParser::TryParseAsWinTermEscapeSequence(const char *s, size_t l)
 {
 	// check for nasty win32-input-mode sequence: as described in
@@ -336,18 +338,31 @@ size_t TTYInputSequenceParser::TryParseAsWinTermEscapeSequence(const char *s, si
 	ir.Event.KeyEvent.wRepeatCount = args[5];
 
 	if (
-		(ir.Event.KeyEvent.wVirtualKeyCode == 0) &&
-		(ir.Event.KeyEvent.wVirtualScanCode == 0) &&
-		(ir.Event.KeyEvent.bKeyDown == 1) &&
-		(ir.Event.KeyEvent.dwControlKeyState == 0) &&
-		(ir.Event.KeyEvent.wRepeatCount == 1) &&
-		getenv("WT_SESSION") // apply this hackfix only under Windows Terminal
-	   ) {
+			(
+				(
+					(ir.Event.KeyEvent.wVirtualKeyCode == 0) &&
+					(ir.Event.KeyEvent.wVirtualScanCode == 0) &&
+					(ir.Event.KeyEvent.bKeyDown == 1) &&
+					(ir.Event.KeyEvent.dwControlKeyState == 0) &&
+					(ir.Event.KeyEvent.wRepeatCount == 1) &&
+				) || 
+				_win32_accumulate
+			) &&
+			getenv("WT_SESSION") // apply this hackfix only under Windows Terminal
+	   )
+	{
 		// use separate buffer for data from sequences encoded twice
 		// append ir.Event.KeyEvent.uChar.UnicodeChar to it here
 		// see https://github.com/elfmz/far2l/issues/2072
 
-		// for now, just drop this data
+		bool _win32_accumulate = true;
+
+		if (ir.Event.KeyEvent.bKeyDown == 1) {
+			// append data to buffer
+		}
+
+		// set _win32_accumulate to false on succesfull mouse event decode from buffer
+
 	} else {
 
 		_ir_pending.emplace_back(ir);
