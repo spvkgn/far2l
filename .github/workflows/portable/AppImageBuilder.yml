@@ -22,15 +22,29 @@ AppDir:
       - sourceline: deb http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main restricted universe multiverse
     include:
       - libarchive13
+      - libneon27
+      - libnfs13
+      - libpcre3
+      - libsmbclient
       - libuchardet0
       - libwxgtk3.0-gtk3-0v5
+      - libxerces-c3.2
       - libxi6
-      # - libsmbclient
+    exclude:
+      - adwaita-icon-theme
+      - humanity-icon-theme
+      - dbus
+      - libgdk-pixbuf2.0-0
+      - tzdata
+      - libthai-data
 
   files:
     exclude:
       - usr/share/man
+      - usr/share/doc*
+      - usr/share/glib-2.0
+      - usr/share/X11
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
-  # update-information: "gh-releases-zsync|spvkgn|far2l|latest|far2l_{{APPIMAGE_ARCH}}.AppImage.zsync"
+  update-information: "gh-releases-zsync|spvkgn|far2l|latest|far2l-*-{{APPIMAGE_ARCH}}.AppImage.zsync"

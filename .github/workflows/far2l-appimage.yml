@@ -35,7 +35,6 @@ jobs:
       - name: Build far2l
         env:
           GH_NAME: ${{ github.repository_owner }}
-          # APPIMAGE: true
         run: |
           bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
 
@@ -60,6 +59,7 @@ jobs:
           name: far2l-AppImage-${{ matrix.os }}
           path: |
             ./*.AppImage
+            ./*.AppImage.zsync
           if-no-files-found: error
 
   release:
@@ -89,7 +89,7 @@ jobs:
           tag_name: ${{ github.ref_name }}-release
           name: ${{ env.DATE }}
           files: |
-            ./**/far2l*.AppImage
+            ./**/far2l*.AppImage*
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@v2
