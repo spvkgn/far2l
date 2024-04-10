@@ -52,14 +52,14 @@ jobs:
       - name: Build AppImage
         uses: AppImageCrafters/build-appimage@v1.3
         with:
-          recipe: ${{ github.workspace }}/.github/workflows/portable/AppImageBuilder.yml
+          recipe: .github/workflows/portable/AppImageBuilder.yml
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: far2l-AppImage-${{ matrix.os }}
           path: |
-            ./**/far2l*.AppImage
+            ./*.AppImage
           if-no-files-found: error
 
   release:

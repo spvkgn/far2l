@@ -17,9 +17,9 @@ AppDir:
     arch: "{{APPIMAGE_APT_ARCH}}"
     allow_unauthenticated: true
     sources:
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}" main
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-updates main
-      - sourceline: deb http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}" main restricted universe multiverse
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-updates main restricted universe multiverse
+      - sourceline: deb http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main restricted universe multiverse
     include:
       - libarchive13
       - libuchardet0
