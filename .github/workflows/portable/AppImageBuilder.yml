@@ -1,0 +1,36 @@
+version: 1
+
+script:
+  # https://github.com/AppImageCrafters/appimage-builder/issues/271
+  - which mksquashfs || apt install -y --no-install-recommends squashfs-tools
+
+AppDir:
+  path: /home/runner/work/far2l/far2l/AppDir/
+  app_info:
+    id: io.github.elfmz.far2l
+    name: far2l
+    icon: far2l
+    version: "{{APPIMAGE_VERSION}}"
+    exec: usr/bin/far2l
+    exec_args: $@
+  apt:
+    arch: "{{APPIMAGE_APT_ARCH}}"
+    allow_unauthenticated: true
+    sources:
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}" main
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-updates main
+      - sourceline: deb http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main
+    include:
+      - libarchive13
+      - libuchardet0
+      - libwxgtk3.0-gtk3-0v5
+      - libxi6
+      # - libsmbclient
+
+  files:
+    exclude:
+      - usr/share/man
+
+AppImage:
+  arch: "{{APPIMAGE_ARCH}}"
+  # update-information: "gh-releases-zsync|spvkgn|far2l|latest|far2l_{{APPIMAGE_ARCH}}.AppImage.zsync"
