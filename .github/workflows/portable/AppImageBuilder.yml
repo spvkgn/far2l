@@ -6,6 +6,7 @@ script:
 
 AppDir:
   path: /home/runner/work/far2l/far2l/AppDir/
+
   app_info:
     id: io.github.elfmz.far2l
     name: far2l
@@ -13,6 +14,7 @@ AppDir:
     version: "{{APPIMAGE_VERSION}}"
     exec: usr/bin/far2l
     exec_args: $@
+
   apt:
     arch: "{{APPIMAGE_APT_ARCH}}"
     allow_unauthenticated: true
@@ -32,18 +34,58 @@ AppDir:
       - libxi6
     exclude:
       - adwaita-icon-theme
+      - hicolor-icon-theme
       - humanity-icon-theme
-      - dbus
+      - dbus-user-session
+      - dconf-service
+      - glib-networking-services
+      - gsettings-desktop-schemas
+      - libavahi-client3
+      - libavahi-common3
+      - libcolord2
+      - libcups2
+      - libdb5.3
+      - libdconf1
+      - libfontconfig1
       - libgdk-pixbuf2.0-0
-      - tzdata
+      - libgmp10
+      - libgnutls30
+      - libgssapi-krb5-2
+      - libhogweed5
+      - libicu66
+      - libjson-glib-1.0-0
+      - libk5crypto3
+      - libkrb5-3
+      - libkrb5support0
+      - liblcms2-2
+      - libncursesw6
+      - libnettle7
+      - libp11-kit0
+      - libpsl5
+      - librest-0.7-0
+      - libsoup-gnome2.4-1
+      - libsoup2.4-1
+      - libsqlite3-0
+      - libtasn1-6
       - libthai-data
+      - libtiff5
+      - libtinfo6
+      - libunistring2
+      - libwebp6
+      - libxml2
+      - mime-support
+      - python3
+      - python3-minimal
+      - readline-common
+      - systemd
+      - systemd-timesyncd
+      - tzdata
+      - xkb-data
 
   files:
     exclude:
       - usr/share/man
       - usr/share/doc*
-      - usr/share/glib-2.0
-      - usr/share/X11
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"

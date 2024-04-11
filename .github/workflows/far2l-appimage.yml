@@ -2,8 +2,8 @@ name: build AppImage
 
 on:
   workflow_dispatch:
-  push:
-    branches: [appimage]
+  # push:
+  #   branches: [appimage]
 
 jobs:
   build-AppImage:
@@ -46,7 +46,7 @@ jobs:
             echo "APPIMAGE_APT_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)"
             echo "APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)"
             echo "APPIMAGE_ARCH=$(uname -m)"
-          } >> "${GITHUB_ENV}"
+          } >> ${GITHUB_ENV}
 
       - name: Build AppImage
         uses: AppImageCrafters/build-appimage@v1.3
