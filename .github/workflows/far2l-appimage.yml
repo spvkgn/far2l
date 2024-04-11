@@ -2,8 +2,8 @@ name: build AppImage
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [appimage]
+  push:
+    branches: [appimage]
 
 jobs:
   build-AppImage:
@@ -59,7 +59,7 @@ jobs:
           name: far2l-AppImage-${{ matrix.os }}
           path: |
             ./*.AppImage
-            ./*.AppImage.zsync
+            # ./*.AppImage.zsync
           if-no-files-found: error
 
   release:

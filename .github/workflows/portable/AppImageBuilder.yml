@@ -5,8 +5,7 @@ script:
   - which mksquashfs || apt install -y --no-install-recommends squashfs-tools
 
 AppDir:
-  path: /home/runner/work/far2l/far2l/AppDir/
-
+  # path: /home/runner/work/far2l/far2l/AppDir/
   app_info:
     id: io.github.elfmz.far2l
     name: far2l
@@ -19,9 +18,9 @@ AppDir:
     arch: "{{APPIMAGE_APT_ARCH}}"
     allow_unauthenticated: true
     sources:
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}" main restricted universe multiverse
-      - sourceline: deb http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-updates main restricted universe multiverse
-      - sourceline: deb http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main restricted universe multiverse
+      - sourceline: 'deb [arch="{{APPIMAGE_APT_ARCH}}"] http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}" main restricted universe multiverse'
+      - sourceline: 'deb [arch="{{APPIMAGE_APT_ARCH}}"] http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-updates main restricted universe multiverse'
+      - sourceline: 'deb [arch="{{APPIMAGE_APT_ARCH}}"] http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main restricted universe multiverse'
     include:
       - libarchive13
       - libneon27
@@ -38,44 +37,56 @@ AppDir:
       - humanity-icon-theme
       - dbus-user-session
       - dconf-service
-      - glib-networking-services
+      - glib-networking
       - gsettings-desktop-schemas
+      - libatk-bridge2.0-0
       - libavahi-client3
+      - libavahi-common-data
       - libavahi-common3
       - libcolord2
+      - libcryptsetup12
       - libcups2
       - libdb5.3
       - libdconf1
+      - libdevmapper1.02.1
+      - libexpat1
       - libfontconfig1
-      - libgdk-pixbuf2.0-0
+      - libfreetype6
+      - libfribidi0
       - libgmp10
-      - libgnutls30
-      - libgssapi-krb5-2
-      - libhogweed5
-      - libicu66
+      - libgpg-error0
+      - libgtk-3-common
+      - libharfbuzz0b
+      - libip4tc2
+      - libjson-c4
       - libjson-glib-1.0-0
-      - libk5crypto3
-      - libkrb5-3
-      - libkrb5support0
+      - libjson-glib-1.0-common
+      - libkmod2
       - liblcms2-2
+      - libldap-common
+      - liblmdb0
+      - libmpdec2
       - libncursesw6
-      - libnettle7
-      - libp11-kit0
-      - libpsl5
+      - libnotify4
+      - libpam-systemd
+      - libpam0g
+      - libpopt0
+      - libproxy1v5
+      - libreadline8
       - librest-0.7-0
-      - libsoup-gnome2.4-1
+      - libsasl2-modules-db
+      - libseccomp2
+      - libsm6
       - libsoup2.4-1
-      - libsqlite3-0
-      - libtasn1-6
-      - libthai-data
-      - libtiff5
+      - libthai0
       - libtinfo6
-      - libunistring2
-      - libwebp6
-      - libxml2
+      - libudev1
+      - libuuid1
       - mime-support
       - python3
+      - python3-ldb
       - python3-minimal
+      - python3-talloc
       - readline-common
       - systemd
       - systemd-timesyncd
@@ -84,9 +95,13 @@ AppDir:
 
   files:
     exclude:
-      - usr/share/man
+      - usr/share/bug
       - usr/share/doc*
+      - usr/share/glib-2.0
+      - usr/share/lintian
+      - usr/share/man
+      - usr/share/themes
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
-  update-information: "gh-releases-zsync|spvkgn|far2l|latest|far2l-*-{{APPIMAGE_ARCH}}.AppImage.zsync"
+  # update-information: "gh-releases-zsync|spvkgn|far2l|latest|far2l-*-{{APPIMAGE_ARCH}}.AppImage.zsync"
