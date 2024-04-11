@@ -46,6 +46,7 @@ jobs:
             echo "APPIMAGE_APT_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)"
             echo "APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)"
             echo "APPIMAGE_ARCH=$(uname -m)"
+            echo "MULTIARCH_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
           } >> ${GITHUB_ENV}
 
       - name: Build AppImage
@@ -59,7 +60,6 @@ jobs:
           name: far2l-AppImage-${{ matrix.os }}
           path: |
             ./*.AppImage
-            # ./*.AppImage.zsync
           if-no-files-found: error
 
   release:
@@ -89,7 +89,7 @@ jobs:
           tag_name: ${{ github.ref_name }}-release
           name: ${{ env.DATE }}
           files: |
-            ./**/far2l*.AppImage*
+            ./**/far2l*.AppImage
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@v2

@@ -5,7 +5,6 @@ script:
   - which mksquashfs || apt install -y --no-install-recommends squashfs-tools
 
 AppDir:
-  # path: /home/runner/work/far2l/far2l/AppDir/
   app_info:
     id: io.github.elfmz.far2l
     name: far2l
@@ -18,9 +17,9 @@ AppDir:
     arch: "{{APPIMAGE_APT_ARCH}}"
     allow_unauthenticated: true
     sources:
-      - sourceline: 'deb [arch="{{APPIMAGE_APT_ARCH}}"] http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}" main restricted universe multiverse'
-      - sourceline: 'deb [arch="{{APPIMAGE_APT_ARCH}}"] http://archive.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-updates main restricted universe multiverse'
-      - sourceline: 'deb [arch="{{APPIMAGE_APT_ARCH}}"] http://security.ubuntu.com/ubuntu/ "{{APPIMAGE_APT_DISTRO}}"-security main restricted universe multiverse'
+      - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://archive.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}} main restricted universe multiverse'
+      - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://archive.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}}-updates main restricted universe multiverse'
+      - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://security.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}}-security main restricted universe multiverse'
     include:
       - libarchive13
       - libneon27
@@ -36,10 +35,12 @@ AppDir:
       - hicolor-icon-theme
       - humanity-icon-theme
       - dbus-user-session
+      - dconf-gsettings-backend
       - dconf-service
       - glib-networking
       - gsettings-desktop-schemas
       - libatk-bridge2.0-0
+      - libatk1.0-data
       - libavahi-client3
       - libavahi-common-data
       - libavahi-common3
@@ -53,9 +54,9 @@ AppDir:
       - libfontconfig1
       - libfreetype6
       - libfribidi0
+      - libgdk-pixbuf2.0-common
       - libgmp10
       - libgpg-error0
-      - libgtk-3-common
       - libharfbuzz0b
       - libip4tc2
       - libjson-c4
@@ -82,8 +83,14 @@ AppDir:
       - libtinfo6
       - libudev1
       - libuuid1
+      - libpython3.8
+      - libpython3.8-minimal
+      - libpython3.8-stdlib
+      - libpython3-stdlib
       - mime-support
       - python3
+      - python3.8
+      - python3.8-minimal
       - python3-ldb
       - python3-minimal
       - python3-talloc
@@ -95,6 +102,12 @@ AppDir:
 
   files:
     exclude:
+      - etc
+      - usr/sbin
+      - usr/lib/python3
+      - usr/lib/sasl2
+      - usr/lib/{{MULTIARCH_TRIPLET}}/ldb
+      - usr/lib/{{MULTIARCH_TRIPLET}}/gdk-pixbuf-2.0
       - usr/share/bug
       - usr/share/doc*
       - usr/share/glib-2.0
