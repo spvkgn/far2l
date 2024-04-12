@@ -104,10 +104,14 @@ AppDir:
     exclude:
       - etc
       - usr/sbin
+      - usr/lib/*-linux-gnu/engines-1.1
+      - usr/lib/*-linux-gnu/gdk-pixbuf-2.0
+      - usr/lib/*-linux-gnu/glib-2.0
+      - usr/lib/*-linux-gnu/gtk-3.0
+      - usr/lib/*-linux-gnu/ldb
+      - usr/lib/*-linux-gnu/libgtk-3.0
       - usr/lib/python3
       - usr/lib/sasl2
-      - usr/lib/{{MULTIARCH_TRIPLET}}/ldb
-      - usr/lib/{{MULTIARCH_TRIPLET}}/gdk-pixbuf-2.0
       - usr/share/bug
       - usr/share/doc*
       - usr/share/glib-2.0
@@ -115,6 +119,10 @@ AppDir:
       - usr/share/man
       - usr/share/themes
 
+  runtime:
+    env:
+      PATH: '$APPDIR/usr/bin:$PATH'
+      # APPDIR_LIBRARY_PATH: '$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/lib/x86_64-linux-gnu'
+
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
-  # update-information: "gh-releases-zsync|spvkgn|far2l|latest|far2l-*-{{APPIMAGE_ARCH}}.AppImage.zsync"
