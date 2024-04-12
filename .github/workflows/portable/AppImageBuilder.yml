@@ -114,6 +114,18 @@ AppDir:
       # - usr/lib/*-linux-gnu/gtk-3.0
       - usr/lib/*-linux-gnu/ldb
       # - usr/lib/*-linux-gnu/libgtk-3.0
+      - usr/lib/*-linux-gnu/libwx_baseu_net*
+      - usr/lib/*-linux-gnu/libwx_baseu_xml
+      - usr/lib/*-linux-gnu/libwx_gtk3u_adv*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_aui*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_gl*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_html*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_propgrid*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_qa*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_ribbon*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_richtext*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_stc*
+      - usr/lib/*-linux-gnu/libwx_gtk3u_xrc*
       - usr/lib/python3
       - usr/lib/sasl2
       - usr/lib/valgrind
