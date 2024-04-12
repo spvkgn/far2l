@@ -21,6 +21,8 @@ AppDir:
       - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://archive.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}}-updates main restricted universe multiverse'
       - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://security.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}}-security main restricted universe multiverse'
     include:
+      - bash
+      - dash
       - libarchive13
       - libneon27
       - libnfs13
@@ -112,17 +114,23 @@ AppDir:
       - usr/lib/*-linux-gnu/libgtk-3.0
       - usr/lib/python3
       - usr/lib/sasl2
+      - usr/lib/valgrind
       - usr/share/bug
       - usr/share/doc*
       - usr/share/glib-2.0
       - usr/share/lintian
       - usr/share/man
+      - usr/share/pixmaps
+      - usr/share/python3
       - usr/share/themes
 
   runtime:
     env:
       PATH: '$APPDIR/usr/bin:$PATH'
       # APPDIR_LIBRARY_PATH: '$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/lib/x86_64-linux-gnu'
+    path_mappings:
+      - /bin/bash:$APPDIR/bin/bash
+      - /bin/sh:$APPDIR/bin/sh
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
