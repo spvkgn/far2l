@@ -27,6 +27,8 @@ AppDir:
       - libneon27
       - libnfs13
       - libpcre3
+      - librsvg2-2
+      - librsvg2-common
       - libsmbclient
       - libuchardet0
       - libwxgtk3.0-gtk3-0v5
@@ -106,12 +108,12 @@ AppDir:
     exclude:
       - etc
       - usr/sbin
-      - usr/lib/*-linux-gnu/engines-1.1
-      - usr/lib/*-linux-gnu/gdk-pixbuf-2.0
-      - usr/lib/*-linux-gnu/glib-2.0
-      - usr/lib/*-linux-gnu/gtk-3.0
+      # - usr/lib/*-linux-gnu/engines-1.1
+      # - usr/lib/*-linux-gnu/gdk-pixbuf-2.0
+      # - usr/lib/*-linux-gnu/glib-2.0
+      # - usr/lib/*-linux-gnu/gtk-3.0
       - usr/lib/*-linux-gnu/ldb
-      - usr/lib/*-linux-gnu/libgtk-3.0
+      # - usr/lib/*-linux-gnu/libgtk-3.0
       - usr/lib/python3
       - usr/lib/sasl2
       - usr/lib/valgrind
