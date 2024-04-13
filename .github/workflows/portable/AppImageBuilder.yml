@@ -138,6 +138,9 @@ AppDir:
       - usr/share/python3
       - usr/share/themes
 
+  # after_bundle: |
+  #   ln -s bash $TARGET_APPDIR/bin/sh
+
   runtime:
     env:
       PATH: '$APPDIR/usr/bin:$PATH'
