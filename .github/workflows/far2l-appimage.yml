@@ -11,13 +11,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-latest]
     steps:
       - name: Add build dependencies
         env:
           PACKAGES: >
             ccache cmake file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev libssh-dev
-            libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf quilt wget
+            libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf python3-minimal quilt wget
         run: |
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
 
@@ -47,6 +47,7 @@ jobs:
             echo "APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)"
             echo "APPIMAGE_ARCH=$(uname -m)"
             echo "MULTIARCH_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+            echo "PYTHON3_VERSION=$(py3versions -vd)"
           } >> ${GITHUB_ENV}
 
       - name: Build AppImage

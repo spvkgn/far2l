@@ -27,13 +27,11 @@ AppDir:
       - libneon27
       - libnfs13
       - libpcre3
-      - librsvg2-2
       - librsvg2-common
       - libsmbclient
       - libuchardet0
       - libwxgtk3.0-gtk3-0v5
       - libxerces-c3.2
-      - libxi6
     exclude:
       - adwaita-icon-theme
       - hicolor-icon-theme
@@ -87,14 +85,14 @@ AppDir:
       - libtinfo6
       - libudev1
       - libuuid1
-      - libpython3.8
-      - libpython3.8-minimal
-      - libpython3.8-stdlib
+      - libpython{{PYTHON3_VERSION}}
+      - libpython{{PYTHON3_VERSION}}-minimal
+      - libpython{{PYTHON3_VERSION}}-stdlib
       - libpython3-stdlib
       - mime-support
       - python3
-      - python3.8
-      - python3.8-minimal
+      - python{{PYTHON3_VERSION}}
+      - python{{PYTHON3_VERSION}}-minimal
       - python3-ldb
       - python3-minimal
       - python3-talloc
@@ -106,14 +104,9 @@ AppDir:
 
   files:
     exclude:
-      - etc
+      - etc/python3*
       - usr/sbin
-      # - usr/lib/*-linux-gnu/engines-1.1
-      # - usr/lib/*-linux-gnu/gdk-pixbuf-2.0
-      # - usr/lib/*-linux-gnu/glib-2.0
-      # - usr/lib/*-linux-gnu/gtk-3.0
       - usr/lib/*-linux-gnu/ldb
-      # - usr/lib/*-linux-gnu/libgtk-3.0
       - usr/lib/*-linux-gnu/libwx_baseu_net*
       - usr/lib/*-linux-gnu/libwx_baseu_xml
       - usr/lib/*-linux-gnu/libwx_gtk3u_adv*
@@ -131,7 +124,6 @@ AppDir:
       - usr/lib/valgrind
       - usr/share/bug
       - usr/share/doc*
-      - usr/share/glib-2.0
       - usr/share/lintian
       - usr/share/man
       - usr/share/pixmaps
@@ -143,11 +135,20 @@ AppDir:
 
   runtime:
     env:
-      PATH: '$APPDIR/usr/bin:$PATH'
+      NO_AT_BRIDGE: 1
+      PATH: $APPDIR/usr/bin:$PATH
       # APPDIR_LIBRARY_PATH: '$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/lib/x86_64-linux-gnu'
+      # GDK_PIXBUF_MODULEDIR: '$APPDIR/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders'
+      # GDK_PIXBUF_MODULE_FILE: '$APPDIR/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache'
+      XDG_DATA_DIRS: $APPDIR/share:$XDG_DATA_DIRS
+      XDG_DATA_HOME: $APPDIR/share:$XDG_DATA_HOME
     path_mappings:
       - /bin/bash:$APPDIR/bin/bash
       - /bin/sh:$APPDIR/bin/sh
+      - /usr/share/glib-2.0/schemas/:$APPDIR/usr/share/glib-2.0/schemas/
+      - /usr/share/fonts/:$APPDIR/usr/share/fonts/
+      - /usr/share/icons/:$APPDIR/usr/share/icons/
+      - /usr/share/themes/:$APPDIR/usr/share/themes/
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
