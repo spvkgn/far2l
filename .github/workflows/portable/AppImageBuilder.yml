@@ -30,6 +30,9 @@ AppDir:
       - librsvg2-common
       - libsmbclient
       - libuchardet0
+      - libwayland-client0
+      - libwayland-cursor0
+      - libwayland-egl1
       - libwxgtk3.0-gtk3-0v5
       - libxerces-c3.2
     exclude:
@@ -41,7 +44,6 @@ AppDir:
       - dconf-service
       - glib-networking
       - gsettings-desktop-schemas
-      - libatk-bridge2.0-0
       - libatk1.0-data
       - libavahi-client3
       - libavahi-common-data
@@ -89,6 +91,16 @@ AppDir:
       - libpython{{PYTHON3_VERSION}}-minimal
       - libpython{{PYTHON3_VERSION}}-stdlib
       - libpython3-stdlib
+      - libxcomposite1
+      - libxcursor1
+      - libxdamage1
+      - libxext6
+      - libxfixes3
+      - libxi6
+      - libxinerama1
+      - libxkbcommon0
+      - libxrandr2
+      - libxrender1
       - mime-support
       - python3
       - python{{PYTHON3_VERSION}}
@@ -105,7 +117,6 @@ AppDir:
   files:
     exclude:
       - etc/python3*
-      - usr/sbin
       - usr/lib/*-linux-gnu/ldb
       - usr/lib/*-linux-gnu/libwx_baseu_net*
       - usr/lib/*-linux-gnu/libwx_baseu_xml
@@ -122,6 +133,7 @@ AppDir:
       - usr/lib/python3
       - usr/lib/sasl2
       - usr/lib/valgrind
+      - usr/sbin
       - usr/share/bug
       - usr/share/doc*
       - usr/share/lintian
@@ -137,18 +149,13 @@ AppDir:
     env:
       NO_AT_BRIDGE: 1
       PATH: $APPDIR/usr/bin:$PATH
-      # APPDIR_LIBRARY_PATH: '$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/lib/x86_64-linux-gnu'
-      # GDK_PIXBUF_MODULEDIR: '$APPDIR/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders'
-      # GDK_PIXBUF_MODULE_FILE: '$APPDIR/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache'
       XDG_DATA_DIRS: $APPDIR/share:$XDG_DATA_DIRS
       XDG_DATA_HOME: $APPDIR/share:$XDG_DATA_HOME
     path_mappings:
       - /bin/bash:$APPDIR/bin/bash
       - /bin/sh:$APPDIR/bin/sh
       - /usr/share/glib-2.0/schemas/:$APPDIR/usr/share/glib-2.0/schemas/
-      - /usr/share/fonts/:$APPDIR/usr/share/fonts/
       - /usr/share/icons/:$APPDIR/usr/share/icons/
-      - /usr/share/themes/:$APPDIR/usr/share/themes/
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
