@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-20.04, ubuntu-latest]
     steps:
       - name: Add build dependencies
         env:
@@ -48,6 +48,7 @@ jobs:
             echo "APPIMAGE_ARCH=$(uname -m)"
             echo "MULTIARCH_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
             echo "PYTHON3_VERSION=$(py3versions -vd)"
+            echo "UBUNTU_VERSION=$(grep -oP '^PRETTY_NAME="\K.+?(?<=\d{2}\.\d{2})' /etc/os-release | tr -d '. ')"
           } >> ${GITHUB_ENV}
 
       - name: Build AppImage

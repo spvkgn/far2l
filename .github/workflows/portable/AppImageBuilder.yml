@@ -159,3 +159,4 @@ AppDir:
 
 AppImage:
   arch: "{{APPIMAGE_ARCH}}"
+  file_name: "far2l-{{APPIMAGE_VERSION}}-{{APPIMAGE_ARCH}}-{{UBUNTU_VERSION}}.AppImage"
