@@ -20,6 +20,7 @@ AppDir:
       - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://archive.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}} main restricted universe multiverse'
       - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://archive.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}}-updates main restricted universe multiverse'
       - sourceline: 'deb [arch={{APPIMAGE_APT_ARCH}}] http://security.ubuntu.com/ubuntu/ {{APPIMAGE_APT_DISTRO}}-security main restricted universe multiverse'
+      - sourceline: 'deb https://ppa.launchpadcontent.net/far2l-team/libs/ubuntu {{APPIMAGE_APT_DISTRO}} main'
     include:
       - bash
       - dash

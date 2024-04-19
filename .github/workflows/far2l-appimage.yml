@@ -19,6 +19,9 @@ jobs:
             ccache cmake file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev libssh-dev
             libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf python3-minimal quilt wget
         run: |
+            sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys EB8B81E14DA65431D7504EA8F63F0F2B90935439
+            # sudo echo "deb [trusted=yes] http://ppa.launchpad.net/far2l-team/libs/ubuntu $(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release) main" > /etc/apt/sources.list.d/far2l-team.list
+            sudo add-apt-repository -y -n ppa:far2l-team/libs
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
 
       - name: Checkout
