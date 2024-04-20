@@ -147,13 +147,13 @@ jobs:
           echo "DATE=$(gh api repos/$REPO/commits/$SHA --jq '.commit.committer.date' | date -f - +%Y%m%d%H%M)" >> $GITHUB_ENV
 
       - name: Upload release assets
-        uses: andelf/nightly-release@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          prerelease: false
-          tag_name: ${{ github.ref_name }}-release
+          allowUpdates: true
+          tag: ${{ github.ref_name }}-release
           name: ${{ env.DATE }}
+          prerelease: false
+          removeArtifacts: true
           body: |
             ## Download and run
             ### Self-extractable tar-archive
@@ -166,7 +166,7 @@ jobs:
             ```
             wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l-*.AppImage
             ```
-          files: |
+          artifacts: |
             ./**/far2l*.run.tar
             ./**/far2l*.AppImage.tar
 
