@@ -142,9 +142,6 @@ AppDir:
       - usr/share/python3
       - usr/share/themes
 
-  # after_bundle: |
-  #   ln -s bash $TARGET_APPDIR/bin/sh
-
   runtime:
     env:
       NO_AT_BRIDGE: 1

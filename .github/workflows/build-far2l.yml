@@ -67,13 +67,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-latest]
     steps:
       - name: Add build dependencies
         env:
           PACKAGES: >
-            ccache cmake file g++ libarchive-dev libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev libssh-dev
-            libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf quilt wget
+            ccache cmake file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev libssh-dev
+            libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf python3-minimal quilt wget
         run: |
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
 
@@ -91,19 +91,41 @@ jobs:
       - name: Build far2l
         env:
           GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
-          APPIMAGE: true
+        run: |
+          bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
+
+      - name: Prepare environment for building AppImage
         shell: bash
         run: |
-          export VERSION=$(cat packaging/version)
-          export PKG_NAME=far2l_${VERSION}_${GH_NAME}_$(uname -m)
-          bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
+          {
+            echo "APPIMAGE_VERSION=$(cat packaging/version)"
+            echo "APPIMAGE_APT_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)"
+            echo "APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)"
+            echo "APPIMAGE_ARCH=$(uname -m)"
+            echo "MULTIARCH_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+            echo "PYTHON3_VERSION=$(py3versions -vd)"
+          } >> ${GITHUB_ENV}
+
+      - name: Build AppImage
+        uses: AppImageCrafters/build-appimage@v1.3
+        with:
+          recipe: .github/workflows/appimage/AppImageBuilder.yml
+
+      - name: Put AppImage into tar
+        env:
+          GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
+        run: |
+          VERSION=$(cat packaging/version)
+          PKG_NAME=far2l_${VERSION}_${GH_NAME}_$(uname -m)
+          mv far2l*.AppImage $PKG_NAME.AppImage
+          tar cvf ${PKG_NAME/${VERSION}_${GH_NAME}_}.AppImage.tar far2l*.AppImage
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: far2l-AppImage-${{ matrix.os }}
           path: |
-            ./**/far2l*.tar*
+            ./far2l*.tar*
           if-no-files-found: error
 
   release:

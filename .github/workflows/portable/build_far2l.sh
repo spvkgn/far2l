@@ -32,21 +32,4 @@ if [[ "$STANDALONE" == "true" ]]; then
     tar cvf ${PKG_NAME/${VERSION}_${GH_NAME}_}.run.tar $PKG_NAME.run )
 fi
 
-# if [[ "$APPIMAGE" == "true" ]]; then
-#   export DISABLE_COPYRIGHT_FILES_DEPLOYMENT=1
-#   export NO_STRIP=1
-#   # export APPIMAGE_EXTRACT_AND_RUN=1
-#   export ARCH=$(uname -m)
-#   APPRUN_FILE=$HERE_DIR/AppRun
-#   ( cd $REPO_DIR && \
-#     AppDir/usr/bin/far2l --help >/dev/null && \
-#     sed 's|@APP@|far2l|' -i $APPRUN_FILE && chmod +x $APPRUN_FILE && \
-#     wget --no-check-certificate https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$ARCH.AppImage && \
-#     wget --no-check-certificate https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$ARCH.AppImage && \
-#     chmod +x *.AppImage && \
-#     ./linuxdeploy-*.AppImage --appdir=AppDir --custom-apprun=$APPRUN_FILE && \
-#     ./appimagetool-*.AppImage -v AppDir $PKG_NAME.AppImage && \
-#     tar cvf ${PKG_NAME/${VERSION}_${GH_NAME}_}.AppImage.tar $PKG_NAME.AppImage )
-# fi
-
 ccache --max-size=50M --show-stats
