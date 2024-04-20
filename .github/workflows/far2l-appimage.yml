@@ -1,0 +1,97 @@
+name: build AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [appimage]
+
+jobs:
+  build-AppImage:
+    name: build AppImage
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - name: Add build dependencies
+        env:
+          PACKAGES: >
+            ccache cmake file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev libssh-dev
+            libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf python3-minimal quilt wget
+        run: |
+            sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os }}-
+
+      - name: Build far2l
+        env:
+          GH_NAME: ${{ github.repository_owner }}
+        run: |
+          bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
+
+      - name: Prepare environment for building AppImage
+        shell: bash
+        run: |
+          {
+            echo "APPIMAGE_VERSION=$(cat packaging/version)-git"
+            echo "APPIMAGE_APT_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)"
+            echo "APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)"
+            echo "APPIMAGE_ARCH=$(uname -m)"
+            echo "MULTIARCH_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+            echo "PYTHON3_VERSION=$(py3versions -vd)"
+          } >> ${GITHUB_ENV}
+
+      - name: Build AppImage
+        uses: AppImageCrafters/build-appimage@v1.3
+        with:
+          recipe: .github/workflows/portable/AppImageBuilder.yml
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: far2l-AppImage-${{ matrix.os }}
+          path: |
+            ./*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Upload release assets
+    needs: [build-AppImage]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Get commit date
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "DATE=$(gh api repos/$REPO/commits/$SHA --jq '.commit.committer.date' | date -f - +%Y%m%d%H%M)" >> $GITHUB_ENV
+
+      - name: Upload release assets
+        uses: andelf/nightly-release@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          prerelease: false
+          tag_name: ${{ github.ref_name }}-release
+          name: ${{ env.DATE }}
+          files: |
+            ./**/far2l*.AppImage
+
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        continue-on-error: true
