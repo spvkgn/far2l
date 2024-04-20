@@ -29,7 +29,7 @@ tar cJvf $REPO_DIR/far2l.tar.xz -C $REPO_DIR/AppDir .
 if [[ "$STANDALONE" == "true" ]]; then
   ( cd $BUILD_DIR/install && ./far2l --help >/dev/null && bash -x $HERE_DIR/make_standalone.sh ) && \
   ( cd $REPO_DIR && makeself --keep-umask $BUILD_DIR/install $PKG_NAME.run "FAR2L File Manager" ./far2l && \
-    tar cvf ${PKG_NAME/${VERSION}_${GH_NAME}_}.run.tar $PKG_NAME.run )
+    tar cvf ${PKG_NAME/${VERSION}-${GH_NAME}-}.run.tar $PKG_NAME.run )
 fi
 
 ccache --max-size=50M --show-stats

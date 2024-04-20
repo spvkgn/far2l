@@ -51,7 +51,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           export VERSION=$(cat packaging/version)
-          export PKG_NAME=far2l_${VERSION}_${GH_NAME}_${ARCH}
+          export PKG_NAME=far2l-${VERSION}-${GH_NAME}-${ARCH}
           bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
 
       - name: Upload artifact
@@ -116,9 +116,9 @@ jobs:
           GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
         run: |
           VERSION=$(cat packaging/version)
-          PKG_NAME=far2l_${VERSION}_${GH_NAME}_$(uname -m)
+          PKG_NAME=far2l-${VERSION}-${GH_NAME}-$(uname -m)
           mv far2l*.AppImage $PKG_NAME.AppImage
-          tar cvf ${PKG_NAME/${VERSION}_${GH_NAME}_}.AppImage.tar far2l*.AppImage
+          tar cvf ${PKG_NAME/${VERSION}-${GH_NAME}-}.AppImage.tar far2l*.AppImage
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -159,16 +159,16 @@ jobs:
             ### Self-extractable tar-archive
             * with TTY X/Xi backend
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l_x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l-*.run
             ```
             ### AppImage
             * with wx-GUI
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l_x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l_*.AppImage
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l-*.AppImage
             ```
           files: |
-            ./**/far2l_*.run.tar
-            ./**/far2l_*.AppImage.tar
+            ./**/far2l*.run.tar
+            ./**/far2l*.AppImage.tar
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@v2
