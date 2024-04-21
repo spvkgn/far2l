@@ -51,7 +51,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           export VERSION=$(cat packaging/version)
-          export PKG_NAME=far2l-${VERSION}-${GH_NAME}-${ARCH}
+          export PKG_NAME=far2l_${VERSION}-${GH_NAME}-${ARCH}
           bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
 
       - name: Upload artifact
@@ -120,9 +120,9 @@ jobs:
           GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
         run: |
           VERSION=$(cat packaging/version)
-          PKG_NAME=far2l-${VERSION}-${GH_NAME}-$(uname -m)
+          PKG_NAME=far2l_${VERSION}-${GH_NAME}-$(uname -m)
           mv far2l*.AppImage $PKG_NAME.AppImage
-          tar cvf ${PKG_NAME/${VERSION}-${GH_NAME}-}.AppImage.tar far2l*.AppImage
+          tar cvf ${PKG_NAME/_${VERSION}-${GH_NAME}}.AppImage.tar far2l*.AppImage
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -163,12 +163,12 @@ jobs:
             ### Self-extractable tar-archive
             * with TTY X/Xi backend
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l-*.run
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run
             ```
             ### AppImage
             * with wx-GUI
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l-*.AppImage
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l_*.AppImage
             ```
           files: |
             ./**/far2l*.run.tar
