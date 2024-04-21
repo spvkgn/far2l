@@ -1,9 +1,5 @@
 version: 1
 
-script:
-  # https://github.com/AppImageCrafters/appimage-builder/issues/271
-  - which mksquashfs || apt install -y --no-install-recommends squashfs-tools
-
 AppDir:
   app_info:
     id: io.github.elfmz.far2l
