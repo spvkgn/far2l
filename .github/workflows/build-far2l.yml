@@ -51,7 +51,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           export VERSION=$(cat packaging/version)
-          export PKG_NAME=far2l-${VERSION}-${GH_NAME}-${ARCH}
+          export PKG_NAME=far2l_${VERSION}-${GH_NAME}-${ARCH}
           bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
 
       - name: Upload artifact
@@ -72,8 +72,9 @@ jobs:
       - name: Add build dependencies
         env:
           PACKAGES: >
-            ccache cmake file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev libssh-dev
-            libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch patchelf python3-minimal quilt wget
+            ccache cmake desktop-file-utils file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev
+            libsmbclient-dev libssh-dev libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch
+            patchelf python3-minimal python3-wheel quilt wget
         run: |
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
 
@@ -94,38 +95,41 @@ jobs:
         run: |
           bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
 
-      - name: Prepare environment for building AppImage
-        shell: bash
-        run: |
-          {
-            echo "APPIMAGE_VERSION=$(cat packaging/version)"
-            echo "APPIMAGE_APT_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)"
-            echo "APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)"
-            echo "APPIMAGE_ARCH=$(uname -m)"
-            echo "MULTIARCH_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
-            echo "PYTHON3_VERSION=$(py3versions -vd)"
-          } >> ${GITHUB_ENV}
-
       - name: Build AppImage
-        uses: AppImageCrafters/build-appimage@v1.3
-        with:
-          recipe: .github/workflows/appimage/AppImageBuilder.yml
+        run: |
+          export ARCH=$(uname -m)
+          export APPIMAGE_VERSION=$(cat packaging/version)
+          export APPIMAGE_APT_ARCH=$(dpkg-architecture -qDEB_HOST_ARCH)
+          export APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)
+          export APPIMAGE_ARCH=$ARCH
+          export PYTHON3_VERSION=$(py3versions -vd)
+
+          # appimagetool with Squashfs zstd compression support
+          wget --no-check-certificate -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage
+          chmod +x appimagetool
+          # static runtime
+          wget --no-check-certificate -O runtime https://github.com/probonopd/static-tools/releases/download/2023/runtime-fuse2-$ARCH
+
+          python -m venv _venv && source _venv/bin/activate
+          pip install git+https://github.com/AppImageCrafters/appimage-builder.git
+          appimage-builder --skip-appimage --recipe .github/workflows/appimage/AppImageBuilder.yml
+          APPIMAGE_EXTRACT_AND_RUN=1 VERSION=$APPIMAGE_VERSION ./appimagetool -v --runtime-file runtime AppDir
 
       - name: Put AppImage into tar
         env:
           GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
         run: |
           VERSION=$(cat packaging/version)
-          PKG_NAME=far2l-${VERSION}-${GH_NAME}-$(uname -m)
+          PKG_NAME=far2l_${VERSION}-${GH_NAME}-$(uname -m)
           mv far2l*.AppImage $PKG_NAME.AppImage
-          tar cvf ${PKG_NAME/${VERSION}-${GH_NAME}-}.AppImage.tar far2l*.AppImage
+          tar cvf ${PKG_NAME/_${VERSION}-${GH_NAME}}.AppImage.tar far2l*.AppImage
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: far2l-AppImage-${{ matrix.os }}
           path: |
-            ./far2l*.tar*
+            ./**/far2l*.tar*
           if-no-files-found: error
 
   release:
@@ -159,12 +163,12 @@ jobs:
             ### Self-extractable tar-archive
             * with TTY X/Xi backend
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l-*.run
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run
             ```
             ### AppImage
             * with wx-GUI
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l-*.AppImage
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l_*.AppImage
             ```
           files: |
             ./**/far2l*.run.tar

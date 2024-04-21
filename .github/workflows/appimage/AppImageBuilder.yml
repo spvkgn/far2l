@@ -153,6 +153,3 @@ AppDir:
       - /bin/sh:$APPDIR/bin/sh
       - /usr/share/glib-2.0/schemas/:$APPDIR/usr/share/glib-2.0/schemas/
       - /usr/share/icons/:$APPDIR/usr/share/icons/
-
-AppImage:
-  arch: "{{APPIMAGE_ARCH}}"
