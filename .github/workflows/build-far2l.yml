@@ -72,9 +72,9 @@ jobs:
       - name: Add build dependencies
         env:
           PACKAGES: >
-            ccache cmake desktop-file-utils file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev
+            appstream ccache cmake desktop-file-utils file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev
             libsmbclient-dev libssh-dev libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch
-            patchelf python3-minimal python3-wheel quilt wget
+            patchelf python3-minimal python3-wheel quilt wget xmlstarlet
         run: |
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
 
@@ -103,11 +103,19 @@ jobs:
           export APPIMAGE_APT_DISTRO=$(awk -F= '/^VERSION_CODENAME=/ {print $2}' /etc/os-release)
           export APPIMAGE_ARCH=$ARCH
           export PYTHON3_VERSION=$(py3versions -vd)
+
+          install -vd AppDir/usr/share/metainfo && \
+          install -vm644 -t AppDir/usr/share/metainfo .github/workflows/appimage/io.github.elfmz.far2l.appdata.xml
+          xmlstarlet ed -L -P -u "component/releases/release/@type" -v "development" \
+            -u "component/releases/release/@version" -v "$APPIMAGE_VERSION" \
+            -u "component/releases/release/@date" -v "$(date --utc +%F)" AppDir/usr/share/metainfo/io.github.elfmz.far2l.appdata.xml
+
           # appimagetool with Squashfs zstd compression support
           wget --no-check-certificate -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage
           chmod +x appimagetool
           # static runtime
           wget --no-check-certificate -O runtime https://github.com/probonopd/static-tools/releases/download/2023/runtime-fuse2-$ARCH
+
           python -m venv _venv && source _venv/bin/activate
           pip install git+https://github.com/AppImageCrafters/appimage-builder.git
           appimage-builder --skip-appimage --recipe .github/workflows/appimage/AppImageBuilder.yml
