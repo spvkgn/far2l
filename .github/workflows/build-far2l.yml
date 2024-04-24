@@ -3,10 +3,64 @@ name: build
 on:
   workflow_dispatch:
   push:
-    branches: [staging]
+    branches: [test]
 
 jobs:
+  build-portable-glibc:
+    name: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - distro: ubuntu
+            version: '18.04'
+    container: ${{ matrix.distro }}:${{ matrix.version }}
+    steps:
+      - name: Add build dependencies
+        env:
+          PACKAGES: >
+            ca-certificates ccache cmake file g++-8 git libarchive-dev libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev
+            libssh-dev libuchardet-dev libxerces-c-dev libxi-dev libtree makeself ninja-build patch patchelf quilt wget
+        run: |
+          if [ "${{ matrix.distro }}" = "ubuntu" ]; then
+            echo "deb [trusted=yes] http://ppa.launchpad.net/far2l-team/tools/ubuntu xenial main" | tee /etc/apt/sources.list.d/far2l-team.list
+            echo "deb [trusted=yes] http://ppa.launchpad.net/git-core/ppa/ubuntu bionic main" | tee /etc/apt/sources.list.d/git-core.list
+            apt update -qq && apt install -y --no-install-recommends ${{ env.PACKAGES }}
+          fi
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup ccache
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ matrix.distro }}-${{ matrix.version }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.distro }}-${{ matrix.version }}-
+
+      - name: Build far2l
+        env:
+          GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
+          STANDALONE: true
+        run: |
+          export CC=gcc-8
+          export CXX=g++-8
+          export VERSION=$(cat packaging/version)
+          export PKG_NAME=far2l_${VERSION}-${GH_NAME}-$(uname -m)-glibc
+          bash -x ${GITHUB_WORKSPACE}/.github/workflows/portable/build_far2l.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: far2l-${{ matrix.distro }}-${{ matrix.version }}
+          path: |
+            ./**/far2l*.tar*
+          if-no-files-found: error
+
   build-portable:
+    if: false
     name: build ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -63,6 +117,7 @@ jobs:
           if-no-files-found: error
 
   build-AppImage:
+    if: false
     name: build AppImage
     runs-on: ${{ matrix.os }}
     strategy:
@@ -133,14 +188,16 @@ jobs:
           if-no-files-found: error
 
   release:
+    # if: false
     name: Upload release assets
-    needs: [build-portable, build-AppImage]
+    # needs: [build-portable, build-AppImage]
+    needs: [build-portable-glibc]
     permissions:
       contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
 
       - name: Get commit date
         env:
@@ -163,16 +220,11 @@ jobs:
             ### Self-extractable tar-archive
             * with TTY X/Xi backend
             ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run
-            ```
-            ### AppImage
-            * with wx-GUI
-            ```
-            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.AppImage.tar | tar -xv -C /tmp && /tmp/far2l_*.AppImage
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64-glibc.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run
             ```
           files: |
             ./**/far2l*.run.tar
-            ./**/far2l*.AppImage.tar
+            # ./**/far2l*.AppImage.tar
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@v2
