@@ -219,7 +219,7 @@ static bool UnderWayland()
 
 void TTYBackend::ReaderThread()
 {
-    bool prev_far2l_tty = false;
+	bool prev_far2l_tty = false;
 	while (!_exiting) {
 		_far2l_cursor_height = -1; // force cursor height update on next output dispatch
 		_fkeys_support = _far2l_tty ? FKS_UNKNOWN : FKS_NOT_SUPPORTED;

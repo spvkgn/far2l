@@ -16,12 +16,6 @@
 #define NODETECT_F      0x0004
 
 
-#define NODETECT_NONE   0x0000
-#define NODETECT_XI     0x0001
-#define NODETECT_X      0x0002
-#define NODETECT_F      0x0004
-
-
 class IConsoleOutputBackend
 {
 protected:
