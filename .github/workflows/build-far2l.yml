@@ -181,20 +181,21 @@ jobs:
           wget -c https://github.com/darealshinji/linuxdeploy-plugin-checkrt/releases/download/continuous/linuxdeploy-plugin-checkrt.sh
           chmod +x linuxdeploy linuxdeploy-plugin-*.sh
           # appimagetool with Squashfs zstd compression support
-          wget -cO appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage
-          chmod +x appimagetool
-          # static runtime
-          wget -cO runtime https://github.com/probonopd/static-tools/releases/download/2023/runtime-fuse2-$ARCH
+          # wget -cO appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage
+          # chmod +x appimagetool
+          # # static runtime
+          # wget -cO runtime https://github.com/probonopd/static-tools/releases/download/2023/runtime-fuse2-$ARCH
 
           # python -m venv _venv && source _venv/bin/activate
           # pip install git+https://github.com/AppImageCrafters/appimage-builder.git
           # appimage-builder --skip-appimage --recipe .github/workflows/appimage/AppImageBuilder.yml
 
           APPIMAGE_EXTRACT_AND_RUN=1 VERSION=$APPIMAGE_VERSION DISABLE_COPYRIGHT_FILES_DEPLOYMENT=1 NO_STRIP=1 DEPLOY_GTK_VERSION=3 \
-          ./linuxdeploy -v0 --appdir=AppDir --plugin gtk --plugin checkrt
+          ./linuxdeploy -v0 --appdir=AppDir --plugin=gtk --output=appimage
+          # ./linuxdeploy -v0 --appdir=AppDir --plugin=gtk --plugin=checkrt --output=appimage
 
-          APPIMAGE_EXTRACT_AND_RUN=1 VERSION=$APPIMAGE_VERSION \
-          ./appimagetool -v --runtime-file runtime AppDir
+          # APPIMAGE_EXTRACT_AND_RUN=1 VERSION=$APPIMAGE_VERSION \
+          # ./appimagetool -v --runtime-file runtime AppDir
 
       - name: Put AppImage into tar
         env:
