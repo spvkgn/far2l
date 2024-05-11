@@ -32,9 +32,8 @@ jobs:
           branch: v3.18
           arch: ${{ matrix.arch }}
           packages: >
-            bash build-base ccache cmake coreutils findutils gawk git grep libarchive-dev libnfs-dev libssh-dev
-            libtree libxi-dev linux-headers neon-dev ninja-is-really-ninja patchelf pcre-dev perl samba-dev tar
-            uchardet-dev wget xerces-c-dev xz
+            bash build-base ccache cmake coreutils findutils gawk git grep libarchive-dev libnfs-dev libssh-dev libtree
+            libxi-dev linux-headers neon-dev patchelf pcre-dev perl samba-dev tar uchardet-dev wget xerces-c-dev xz
           shell-name: alpine.sh
 
       - name: Add extra build-deps to chroot
@@ -48,6 +47,7 @@ jobs:
           ARCH: ${{ matrix.arch }}
           GH_NAME: ${{ github.repository_owner }}_${{ github.ref_name }}
           STANDALONE: true
+          WXGUI: false
         shell: alpine.sh {0}
         run: |
           export VERSION=$(cat packaging/version)
@@ -73,8 +73,8 @@ jobs:
         env:
           PACKAGES: >
             ccache cmake desktop-file-utils file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev
-            libsmbclient-dev libssh-dev libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev ninja-build patch
-            patchelf python3-minimal python3-wheel quilt squashfs-tools wget
+            libsmbclient-dev libssh-dev libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev patch patchelf
+            python3-minimal python3-wheel quilt squashfs-tools wget
         run: |
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
 
