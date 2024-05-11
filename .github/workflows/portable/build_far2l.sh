@@ -17,7 +17,6 @@ mkdir -p $BUILD_DIR && \
 cmake -S . -B $BUILD_DIR \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr \
-  -DCMAKE_VERBOSE_MAKEFILE=ON \
   -DCMAKE_C_COMPILER_LAUNCHER=/usr/bin/ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=/usr/bin/ccache \
   ${CMAKE_OPTS[@]} && \
