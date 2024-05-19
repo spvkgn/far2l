@@ -7,6 +7,7 @@ on:
 
 jobs:
   build-portable-glibc:
+    # if: false
     name: build
     runs-on: ubuntu-latest
     strategy:
@@ -20,10 +21,10 @@ jobs:
         env:
           PACKAGES: >
             ca-certificates ccache cmake file g++-8 git libarchive-dev libneon27-dev libnfs-dev libpcre3-dev libsmbclient-dev
-            libssh-dev libuchardet-dev libxerces-c-dev libxi-dev libtree makeself patch patchelf quilt wget
+            libssh-dev libuchardet-dev libxerces-c-dev libxi-dev libtree makeself patch patchelf quilt wget uasm
         run: |
           if [ "${{ matrix.distro }}" = "ubuntu" ]; then
-            echo "deb [trusted=yes] http://ppa.launchpad.net/far2l-team/tools/ubuntu xenial main" | tee /etc/apt/sources.list.d/far2l-team.list
+            echo "deb [trusted=yes] http://ppa.launchpad.net/far2l-team/tools/ubuntu bionic main" | tee /etc/apt/sources.list.d/far2l-team.list
             echo "deb [trusted=yes] http://ppa.launchpad.net/git-core/ppa/ubuntu bionic main" | tee /etc/apt/sources.list.d/git-core.list
             apt update -qq && apt install -y --no-install-recommends ${{ env.PACKAGES }}
           fi
@@ -61,7 +62,6 @@ jobs:
           if-no-files-found: error
 
   build-portable-musl:
-    if: false
     name: build ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -188,8 +188,10 @@ jobs:
           if-no-files-found: error
 
   release:
+    # if: false
     name: Upload release assets
-    needs: [build-portable-glibc]
+    needs: [build-portable-glibc, build-portable-musl]
+    # needs: [build-portable-musl]
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -216,6 +218,12 @@ jobs:
           body: |
             ### Self-extractable tar-archive
             * with TTY X/Xi backend
+            #### Download and run
+            built on Alpine
+            ```
+            wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run
+            ```
+            built on Ubuntu 18.04
             #### Download and run
             ```
             wget -qO- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}-release/far2l-x86_64-glibc.run.tar | tar -xv -C /tmp && /tmp/far2l_*.run

@@ -388,7 +388,45 @@ set(SOURCES
     src/formats/ha/ha/misc.c
     src/formats/ha/ha/swdict.c
 )
-    
+
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    find_program(UASM_CMD uasm)
+    if( UASM_CMD AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
+        message( STATUS "Found UASM: ${UASM_CMD}" )
+        set(ASM_OPTIONS " -elf64 -DABI_LINUX ")
+        set(ASM_SOURCES
+            src/formats/7z/Asm/x86/7zCrcOpt.asm
+            src/formats/7z/Asm/x86/XzCrc64Opt.asm
+            src/formats/7z/Asm/x86/Sha1Opt.asm
+            src/formats/7z/Asm/x86/Sha256Opt.asm
+            src/formats/7z/Asm/x86/AesOpt.asm
+            src/formats/7z/Asm/x86/LzFindOpt.asm
+            src/formats/7z/Asm/x86/LzmaDecOpt.asm
+        )
+        foreach(src ${ASM_SOURCES})
+            get_filename_component(FILE_BASE ${src} NAME_WE)
+            set(src ${CMAKE_CURRENT_SOURCE_DIR}/${src})
+            set(obj ${CMAKE_CURRENT_BINARY_DIR}/${FILE_BASE}.o)
+            add_custom_command(OUTPUT ${obj}
+                MAIN_DEPENDENCY ${src}
+                COMMAND "${UASM_CMD}"
+                ARGS "${ASM_OPTIONS}" -Fo"${obj}" "${src}")
+            set(ASM_OBJS ${ASM_OBJS} ${obj})
+        endforeach(src)
+    else()
+        message( STATUS "UASM not found" )
+        set(SOURCES
+            ${SOURCES}
+            src/formats/7z/C/7zCrcOpt.c
+            src/formats/7z/C/XzCrc64Opt.c
+            src/formats/7z/C/Sha1Opt.c
+            src/formats/7z/C/Sha256Opt.c
+            src/formats/7z/C/AesOpt.c
+            src/formats/7z/C/LzFindOpt.c
+        )
+    endif()
+endif()
+
 if(PCRE_FOUND)
     set(SOURCES
         ${SOURCES}
@@ -414,51 +452,6 @@ else()
     )
 endif()
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tools)
-find_package(Asmc)
-if( ASMC_ASM_TOOL AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
-
-    message(STATUS "Asmc used for compile portion of 7z code")
-
-    set(ASM_OPTIONS " -nologo -elf64 -DABI_LINUX ")
-
-    set(ASM_SOURCES
-        src/formats/7z/Asm/x86/7zCrcOpt.asm
-        src/formats/7z/Asm/x86/XzCrc64Opt.asm
-        src/formats/7z/Asm/x86/Sha1Opt.asm
-        src/formats/7z/Asm/x86/Sha256Opt.asm
-        src/formats/7z/Asm/x86/AesOpt.asm
-        src/formats/7z/Asm/x86/LzFindOpt.asm
-        src/formats/7z/Asm/x86/LzmaDecOpt.asm
-    )
-
-    #This bit of code loops through the assembly files and calls asmc64.
-    foreach(src ${ASM_SOURCES})
-        get_filename_component(FILE_BASE ${src} NAME_WE)
-        set(src ${CMAKE_CURRENT_SOURCE_DIR}/${src})
-        set(obj ${CMAKE_CURRENT_BINARY_DIR}/${FILE_BASE}.o)
-        add_custom_command(OUTPUT ${obj}
-                  MAIN_DEPENDENCY ${src}
-                  COMMAND "${ASMC_ASM_TOOL}"
-                  ARGS "${ASM_OPTIONS}" -Fo"${obj}" "${src}")
-        set(ASM_OBJS ${ASM_OBJS} ${obj})
-    endforeach(src)
-
-else()
-
-    # This portion of code used if can't compile asm
-    set(SOURCES
-        ${SOURCES}
-        src/formats/7z/C/7zCrcOpt.c
-        src/formats/7z/C/XzCrc64Opt.c
-        src/formats/7z/C/Sha1Opt.c
-        src/formats/7z/C/Sha256Opt.c
-        src/formats/7z/C/AesOpt.c
-        src/formats/7z/C/LzFindOpt.c
-    )
-
-endif()
-
 add_library (multiarc MODULE ${SOURCES} ${ASM_SOURCES})
 
 target_compile_definitions(multiarc PRIVATE -DRARDLL -D_7ZIP_ST -D_7ZIP_PPMD_SUPPPORT -DST_MODE)
@@ -481,6 +474,10 @@ if(LibArchive_FOUND)
     target_compile_definitions(multiarc PRIVATE -DHAVE_LIBARCHIVE)
     target_link_libraries(multiarc ${LibArchive_LIBRARIES})
     target_include_directories(multiarc PRIVATE ${LibArchive_INCLUDE_DIRS})
+endif()
+
+if(MUSL)
+    target_compile_definitions(multiarc PRIVATE -D_GNU_SOURCE -D_7ZIP_AFFINITY_DISABLE -DZ7_AFFINITY_DISABLE)
 endif()
 
 set_target_properties(multiarc
