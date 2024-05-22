@@ -95,6 +95,7 @@ jobs:
         run: |
           apk add --no-progress makeself --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing
           apk add --no-progress quilt --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+          apk add uasm --allow-untrusted --repository https://spvkgn.github.io/alpine-packages/workspace
 
       - name: Build far2l inside chroot
         env:
