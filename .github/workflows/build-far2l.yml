@@ -33,7 +33,7 @@ jobs:
           arch: ${{ matrix.arch }}
           packages: >
             bash build-base ccache cmake coreutils findutils gawk git grep libarchive-dev libnfs-dev libssh-dev libtree
-            libxi-dev linux-headers neon-dev patchelf pcre-dev perl samba-dev tar uchardet-dev wget xerces-c-dev xz
+            libxi-dev libxml2-dev linux-headers neon-dev patchelf pcre-dev perl samba-dev tar uchardet-dev wget xz
           shell-name: alpine.sh
 
       - name: Add extra build-deps to chroot
@@ -67,13 +67,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-22.04]
     steps:
       - name: Add build dependencies
         env:
           PACKAGES: >
             ccache cmake desktop-file-utils file g++ libarchive-dev libfuse2 libneon27-dev libnfs-dev libpcre3-dev
-            libsmbclient-dev libssh-dev libuchardet-dev libwxgtk3.0-gtk3-dev libxerces-c-dev libxi-dev patch patchelf
+            libsmbclient-dev libssh-dev libuchardet-dev libwxgtk3.0-gtk3-dev libxml2-dev libxi-dev patch patchelf
             python3-minimal python3-wheel quilt squashfs-tools wget
         run: |
             sudo apt update -qq && sudo apt install -y --no-install-recommends ${{ env.PACKAGES }}
