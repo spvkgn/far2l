@@ -1,6 +1,8 @@
 #ifndef COLORER_XMLTAGDEFS_H
 #define COLORER_XMLTAGDEFS_H
 
+#define UNICODE_LITERAL(name, value) inline const auto name = UnicodeString(value);
+
 /* catalog.xml
 
 <catalog>
@@ -15,15 +17,15 @@
 </catalog>
 */
 
-const XMLCh catTagCatalog[] = u"catalog\0";
-const XMLCh catTagHrcSets[] = u"hrc-sets\0";
-const XMLCh catTagLocation[] = u"location\0";
-const XMLCh catLocationAttrLink[] = u"link\0";
-const XMLCh catTagHrdSets[] = u"hrd-sets\0";
-const XMLCh catTagHrd[] = u"hrd\0";
-const XMLCh catHrdAttrClass[] = u"class\0";
-const XMLCh catHrdAttrName[] = u"name\0";
-const XMLCh catHrdAttrDescription[] = u"description\0";
+UNICODE_LITERAL(catTagCatalog, u"catalog")
+UNICODE_LITERAL(catTagHrcSets, u"hrc-sets")
+UNICODE_LITERAL(catTagLocation, u"location")
+UNICODE_LITERAL(catLocationAttrLink, u"link")
+UNICODE_LITERAL(catTagHrdSets, u"hrd-sets")
+UNICODE_LITERAL(catTagHrd, u"hrd")
+UNICODE_LITERAL(catHrdAttrClass, u"class")
+UNICODE_LITERAL(catHrdAttrName, u"name")
+UNICODE_LITERAL(catHrdAttrDescription, u"description")
 
 /* hrc file
 
@@ -63,71 +65,71 @@ const XMLCh catHrdAttrDescription[] = u"description\0";
 </hrc>
 */
 
-const XMLCh hrcTagHrc[] = u"hrc\0";
-const XMLCh hrcHrcAttrVersion[] = u"version\0";
-const XMLCh hrcTagAnnotation[] = u"annotation\0";
-const XMLCh hrcTagPrototype[] = u"prototype\0";
-const XMLCh hrcPrototypeAttrName[] = u"name\0";
-const XMLCh hrcPrototypeAttrDescription[] = u"description\0";
-const XMLCh hrcPrototypeAttrGroup[] = u"group\0";
-const XMLCh hrcTagLocation[] = u"location\0";
-const XMLCh hrcLocationAttrLink[] = u"link\0";
-const XMLCh hrcTagFilename[] = u"filename\0";
-const XMLCh hrcFilenameAttrWeight[] = u"weight\0";
-const XMLCh hrcTagFirstline[] = u"firstline\0";
-const XMLCh hrcFirstlineAttrWeight[] = u"weight\0";
-const XMLCh hrcTagParametrs[] = u"parameters\0";
-const XMLCh hrcTagParam[] = u"param\0";
-const XMLCh hrcParamAttrName[] = u"name\0";
-const XMLCh hrcParamAttrValue[] = u"value\0";
-const XMLCh hrcParamAttrDescription[] = u"description\0";
-const XMLCh hrcTagPackage[] = u"package\0";
-const XMLCh hrcPackageAttrName[] = u"name\0";
-const XMLCh hrcPackageAttrDescription[] = u"description\0";
-const XMLCh hrcPackageAttrGroup[] = u"group\0";
-const XMLCh hrcTagType[] = u"type\0";
-const XMLCh hrcTypeAttrName[] = u"name\0";
-const XMLCh hrcTagImport[] = u"import\0";
-const XMLCh hrcImportAttrType[] = u"type\0";
-const XMLCh hrcTagRegion[] = u"region\0";
-const XMLCh hrcRegionAttrName[] = u"name\0";
-const XMLCh hrcRegionAttrParent[] = u"parent\0";
-const XMLCh hrcRegionAttrDescription[] = u"description\0";
-const XMLCh hrcTagEntity[] = u"entity\0";
-const XMLCh hrcEntityAttrName[] = u"name\0";
-const XMLCh hrcEntityAttrValue[] = u"value\0";
-const XMLCh hrcTagScheme[] = u"scheme\0";
-const XMLCh hrcSchemeAttrName[] = u"name\0";
-const XMLCh hrcSchemeAttrIf[] = u"if\0";
-const XMLCh hrcSchemeAttrUnless[] = u"unless\0";
-const XMLCh hrcTagKeywords[] = u"keywords\0";
-const XMLCh hrcKeywordsAttrIgnorecase[] = u"ignorecase\0";
-const XMLCh hrcKeywordsAttrPriority[] = u"priority\0";
-const XMLCh hrcKeywordsAttrWorddiv[] = u"worddiv\0";
-const XMLCh hrcKeywordsAttrRegion[] = u"region\0";
-const XMLCh hrcTagWord[] = u"word\0";
-const XMLCh hrcWordAttrName[] = u"name\0";
-const XMLCh hrcWordAttrRegion[] = u"region\0";
-const XMLCh hrcTagSymb[] = u"symb\0";
-const XMLCh hrcSymbAttrName[] = u"name\0";
-const XMLCh hrcSymbAttrRegion[] = u"region\0";
-const XMLCh hrcTagRegexp[] = u"regexp\0";
-const XMLCh hrcRegexpAttrMatch[] = u"match\0";
-const XMLCh hrcRegexpAttrPriority[] = u"priority\0";
-const XMLCh hrcRegexpAttrRegion[] = u"region\0";
-const XMLCh hrcTagBlock[] = u"block\0";
-const XMLCh hrcBlockAttrStart[] = u"start\0";
-const XMLCh hrcBlockAttrEnd[] = u"end\0";
-const XMLCh hrcBlockAttrScheme[] = u"scheme\0";
-const XMLCh hrcBlockAttrPriority[] = u"priority\0";
-const XMLCh hrcBlockAttrContentPriority[] = u"content-priority\0";
-const XMLCh hrcBlockAttrInnerRegion[] = u"inner-region\0";
-const XMLCh hrcBlockAttrMatch[] = u"match\0";
-const XMLCh hrcTagInherit[] = u"inherit\0";
-const XMLCh hrcInheritAttrScheme[] = u"scheme\0";
-const XMLCh hrcTagVirtual[] = u"virtual\0";
-const XMLCh hrcVirtualAttrScheme[] = u"scheme\0";
-const XMLCh hrcVirtualAttrSubstScheme[] = u"subst-scheme\0";
+UNICODE_LITERAL(hrcTagHrc, u"hrc")
+UNICODE_LITERAL(hrcHrcAttrVersion, u"version")
+UNICODE_LITERAL(hrcTagAnnotation, u"annotation")
+UNICODE_LITERAL(hrcTagPrototype, u"prototype")
+UNICODE_LITERAL(hrcPrototypeAttrName, u"name")
+UNICODE_LITERAL(hrcPrototypeAttrDescription, u"description")
+UNICODE_LITERAL(hrcPrototypeAttrGroup, u"group")
+UNICODE_LITERAL(hrcTagLocation, u"location")
+UNICODE_LITERAL(hrcLocationAttrLink, u"link")
+UNICODE_LITERAL(hrcTagFilename, u"filename")
+UNICODE_LITERAL(hrcFilenameAttrWeight, u"weight")
+UNICODE_LITERAL(hrcTagFirstline, u"firstline")
+UNICODE_LITERAL(hrcFirstlineAttrWeight, u"weight")
+UNICODE_LITERAL(hrcTagParametrs, u"parameters")
+UNICODE_LITERAL(hrcTagParam, u"param")
+UNICODE_LITERAL(hrcParamAttrName, u"name")
+UNICODE_LITERAL(hrcParamAttrValue, u"value")
+UNICODE_LITERAL(hrcParamAttrDescription, u"description")
+UNICODE_LITERAL(hrcTagPackage, u"package")
+UNICODE_LITERAL(hrcPackageAttrName, u"name")
+UNICODE_LITERAL(hrcPackageAttrDescription, u"description")
+UNICODE_LITERAL(hrcPackageAttrGroup, u"group")
+UNICODE_LITERAL(hrcTagType, u"type")
+UNICODE_LITERAL(hrcTypeAttrName, u"name")
+UNICODE_LITERAL(hrcTagImport, u"import")
+UNICODE_LITERAL(hrcImportAttrType, u"type")
+UNICODE_LITERAL(hrcTagRegion, u"region")
+UNICODE_LITERAL(hrcRegionAttrName, u"name")
+UNICODE_LITERAL(hrcRegionAttrParent, u"parent")
+UNICODE_LITERAL(hrcRegionAttrDescription, u"description")
+UNICODE_LITERAL(hrcTagEntity, u"entity")
+UNICODE_LITERAL(hrcEntityAttrName, u"name")
+UNICODE_LITERAL(hrcEntityAttrValue, u"value")
+UNICODE_LITERAL(hrcTagScheme, u"scheme")
+UNICODE_LITERAL(hrcSchemeAttrName, u"name")
+UNICODE_LITERAL(hrcSchemeAttrIf, u"if")
+UNICODE_LITERAL(hrcSchemeAttrUnless, u"unless")
+UNICODE_LITERAL(hrcTagKeywords, u"keywords")
+UNICODE_LITERAL(hrcKeywordsAttrIgnorecase, u"ignorecase")
+UNICODE_LITERAL(hrcKeywordsAttrPriority, u"priority")
+UNICODE_LITERAL(hrcKeywordsAttrWorddiv, u"worddiv")
+UNICODE_LITERAL(hrcKeywordsAttrRegion, u"region")
+UNICODE_LITERAL(hrcTagWord, u"word")
+UNICODE_LITERAL(hrcWordAttrName, u"name")
+UNICODE_LITERAL(hrcWordAttrRegion, u"region")
+UNICODE_LITERAL(hrcTagSymb, u"symb")
+UNICODE_LITERAL(hrcSymbAttrName, u"name")
+UNICODE_LITERAL(hrcSymbAttrRegion, u"region")
+UNICODE_LITERAL(hrcTagRegexp, u"regexp")
+UNICODE_LITERAL(hrcRegexpAttrMatch, u"match")
+UNICODE_LITERAL(hrcRegexpAttrPriority, u"priority")
+UNICODE_LITERAL(hrcRegexpAttrRegion, u"region")
+UNICODE_LITERAL(hrcTagBlock, u"block")
+UNICODE_LITERAL(hrcBlockAttrStart, u"start")
+UNICODE_LITERAL(hrcBlockAttrEnd, u"end")
+UNICODE_LITERAL(hrcBlockAttrScheme, u"scheme")
+UNICODE_LITERAL(hrcBlockAttrPriority, u"priority")
+UNICODE_LITERAL(hrcBlockAttrContentPriority, u"content-priority")
+UNICODE_LITERAL(hrcBlockAttrInnerRegion, u"inner-region")
+UNICODE_LITERAL(hrcBlockAttrMatch, u"match")
+UNICODE_LITERAL(hrcTagInherit, u"inherit")
+UNICODE_LITERAL(hrcInheritAttrScheme, u"scheme")
+UNICODE_LITERAL(hrcTagVirtual, u"virtual")
+UNICODE_LITERAL(hrcVirtualAttrScheme, u"scheme")
+UNICODE_LITERAL(hrcVirtualAttrSubstScheme, u"subst-scheme")
 
 /* hrd file
 <hrd>
@@ -135,21 +137,21 @@ const XMLCh hrcVirtualAttrSubstScheme[] = u"subst-scheme\0";
   <assign name="" stext="" etext="" sback="" eback=""/>
 </hrc>
 */
-const XMLCh hrdTagHrd[] = u"hrd\0";
-const XMLCh hrdTagAssign[] = u"assign\0";
-const XMLCh hrdAssignAttrName[] = u"name\0";
-const XMLCh hrdAssignAttrFore[] = u"fore\0";
-const XMLCh hrdAssignAttrBack[] = u"back\0";
-const XMLCh hrdAssignAttrStyle[] = u"style\0";
-const XMLCh hrdAssignAttrSBack[] = u"sback\0";
-const XMLCh hrdAssignAttrEBack[] = u"eback\0";
-const XMLCh hrdAssignAttrSText[] = u"stext\0";
-const XMLCh hrdAssignAttrEText[] = u"etext\0";
+UNICODE_LITERAL(hrdTagHrd, u"hrd")
+UNICODE_LITERAL(hrdTagAssign, u"assign")
+UNICODE_LITERAL(hrdAssignAttrName, u"name")
+UNICODE_LITERAL(hrdAssignAttrFore, u"fore")
+UNICODE_LITERAL(hrdAssignAttrBack, u"back")
+UNICODE_LITERAL(hrdAssignAttrStyle, u"style")
+UNICODE_LITERAL(hrdAssignAttrSBack, u"sback")
+UNICODE_LITERAL(hrdAssignAttrEBack, u"eback")
+UNICODE_LITERAL(hrdAssignAttrSText, u"stext")
+UNICODE_LITERAL(hrdAssignAttrEText, u"etext")
 
 /*
  * attributes value
  */
-const XMLCh value_low[] = u"low\0";
-const XMLCh value_yes[] = u"yes\0";
+UNICODE_LITERAL(value_low, u"low")
+UNICODE_LITERAL(value_yes, u"yes")
 
 #endif  // COLORER_XMLTAGDEFS_H

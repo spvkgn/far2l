@@ -192,7 +192,7 @@ FARString &EscapeSpace(FARString &strStr)
 static FARString unEscapeSpace(const wchar_t *str)
 {
 	if (*str == L'\0')
-		return "''";
+		return "";
 	FARString result;
 	for (const wchar_t *cur = str; *cur; ++cur) {
 		if (*cur == L'\\' && *(cur+1) != L'\\')
@@ -1180,7 +1180,7 @@ wchar_t GetDecimalSeparator()
 }
 
 FARString
-ReplaceBrackets(const FARString &SearchStr, const FARString &ReplaceStr, RegExpMatch *Match, int Count)
+ReplaceBrackets(const wchar_t* SearchStr, const FARString &ReplaceStr, RegExpMatch *Match, int Count)
 {
 	FARString result;
 	size_t pos = 0, length = ReplaceStr.GetLength();
@@ -1205,7 +1205,7 @@ ReplaceBrackets(const FARString &SearchStr, const FARString &ReplaceStr, RegExpM
 
 			if (index >= 0) {
 				if (index < Count) {
-					FARString bracket(SearchStr.CPtr() + Match[index].start,
+					FARString bracket(SearchStr + Match[index].start,
 							Match[index].end - Match[index].start);
 					result+= bracket;
 				}
@@ -1232,7 +1232,7 @@ std::string EscapeUnprintable(const std::string &str)
 		unsigned char c = (unsigned char)*i;
 		if (c <= 0x20 || c > 0x7e || c == '\\') {
 			char buf[32];
-			sprintf(buf, "\\x%02x", c);
+			snprintf(buf, sizeof(buf), "\\x%02x", c);
 			out+= buf;
 		} else
 			out+= c;

@@ -214,6 +214,7 @@ void PanelSettings()
 	Builder.AddCheckbox(Msg::ConfigHighlight, &Opt.Highlight);
 	Builder.AddCheckbox(Msg::ConfigAutoChange, &Opt.Tree.AutoChangeFolder);
 	Builder.AddCheckbox(Msg::ConfigSelectFolders, &Opt.SelectFolders);
+	Builder.AddCheckbox(Msg::ConfigCaseSensitiveCompareSelect, &Opt.PanelCaseSensitiveCompareSelect);
 	Builder.AddCheckbox(Msg::ConfigSortFolderExt, &Opt.SortFolderExt);
 	Builder.AddCheckbox(Msg::ConfigReverseSort, &Opt.ReverseSort);
 
@@ -625,7 +626,7 @@ void VMenuSettings()
 	Builder.AddComboBox((int *)&Opt.VMenu.MBtnClick, 40, CAListItems, ARRAYSIZE(CAListItems),
 			DIF_DROPDOWNLIST | DIF_LISTAUTOHIGHLIGHT | DIF_LISTWRAPMODE);
 
-	Builder.AddCheckbox(Msg::ConfigVMenuStopEdge, (BOOL *)&Opt.VMenu.StopOnEdge);
+	Builder.AddCheckbox(Msg::ConfigVMenuStopEdge, (BOOL *)&Opt.VMenu.MenuLoopScroll);
 
 	Builder.AddOKCancel();
 	Builder.ShowDialog();

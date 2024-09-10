@@ -2071,8 +2071,28 @@ int FileList::ProcessKey(FarKey Key)
 			return TRUE;
 
 		default:
+
+			if ((Key == L'*') || (Key == L'+') || (Key == L'-')) {
+				FARString TmpStr;
+				CtrlObject->CmdLine->GetString(TmpStr);
+				if (TmpStr.IsEmpty()) {
+					if (Key == L'*') {
+						SelectFiles(SELECT_INVERT);
+						return TRUE;
+					} else if (Key == L'+') {
+						SelectFiles(SELECT_ADD);
+						return TRUE;
+					} else if (Key == L'-') {
+						SelectFiles(SELECT_REMOVE);
+						return TRUE;
+					}
+				}
+			}
+
 			if (((Key >= KEY_ALT_BASE + 0x01 && Key <= KEY_ALT_BASE + 65535)
-						|| (Key >= KEY_ALTSHIFT_BASE + 0x01 && Key <= KEY_ALTSHIFT_BASE + 65535))
+				|| (Key >= KEY_ALTSHIFT_BASE + 0x01 && Key <= KEY_ALTSHIFT_BASE + 65535)
+				|| (Key >= 0x01 && Key <= 65535 && !CtrlObject->CmdLine->IsVisible())
+				)
 					&& (Key & ~KEY_ALTSHIFT_BASE) != KEY_BS && (Key & ~KEY_ALTSHIFT_BASE) != KEY_TAB
 					&& (Key & ~KEY_ALTSHIFT_BASE) != KEY_ENTER && (Key & ~KEY_ALTSHIFT_BASE) != KEY_ESC
 					&& !IS_KEY_EXTENDED(Key)) {
@@ -2229,6 +2249,7 @@ void FileList::ProcessEnter(bool EnableExec, bool SeparateWindow, bool EnableAss
 	if (CurFile >= ListData.Count())
 		return;
 
+	CmdLineVisibleScope CLVS;
 	SudoClientRegion sdc_rgn;
 
 	CurPtr = ListData[CurFile];
@@ -3210,13 +3231,15 @@ long FileList::SelectFiles(int Mode, const wchar_t *Mask)
 	CFileMask FileMask;		// Класс для работы с масками
 	const wchar_t *HistoryName = L"Masks";
 	DialogDataEx SelectDlgData[] = {
-		{DI_DOUBLEBOX, 3, 1, 51, 6, {}, 0, L""},
+		{DI_DOUBLEBOX, 3, 1, 51, 8, {}, 0, L""},
 		{DI_EDIT,      5, 2, 49, 2, {(DWORD_PTR)HistoryName}, DIF_FOCUS | DIF_HISTORY, L""},
 		{DI_CHECKBOX,  5, 3, 49, 3, {(DWORD_PTR)Opt.SelectFolders}, 0, Msg::SelectFolders},
-		{DI_TEXT,      0, 4, 0,  4, {}, DIF_SEPARATOR, L""},
-		{DI_BUTTON,    0, 5, 0,  5, {}, DIF_DEFAULT | DIF_CENTERGROUP, Msg::Ok},
-		{DI_BUTTON,    0, 5, 0,  5, {}, DIF_CENTERGROUP, Msg::SelectFilter},
-		{DI_BUTTON,    0, 5, 0,  5, {}, DIF_CENTERGROUP, Msg::Cancel}
+		{DI_CHECKBOX,  5, 4, 49, 4, {(DWORD_PTR)Opt.PanelCaseSensitiveCompareSelect}, 0, Msg::SelectCase},
+		{DI_TEXT,      4, 5, 50,  5, {}, DIF_DISABLE | DIF_CENTERTEXT, Msg::SelectNote},
+		{DI_TEXT,      0, 6, 0,  6, {}, DIF_SEPARATOR, L""},
+		{DI_BUTTON,    0, 7, 0,  7, {}, DIF_DEFAULT | DIF_CENTERGROUP, Msg::Ok},
+		{DI_BUTTON,    0, 7, 0,  7, {}, DIF_CENTERGROUP, Msg::SelectFilter},
+		{DI_BUTTON,    0, 7, 0,  7, {}, DIF_CENTERGROUP, Msg::Cancel}
 	};
 	MakeDialogItemsEx(SelectDlgData, SelectDlg);
 	FileFilter Filter(this, FFT_SELECT);
@@ -3281,26 +3304,26 @@ long FileList::SelectFiles(int Mode, const wchar_t *Mask)
 					SelectDlg[0].strData = Msg::SelectTitle;
 				else {
 					SelectDlg[0].strData = Msg::UnselectTitle;
-					SelectDlg[2].Flags |= DIF_DISABLE; // Not need for Unselect, because it process all secelted items
+					SelectDlg[2].Flags |= DIF_DISABLE; // Not need for Unselect, because it process all selected items
 				}
 
 				{
 					Dialog Dlg(SelectDlg, ARRAYSIZE(SelectDlg));
 					Dlg.SetHelp(L"SelectFiles");
-					Dlg.SetPosition(-1, -1, 55, 8);
+					Dlg.SetPosition(-1, -1, 55, 10);
 
 					for (;;) {
 						Dlg.ClearDone();
 						Dlg.Process();
 
-						if (Dlg.GetExitCode() == 5 && Filter.FilterEdit()) {
+						if (Dlg.GetExitCode() == 7 && Filter.FilterEdit()) {
 							// Рефреш текущему времени для фильтра сразу после выхода из диалога
 							Filter.UpdateCurrentTime();
 							bUseFilter = true;
 							break;
 						}
 
-						if (Dlg.GetExitCode() != 4)
+						if (Dlg.GetExitCode() != 6)
 							return 0;
 
 						strMask = SelectDlg[1].strData;
@@ -3311,6 +3334,8 @@ long FileList::SelectFiles(int Mode, const wchar_t *Mask)
 							break;
 						}
 					}
+					Opt.SelectFolders = SelectDlg[2].Selected == BSTATE_CHECKED;
+					Opt.PanelCaseSensitiveCompareSelect = SelectDlg[3].Selected == BSTATE_CHECKED;
 				}
 			} else if (Mode == SELECT_ADDMASK || Mode == SELECT_REMOVEMASK || Mode == SELECT_INVERTMASK) {
 				strMask = Mask;
@@ -3353,8 +3378,9 @@ long FileList::SelectFiles(int Mode, const wchar_t *Mask)
 			else {
 				if (bUseFilter)
 					Match = Filter.FileInFilter(*CurPtr);
-				else
-					Match = FileMask.Compare(CurPtr->strName);
+				else {
+					Match = FileMask.Compare(CurPtr->strName, !Opt.PanelCaseSensitiveCompareSelect);
+				}
 			}
 
 			if (Match) {
@@ -3374,7 +3400,7 @@ long FileList::SelectFiles(int Mode, const wchar_t *Mask)
 						break;
 				}
 
-				if (bUseFilter || !(CurPtr->FileAttr & FILE_ATTRIBUTE_DIRECTORY) || SelectDlg[2].Selected == BSTATE_CHECKED //Opt.SelectFolders
+				if (bUseFilter || !(CurPtr->FileAttr & FILE_ATTRIBUTE_DIRECTORY) || Opt.SelectFolders
 						|| !Selection || RawSelection || Mode == SELECT_INVERTALL
 						|| Mode == SELECT_INVERTMASK) {
 					Select(CurPtr, Selection);
@@ -3498,7 +3524,8 @@ void FileList::CompareDir()
 			PtrTempName1 = PointToName(Item->strName);
 			PtrTempName2 = PointToName(AnotherItem->strName);
 
-			if (!StrCmpI(PtrTempName1, PtrTempName2)) {
+			if ((Opt.PanelCaseSensitiveCompareSelect && !StrCmp(PtrTempName1, PtrTempName2))
+					|| (!Opt.PanelCaseSensitiveCompareSelect && !StrCmpI(PtrTempName1, PtrTempName2))) {
 				if (CompareFatTime) {
 					WORD DosDate, DosTime, AnotherDosDate, AnotherDosTime;
 					WINPORT(FileTimeToDosDateTime)(&Item->WriteTime, &DosDate, &DosTime);
@@ -4510,6 +4537,11 @@ const void *FileList::GetItem(int Index)
 
 void FileList::ClearAllItem()
 {
+	for (PrevDataItem **i = PrevDataList.Last(); i; i = PrevDataList.Prev(i)) {
+		(*i)->PrevListData.Clear();	//???
+	}
+
+#if 0
 	// удалим пред.значение.
 	if (!PrevDataList.Empty())		//???
 	{
@@ -4517,5 +4549,7 @@ void FileList::ClearAllItem()
 			i->PrevListData.Clear();	//???
 		}
 	}
+#endif
+
 	SymlinksCache.clear();
 }

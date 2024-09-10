@@ -357,6 +357,8 @@ WinPortFrame::WinPortFrame(const wxString& title)
 
 	// far2l doesn't need special erase background
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
+	const auto bkclr = g_wx_palette.background[0];
+	SetBackgroundColour(wxColour(bkclr.r, bkclr.g, bkclr.b));
 	Create(NULL, wxID_ANY, title, _win_state.pos, _win_state.size, style);
 	_panel = new WinPortPanel(this, wxPoint(0, 0), GetClientSize());
 	_panel->SetFocus();
@@ -434,6 +436,7 @@ void WinPortFrame::OnEraseBackground(wxEraseEvent &event)
 void WinPortFrame::OnPaint(wxPaintEvent &event)
 {
 	wxPaintDC dc(this);
+	dc.Clear();
 }
 
 void WinPortFrame::OnChar(wxKeyEvent &event)
@@ -1106,12 +1109,147 @@ static bool IsForcedCharTranslation(int code)
 		|| code==WXK_NUMPAD_MULTIPLY || code==WXK_NUMPAD_SUBTRACT || code==WXK_NUMPAD_DIVIDE);
 }
 
+// helper function that returns textual description of wx virtual keycode
+const char* GetWxVirtualKeyCodeName(int keycode)
+{
+	switch ( keycode )
+	{
+#define WXK_(x) \
+		case WXK_##x: return #x;
+
+		WXK_(BACK)
+		WXK_(TAB)
+		WXK_(RETURN)
+		WXK_(ESCAPE)
+		WXK_(SPACE)
+		WXK_(DELETE)
+		WXK_(START)
+		WXK_(LBUTTON)
+		WXK_(RBUTTON)
+		WXK_(CANCEL)
+		WXK_(MBUTTON)
+//		WXK_(NUMPAD_CENTER)
+		WXK_(SHIFT)
+		WXK_(ALT)
+		WXK_(CONTROL)
+		WXK_(MENU)
+		WXK_(PAUSE)
+		WXK_(CAPITAL)
+		WXK_(END)
+		WXK_(HOME)
+		WXK_(LEFT)
+		WXK_(UP)
+		WXK_(RIGHT)
+		WXK_(DOWN)
+		WXK_(SELECT)
+		WXK_(PRINT)
+		WXK_(EXECUTE)
+		WXK_(SNAPSHOT)
+		WXK_(INSERT)
+		WXK_(HELP)
+		WXK_(NUMPAD0)
+		WXK_(NUMPAD1)
+		WXK_(NUMPAD2)
+		WXK_(NUMPAD3)
+		WXK_(NUMPAD4)
+		WXK_(NUMPAD5)
+		WXK_(NUMPAD6)
+		WXK_(NUMPAD7)
+		WXK_(NUMPAD8)
+		WXK_(NUMPAD9)
+		WXK_(MULTIPLY)
+		WXK_(ADD)
+		WXK_(SEPARATOR)
+		WXK_(SUBTRACT)
+		WXK_(DECIMAL)
+		WXK_(DIVIDE)
+		WXK_(F1)
+		WXK_(F2)
+		WXK_(F3)
+		WXK_(F4)
+		WXK_(F5)
+		WXK_(F6)
+		WXK_(F7)
+		WXK_(F8)
+		WXK_(F9)
+		WXK_(F10)
+		WXK_(F11)
+		WXK_(F12)
+		WXK_(F13)
+		WXK_(F14)
+		WXK_(F15)
+		WXK_(F16)
+		WXK_(F17)
+		WXK_(F18)
+		WXK_(F19)
+		WXK_(F20)
+		WXK_(F21)
+		WXK_(F22)
+		WXK_(F23)
+		WXK_(F24)
+		WXK_(NUMLOCK)
+		WXK_(SCROLL)
+		WXK_(PAGEUP)
+		WXK_(PAGEDOWN)
+		WXK_(NUMPAD_SPACE)
+		WXK_(NUMPAD_TAB)
+		WXK_(NUMPAD_ENTER)
+		WXK_(NUMPAD_F1)
+		WXK_(NUMPAD_F2)
+		WXK_(NUMPAD_F3)
+		WXK_(NUMPAD_F4)
+		WXK_(NUMPAD_HOME)
+		WXK_(NUMPAD_LEFT)
+		WXK_(NUMPAD_UP)
+		WXK_(NUMPAD_RIGHT)
+		WXK_(NUMPAD_DOWN)
+		WXK_(NUMPAD_PAGEUP)
+		WXK_(NUMPAD_PAGEDOWN)
+		WXK_(NUMPAD_END)
+		WXK_(NUMPAD_INSERT)
+		WXK_(NUMPAD_DELETE)
+		WXK_(NUMPAD_EQUAL)
+		WXK_(NUMPAD_MULTIPLY)
+		WXK_(NUMPAD_ADD)
+		WXK_(NUMPAD_SEPARATOR)
+		WXK_(NUMPAD_SUBTRACT)
+		WXK_(NUMPAD_DECIMAL)
+		WXK_(NUMPAD_DIVIDE)
+
+		WXK_(WINDOWS_LEFT)
+		WXK_(WINDOWS_RIGHT)
+#ifdef __WXOSX__
+		WXK_(RAW_CONTROL)
+#endif
+#undef WXK_
+
+	default:
+		return "ERR";
+	}
+}
+
+char* FormatWxKeyState(uint16_t state) {
+
+	static char buffer[5];
+
+	buffer[0]  = state & wxMOD_ALT          ? 'A' : 'a';
+	buffer[1]  = state & wxMOD_CONTROL      ? 'C' : 'c';
+	buffer[2]  = state & wxMOD_SHIFT        ? 'S' : 's';
+	buffer[3]  = state & wxMOD_META         ? 'M' : 'm';
+
+	buffer[4] = '\0';
+
+	return buffer;
+}
+
 void WinPortPanel::OnKeyDown( wxKeyEvent& event )
 {
 	ResetTimerIdling();
 	DWORD now = WINPORT(GetTickCount)();
 	const auto uni = event.GetUnicodeKey();
-	fprintf(stderr, "OnKeyDown: raw=%x code=%x uni=%x (%lc) ts=%lu [now=%u]",
+	fprintf(stderr, "\nOnKeyDown: %s %s raw=%x code=%x uni=%x (%lc) ts=%lu [now=%u]",
+		FormatWxKeyState(event.GetModifiers()),
+		GetWxVirtualKeyCodeName(event.GetKeyCode()),
 		event.GetRawKeyCode(), event.GetKeyCode(),
 		uni, (uni > 0x1f) ? uni : L' ', event.GetTimestamp(), now);
 
@@ -1230,7 +1368,9 @@ void WinPortPanel::OnKeyUp( wxKeyEvent& event )
 {
 	ResetTimerIdling();
 	const auto uni = event.GetUnicodeKey();
-	fprintf(stderr, "OnKeyUp: raw=%x code=%x uni=%x (%lc) ts=%lu",
+	fprintf(stderr, "\nOnKeyUp: %s %s raw=%x code=%x uni=%x (%lc) ts=%lu",
+		FormatWxKeyState(event.GetModifiers()),
+		GetWxVirtualKeyCodeName(event.GetKeyCode()),
 		event.GetRawKeyCode(), event.GetKeyCode(),
 		uni, (uni > 0x1f) ? uni : L' ', event.GetTimestamp());
 
@@ -1308,7 +1448,12 @@ void WinPortPanel::OnChar( wxKeyEvent& event )
 {
 	ResetTimerIdling();
 	const auto uni = event.GetUnicodeKey();
-	fprintf(stderr, "OnChar: raw=%x code=%x uni=%x (%lc) ts=%lu lke=%u",
+	if (_key_tracker.LastKeydown().GetTimestamp() != event.GetTimestamp()) {
+		fprintf(stderr, "\n");
+	}
+	fprintf(stderr, "OnChar: %s %s raw=%x code=%x uni=%x (%lc) ts=%lu lke=%u",
+		FormatWxKeyState(event.GetModifiers()),
+		GetWxVirtualKeyCodeName(event.GetKeyCode()),
 		event.GetRawKeyCode(), event.GetKeyCode(),
 		uni, (uni > 0x1f) ? uni : L' ', event.GetTimestamp(), _last_keydown_enqueued);
 	_exclusive_hotkeys.OnKeyUp(event);
@@ -1801,6 +1946,24 @@ void WinPortPanel::ResetInputState()
 
 static void ConsoleOverrideColorInMain(DWORD Index, DWORD *ColorFG, DWORD *ColorBK)
 {
+	if (Index == (DWORD)-1) {
+		const DWORD64 orig_attrs = g_winport_con_out->GetAttributes();
+		DWORD64 new_attrs = orig_attrs;
+		if ((*ColorFG & 0xff000000) == 0) {
+			SET_RGB_FORE(new_attrs, *ColorFG);
+		}
+		if ((*ColorBK & 0xff000000) == 0) {
+			SET_RGB_BACK(new_attrs, *ColorBK);
+		}
+		if (new_attrs != orig_attrs) {
+			g_winport_con_out->SetAttributes(new_attrs);
+		}
+
+		*ColorFG = WxConsoleForeground2RGB(orig_attrs & ~(DWORD64)COMMON_LVB_REVERSE_VIDEO).AsRGB();
+		*ColorBK = WxConsoleBackground2RGB(orig_attrs & ~(DWORD64)COMMON_LVB_REVERSE_VIDEO).AsRGB();
+		return;
+	}
+
 	WinPortRGB fg(*ColorFG), bk(*ColorBK);
 	if (*ColorFG == (DWORD)-1) {
 		fg = g_winport_palette.foreground[Index];
@@ -1808,10 +1971,16 @@ static void ConsoleOverrideColorInMain(DWORD Index, DWORD *ColorFG, DWORD *Color
 	if (*ColorBK == (DWORD)-1) {
 		bk = g_winport_palette.background[Index];
 	}
-	*ColorFG = g_wx_palette.foreground[Index].AsRGB();
-	*ColorBK = g_wx_palette.background[Index].AsRGB();
-	g_wx_palette.foreground[Index] = fg;
-	g_wx_palette.background[Index] = bk;
+	const auto prev_fg = g_wx_palette.foreground[Index].AsRGB();
+	const auto prev_bk = g_wx_palette.background[Index].AsRGB();
+	if (*ColorFG != (DWORD)-2) {
+		g_wx_palette.foreground[Index] = fg;
+	}
+	if (*ColorBK != (DWORD)-2) {
+		g_wx_palette.background[Index] = bk;
+	}
+	*ColorFG = prev_fg;
+	*ColorBK = prev_bk;
 }
 
 static void ConsoleOverrideBasePaletteInMain(void *pbuff)

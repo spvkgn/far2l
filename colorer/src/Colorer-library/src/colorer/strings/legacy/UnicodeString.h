@@ -17,6 +17,7 @@ class UnicodeString
   UnicodeString(const char* str);
   UnicodeString(const wchar* str);
   UnicodeString(const w2char* str);
+  UnicodeString(const uint16_t* str);
   UnicodeString(const char* string, int32_t l);
   UnicodeString(const wchar* string, int32_t l);
   UnicodeString(const w2char* string, int32_t l);
@@ -83,6 +84,8 @@ class UnicodeString
   wchar operator[](int32_t i) const;
   /** String length in unicode characters */
   int32_t length() const;
+
+  UnicodeString& trim();
 
   /** Searches first index of substring @c str, starting from @c pos */
   int32_t indexOf(const UnicodeString& str, int32_t pos = 0) const;

@@ -1,13 +1,13 @@
 #ifndef COLORER_FILETYPEIMPL_H
 #define COLORER_FILETYPEIMPL_H
 
-#include <optional>
 #include <unordered_map>
 #include <vector>
 #include "colorer/FileType.h"
 #include "colorer/HrcLibrary.h"
 #include "colorer/parsers/FileTypeChooser.h"
 #include "colorer/parsers/SchemeImpl.h"
+#include "colorer/xml/XmlInputSource.h"
 
 /* structure for storing data of scheme parameter*/
 class TypeParameter
@@ -19,11 +19,11 @@ class TypeParameter
   /* parameter name*/
   UnicodeString name;
   /* parameter description*/
-  std::optional<UnicodeString> description;
+  uUnicodeString description;
   /* default value*/
   UnicodeString value;
   /* user value*/
-  std::optional<UnicodeString> user_value;
+  uUnicodeString user_value;
 };
 
 /**

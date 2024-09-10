@@ -1655,6 +1655,8 @@ static void ScanPluginDir()
 	TruncStr(strDirName, 30);
 	CenterStr(strDirName, strDirName, 30);
 
+	FarGetPluginDirListMsg(strDirName, AbortOp ? 0 : MSG_KEEPBACKGROUND);
+
 	if (CheckForEscSilent()) {
 		if (Opt.Confirm.Esc)	// Будет выдаваться диалог?
 			AbortOp = TRUE;
@@ -1662,8 +1664,6 @@ static void ScanPluginDir()
 		if (ConfirmAbortOp())
 			StopSearch = TRUE;
 	}
-
-	FarGetPluginDirListMsg(strDirName, AbortOp ? 0 : MSG_KEEPBACKGROUND);
 
 	if (StopSearch || !CtrlObject->Plugins.GetFindData(hDirListPlugin, &PanelData, &ItemCount, OPM_FIND))
 		return;
@@ -2054,6 +2054,16 @@ int WINAPI farStrCmpNI(const wchar_t *s1, const wchar_t *s2, int n)
 int WINAPI farStrCmpI(const wchar_t *s1, const wchar_t *s2)
 {
 	return StrCmpI(s1, s2);
+}
+
+int WINAPI farStrCmpN(const wchar_t *s1, const wchar_t *s2, int n)
+{
+	return StrCmpN(s1, s2, n);
+}
+
+int WINAPI farStrCmp(const wchar_t *s1, const wchar_t *s2)
+{
+	return StrCmp(s1, s2);
 }
 
 int WINAPI farIsLower(wchar_t Ch)

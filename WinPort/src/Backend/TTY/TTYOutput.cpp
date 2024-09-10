@@ -19,6 +19,7 @@
 #include "FarTTY.h"
 #include "WideMB.h"
 #include "WinPort.h"
+#include "Backend.h"
 #include "../WinPortRGB.h"
 
 #define ESC "\x1b"
@@ -46,9 +47,9 @@ void TTYOutput::TrueColors::AppendSuffix(std::string &out, DWORD rgb)
 	char buf[64];
 	const auto &it = _colors256_lookup.find(rgb);
 	if (it != _colors256_lookup.end()) {
-		sprintf(buf, "5;%u;", ((unsigned int)it->second) + 16);
+		snprintf(buf, sizeof(buf), "5;%u;", ((unsigned int)it->second) + 16);
 	} else {
-		sprintf(buf, "2;%u;%u;%u;", rgb & 0xff, (rgb >> 8) & 0xff, (rgb >> 16) & 0xff);
+		snprintf(buf, sizeof(buf), "2;%u;%u;%u;", rgb & 0xff, (rgb >> 8) & 0xff, (rgb >> 16) & 0xff);
 	}
 	out+= buf;
 }
@@ -153,9 +154,9 @@ void TTYOutput::WriteUpdatedAttributes(DWORD64 attr, bool is_space)
 
 ///////////////////////
 
-TTYOutput::TTYOutput(int out, bool far2l_tty, bool norgb)
+TTYOutput::TTYOutput(int out, bool far2l_tty, bool norgb, DWORD nodetect)
 	:
-	_out(out), _far2l_tty(far2l_tty), _norgb(norgb), _kernel_tty(false)
+	_out(out), _far2l_tty(far2l_tty), _norgb(norgb), _kernel_tty(false), _nodetect(nodetect)
 {
 	const char *env = getenv("TERM");
 	_screen_tty = (env && strncmp(env, "screen", 6) == 0); // TERM=screen.xterm-256color
@@ -174,9 +175,16 @@ TTYOutput::TTYOutput(int out, bool far2l_tty, bool norgb)
 #endif
 
 	Format(ESC "7" ESC "[?47h" ESC "[?1049h" ESC "[?2004h");
-	Format(ESC "[?9001h"); // win32-input-mode on
-	Format(ESC "[?1337h"); // iTerm2 input mode on
-	Format(ESC "[=15;1u"); // kovidgoyal's kitty mode on
+
+	if ((_nodetect & NODETECT_W) == 0) {
+		Format(ESC "[?9001h"); // win32-input-mode on
+	}
+	if ((_nodetect & NODETECT_A) == 0) {
+		Format(ESC "[?1337h"); // iTerm2 input mode on
+	}
+	if ((_nodetect & NODETECT_K) == 0) {
+		Format(ESC "[=15;1u"); // kovidgoyal's kitty mode on
+	}
 	ChangeKeypad(true);
 	ChangeMouse(true);
 
@@ -204,10 +212,16 @@ TTYOutput::~TTYOutput()
 		if (!_kernel_tty) {
 			Format(ESC "[0 q");
 		}
-		Format(ESC "[=0;1u" "\r"); // kovidgoyal's kitty mode off
+		if ((_nodetect & NODETECT_K) == 0) {
+			Format(ESC "[=0;1u" "\r"); // kovidgoyal's kitty mode off
+		}
 		Format(ESC "[0m" ESC "[?1049l" ESC "[?47l" ESC "8" ESC "[?2004l" "\r\n");
-		Format(ESC "[?9001l"); // win32-input-mode off
-		Format(ESC "[?1337l"); // iTerm2 input mode off
+		if ((_nodetect & NODETECT_W) == 0) {
+			Format(ESC "[?9001l"); // win32-input-mode off
+		}
+		if ((_nodetect & NODETECT_A) == 0) {
+			Format(ESC "[?1337l"); // iTerm2 input mode off
+		}
 		TTYBasePalette def_palette;
 		ChangePalette(def_palette);
 		Flush();
@@ -284,11 +298,11 @@ void TTYOutput::FinalizeSameChars()
 		int sz_len;
 		if (_far2l_tty) {
 			_rawbuf.insert(_rawbuf.end(), _same_chars.tmp.begin(), _same_chars.tmp.end());
-			sz_len = sprintf(sz, // repeat last character <count-1> times
-				ESC "[%ub", _same_chars.count - 1);
+			sz_len = snprintf(sz, // repeat last character <count-1> times
+				sizeof(sz), ESC "[%ub", _same_chars.count - 1);
 		} else {
-			sz_len = sprintf(sz, // erase <count> chars and move cursor forward by <count>
-				ESC "[%uX" ESC "[%uC", _same_chars.count, _same_chars.count);
+			sz_len = snprintf(sz, // erase <count> chars and move cursor forward by <count>
+				sizeof(sz), ESC "[%uX" ESC "[%uC", _same_chars.count, _same_chars.count);
 		}
 		if (sz_len >= 0) {
 			assert(size_t(sz_len) <= ARRAYSIZE(sz));

@@ -1599,6 +1599,30 @@ HistoryExt
 "Зовнішній"
 "Знешні"
 
+HistoryRefreshFolder
+l:
+"История будет обновлена: записи о недоступных папках будут удалены. Продолжить?"
+"History list will be refreshed: entries of non-existing folders will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing folder will be deleted. Continue?"
+
+HistoryRefreshView
+l:
+"История будет обновлена: записи о недоступных файлах будут удалены. Продолжить?"
+"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+upd:"History list will be refreshed: entries of non-existing files will be deleted. Continue?"
+
 HistoryClear
 l:
 "История будет полностью очищена. Продолжить?"
@@ -1900,14 +1924,14 @@ upd:"by name"
 
 ConfigHistoryRemoveDupsRuleByNameExtra
 "по имени и пути"
-"by name and extra"
-upd:"by name and extra"
-upd:"by name and extra"
-upd:"by name and extra"
-upd:"by name and extra"
-upd:"by name and extra"
-upd:"by name and extra"
-upd:"by name and extra"
+"by name and path"
+upd:"by name and path"
+upd:"by name and path"
+upd:"by name and path"
+upd:"by name and path"
+upd:"by name and path"
+upd:"by name and path"
+upd:"by name and path"
 
 ConfigAutoHighlightHistory
 "Автоподсветка в списках истории"
@@ -2019,6 +2043,17 @@ ConfigSelectFolders
 "Seleccionar &directorios"
 "Позначка &тек"
 "Адзнака ката&логаў"
+
+ConfigCaseSensitiveCompareSelect
+"&Учитывать регистр при сравнении или пометке"
+"Case sens&itive when compare or select"
+upd:"Case sensitive when compare or select"
+upd:"Case sensitive when compare or select"
+upd:"Case sensitive when compare or select"
+upd:"Case sensitive when compare or select"
+upd:"Case sensitive when compare or select"
+upd:"Case sensitive when compare or select"
+upd:"Case sensitive when compare or select"
 
 ConfigSortFolderExt
 "Сортировать имена папок по рас&ширению"
@@ -2452,8 +2487,8 @@ upd:"Show total delete progress indicator"
 "Адлюстроўваць агульны індыкатар выдалення"
 
 ConfigPgUpChangeDisk
-"Использовать Ctrl+PgUp для в&ыбора диска"
-"Use Ctrl+Pg&Up to change drive"
+"Использовать Ctrl+PgUp для мен&ю перехода"
+"Use Ctrl+Pg&Up for location menu"
 "Použít Ctrl+Pg&Up pro změnu disku"
 "Strg+Pg&Up wechselt das Laufwerk"
 "A Ctrl+Pg&Up meghajtót vált"
@@ -2751,15 +2786,15 @@ upd:"Do nothing"
 "Нічога не рабіць"
 
 ConfigVMenuStopEdge
-"Остановить обертывание по краю"
-"Stop wrap on edge"
-"Zastavte obalení na okraji"
-"Stoppen Sie das Umwickeln am Rand"
-"Állítsd meg az szélén történő csomagolást"
-"Przerwij obracanie wzdłuż krawędzi"
-"Detenga el envoltorio en el borde"
-"Зупинити обертання по краю"
-"Паздзерджыць абгортку па краі"
+"Прокрутка списка по кругу"
+"Loop list scrolling"
+"Procházení seznamu smyčkou"
+"Schleifenlisten-Bildlauf"
+"Hurok lista görgetés"
+"Przewijanie listy w pętli"
+"Desplazamiento en bucle de la lista"
+"Прокручування списку зациклено"
+"Цыклічная прокрутка спісу"
 
 ConfigCmdlineTitle
 l:
@@ -9278,6 +9313,28 @@ SelectFolders
 "Позначка &тек"
 "Адзнака ката&логаў"
 
+SelectCase
+"&Учитывать регистр"
+"&Case sensitive"
+"Roz&lišovat velikost písmen"
+"&Groß-/Kleinschreibung"
+"&Nagy/kisbetű érzékeny"
+"&Uwzględnij wielkość liter"
+"Sensible min/ma&yúsc."
+"&Враховувати регістр"
+"&Улічваць рэгістр"
+
+SelectNote
+"Настройка влияет и на сравнение папок"
+"Setting affects also Compare folders"
+upd:"Setting affects also Compare folders"
+upd:"Setting affects also Compare folders"
+upd:"Setting affects also Compare folders"
+upd:"Setting affects also Compare folders"
+upd:"Setting affects also Compare folders"
+"Опція впливає і на порівняння тек"
+"Наладка ўплывае на параўнанне каталогаў"
+
 SelectFilter
 "&Фильтр"
 "&Filter"
@@ -11885,16 +11942,27 @@ FindFileCodePageBottom
 "Space Ins"
 "Space Ins"
 
+FindFileCaseFileMask
+"Учитывать ре&гистр масок"
+"Case &sensitive file masks"
+"Zvážit &velikost písmen masky"
+"Groß-/Kleinschreibung (&dateimaske)"
+"Nagy/&kisbetű érzékeny (fájlmaszk)"
+"Uwzględnij &wielkość liter (maska pliku)"
+"&Sensible min/mayúsc. (máscara de archivo)"
+"Враховувати ре&гістр масок"
+"Улічваць рэ&гістр масак"
+
 FindFileCase
-"&Учитывать регистр"
-"&Case sensitive"
-"Roz&lišovat velikost písmen"
-"Gr&oß-/Kleinschreibung"
+"&Учитывать регистр текста"
+"&Case sensitive text"
+"Zvážit &velikost písmen textu"
+"Gr&oß-/Kleinschreibung (text)"
 "&Nagy/kisbetű érzékeny"
 "&Uwzględnij wielkość liter"
-"Sensible min/ma&yúsc."
-"&Враховувати регістр"
-"&Улічваць рэгістр"
+"Sensible min/ma&yúsc (texto)"
+"&Враховувати регістр тексту"
+"&Улічваць рэгістр тэксту"
 
 FindFileWholeWords
 "Только &целые слова"
@@ -13781,8 +13849,8 @@ MenuReread
 "П&ерачытаць                Ctrl+R"
 
 MenuChangeDrive
-"С&менить диск             Alt+F1"
-"&Change drive       Alt+F1"
+"&Меню перехода             Alt+F1"
+"Lo&cation menu       Alt+F1"
 "Z&měnit jednotku          Alt+F1"
 "Laufwerk we&chseln    Alt+F1"
 "Meghajtó&váltás     Alt+F1"
@@ -14433,8 +14501,8 @@ MenuTogglePanelRight
 "Панэль &Укл/Адкл          Ctrl+F2"
 
 MenuChangeDriveRight
-"С&менить диск             Alt+F2"
-"&Change drive       Alt+F2"
+"&Меню перехода             Alt+F2"
+"Lo&cation menu       Alt+F2"
 "Z&měnit jednotku          Alt+F2"
 "Laufwerk &wechseln    Alt+F2"
 "Meghajtó&váltás     Alt+F2"
@@ -15408,15 +15476,48 @@ EditControlHistoryFooterNoDel
 "Up/Down Enter Esc"
 
 HistoryFooter
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
-"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+Alt+F"
+
+HistoryFooterFolder
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+
+HistoryFooterCmd
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 Shift+Del Del Ins Ctrl+C Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+
+HistoryFooterViewEdit
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
+"Up/Down Enter Esc F3 F4 Shift+Del Del Ins Ctrl+C Ctrl+R Ctrl+T Ctrl+F10 Ctrl+Alt+F"
 
 SearchFileTitle
 l:
@@ -15996,15 +16097,15 @@ upd:"&Hidden"
 "С&хаваны"
 
 SetAttrSUID
-"SUID"
-"SUID"
-"SUID"
-"SUID"
-"SUID"
-"SUID"
-"SUID"
-"SUID"
-"SUID"
+"&SUID"
+"&SUID"
+"&SUID"
+"&SUID"
+"&SUID"
+"&SUID"
+"&SUID"
+"&SUID"
+"&SUID"
 
 SetAttrSGID
 "SGID"
@@ -16196,12 +16297,12 @@ upd:"&Info:"
 
 SetAttrSymlinkContent
 "Ссылк&а: "
-"&Symlink:"
-upd:"&Symlink:"
-upd:"&Symlink:"
-upd:"&Symlink:"
-upd:"&Symlink:"
-upd:"&Symlink:"
+"S&ymlink:"
+upd:"S&ymlink:"
+upd:"S&ymlink:"
+upd:"S&ymlink:"
+upd:"S&ymlink:"
+upd:"S&ymlink:"
 "Пос&ил..:"
 "Сп&асыл.:"
 
@@ -25207,6 +25308,17 @@ FileFilterMatchMask
 "&Máscara:"
 "&Маска:"
 "&Маска:"
+
+FileFilterMatchMaskCase
+"Учитывать регистр (маски файлов)"
+"Case sensitive (file masks)"
+"Rozlišovat velikost písmen (masky souborů)"
+"Groß-/Kleinschreibung (dateimaske)"
+"Nagy/kisbetű érzékeny (fájlmaszk)"
+"Uwzględnij wielkość liter (maska pliku)"
+"Sensible min/mayúsc. (máscara de archivo)"
+"Враховувати регістр (масок файлів)"
+"Улічваць рэгістр (масак файлаў)"
 
 FileFilterSize
 "Разм&ер:"

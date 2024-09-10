@@ -1789,7 +1789,7 @@ struct EditorColor
 	int StringNumber;
 	int ColorItem;
 	int StartPos;
-	int EndPos; // -1 means edge of visible screen part, otherwise wanted edge position
+	int EndPos;
 	int Color;
 };
 
@@ -1894,6 +1894,8 @@ typedef void (WINAPI *FARSTDLOCALSTRUPR)(wchar_t *s1);
 typedef void (WINAPI *FARSTDLOCALSTRLWR)(wchar_t *s1);
 typedef int (WINAPI *FARSTDLOCALSTRICMP)(const wchar_t *s1,const wchar_t *s2);
 typedef int (WINAPI *FARSTDLOCALSTRNICMP)(const wchar_t *s1,const wchar_t *s2,int n);
+typedef int (WINAPI *FARSTDLOCALSTRCMP)(const wchar_t *s1,const wchar_t *s2);
+typedef int (WINAPI *FARSTDLOCALSTRNCMP)(const wchar_t *s1,const wchar_t *s2,int n);
 
 enum PROCESSNAME_FLAGS
 {
@@ -2116,6 +2118,9 @@ typedef struct FarStandardFunctions
 	FARBACKGROUNDTASK          BackgroundTask;
 	FARSTRCELLSCOUNT           StrCellsCount;
 	FARSTRSIZEOFCELLS          StrSizeOfCells;
+
+	FARSTDLOCALSTRICMP         LStrcmp;
+	FARSTDLOCALSTRNICMP        LStrncmp;
 } FARSTANDARDFUNCTIONS;
 
 struct PluginStartupInfo

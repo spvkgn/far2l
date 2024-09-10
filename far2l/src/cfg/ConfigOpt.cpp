@@ -298,6 +298,7 @@ const ConfigOpt g_cfg_opts[] {
 	{true,  NSecSystem, "SearchOutFormatWidth", &Opt.FindOpt.strSearchOutFormatWidth, L"14,13,0"},
 	{true,  NSecSystem, "FindFolders", &Opt.FindOpt.FindFolders, 1},
 	{true,  NSecSystem, "FindSymLinks", &Opt.FindOpt.FindSymLinks, 1},
+	{true,  NSecSystem, "FindCaseSensitiveFileMask", &Opt.FindOpt.FindCaseSensitiveFileMask, 1},
 	{true,  NSecSystem, "UseFilterInSearch", &Opt.FindOpt.UseFilter, 0},
 	{true,  NSecSystem, "FindCodePage", &Opt.FindCodePage, CP_AUTODETECT},
 	{false, NSecSystem, "CmdHistoryRule", &Opt.CmdHistoryRule, 0},
@@ -377,6 +378,7 @@ const ConfigOpt g_cfg_opts[] {
 	{true,  NSecPanel, "Highlight", &Opt.Highlight, 1},
 	{true,  NSecPanel, "SortFolderExt", &Opt.SortFolderExt, 0},
 	{true,  NSecPanel, "SelectFolders", &Opt.SelectFolders, 0},
+	{true,  NSecPanel, "CaseSensitiveCompareSelect", &Opt.PanelCaseSensitiveCompareSelect, 1},
 	{true,  NSecPanel, "ReverseSort", &Opt.ReverseSort, 1},
 	{false, NSecPanel, "RightClickRule", &Opt.PanelRightClickRule, 2},
 	{false, NSecPanel, "CtrlFRule", &Opt.PanelCtrlFRule, 1},
@@ -444,12 +446,13 @@ const ConfigOpt g_cfg_opts[] {
 
 	{true,  NSecCodePages, "CPMenuMode2", &Opt.CPMenuMode, 1},
 
-	{true,  NSecVMenu, "MenuStopWrapOnEdge", &Opt.VMenu.StopOnEdge, 1},
+	{true,  NSecVMenu, "MenuStopWrapOnEdge", &Opt.VMenu.MenuLoopScroll, 1},
 
 	{true,  NSecVMenu, "LBtnClick", &Opt.VMenu.LBtnClick, VMENUCLICK_CANCEL},
 	{true,  NSecVMenu, "RBtnClick", &Opt.VMenu.RBtnClick, VMENUCLICK_CANCEL},
 	{true,  NSecVMenu, "MBtnClick", &Opt.VMenu.MBtnClick, VMENUCLICK_APPLY},
-	{true,  NSecVMenu, "HistShowTimes", ARRAYSIZE(Opt.HistoryShowTimes), Opt.HistoryShowTimes, nullptr}
+	{true,  NSecVMenu, "HistShowTimes", ARRAYSIZE(Opt.HistoryShowTimes), Opt.HistoryShowTimes, nullptr},
+	{true,  NSecVMenu, "HistDirsPrefixLen", &Opt.HistoryDirsPrefixLen, 20},
 };
 
 size_t ConfigOptCount() noexcept
@@ -588,15 +591,16 @@ static void SanitizePalette()
 
 static void MergePalette()
 {
-//	for(size_t i = 0; i < SIZE_ARRAY_PALETTE; i++) {
-//
-//		Palette[i] &= 0xFFFFFFFFFFFFFF00;
-//		Palette[i] |= Palette8bit[i];
-//	}
+	for(size_t i = 0; i < SIZE_ARRAY_PALETTE; i++) {
 
-	uint32_t basepalette[32];
-	WINPORT(GetConsoleBasePalette)(NULL, basepalette);
+		Palette[i] &= 0xFFFFFFFFFFFFFF00;
+		Palette[i] |= Palette8bit[i];
+	}
 
+//	uint32_t basepalette[32];
+//	WINPORT(GetConsoleBasePalette)(NULL, basepalette);
+
+/*
 	for(size_t i = 0; i < SIZE_ARRAY_PALETTE; i++) {
 		uint8_t color = Palette8bit[i];
 
@@ -615,6 +619,7 @@ static void MergePalette()
 
 		Palette[i] += color;
 	}
+*/
 }
 
 void ConfigOptFromCmdLine()
@@ -758,6 +763,11 @@ void ConfigOptLoad()
 	}
 
 	FileFilter::InitFilter(cfg_reader);
+
+	// avoid negative decrement for now as hiding command line by Ctrl+Down is a new feature and may confuse
+	// some users, so let this state be not persistent for now so such users may recover by simple restart
+	Opt.LeftHeightDecrement = std::max(Opt.LeftHeightDecrement, 0);
+	Opt.RightHeightDecrement = std::max(Opt.RightHeightDecrement, 0);
 
 	g_config_ready = true;
 	/* *************************************************** </ПОСТПРОЦЕССЫ> */

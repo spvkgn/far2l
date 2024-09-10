@@ -238,19 +238,19 @@ extern "C" void WinPortHelp()
 	printf("FAR2L backend-specific options:\n");
 	printf("\t--tty - force using TTY backend only (disable GUI/TTY autodetection)\n");
 	printf("\t--notty - don't fallback to TTY backend if GUI backend failed\n");
-	printf("\t--nodetect or --nodetect=[f|][x|xi] - don't detect if TTY backend supports FAR2L or X11/Xi extensions\n");
+	printf("\t--nodetect or --nodetect=[x|xi][f][w][a][k] - don't detect if TTY backend supports X11/Xi input and clipboard interaction extensions and/or disable detect f=FAR2l terminal extensions, w=win32, a=apple iTerm2, k=kovidgoyal's kitty input modes\n");
 	printf("\t--norgb - don't use true (24-bit) colors\n");
 	printf("\t--mortal - terminate instead of going to background on getting SIGHUP (default if in Linux TTY)\n");
 	printf("\t--immortal - go to background instead of terminating on getting SIGHUP (default if not in Linux TTY)\n");
 	printf("\t--x11 - force GUI backend to run on X11\n");
 	printf("\t--wayland - force GUI backend to run on Wayland\n");
-	printf("\t--ee or --ee=N - ESC expiration in msec (100 if unspecified) to avoid need for double ESC presses (valid only in TTY mode without FAR2L extensions)\n");
+	printf("\t--ee=N - ESC expiration in msec (default is 100, 0 to disable) to avoid need for double ESC presses (valid only in TTY mode without FAR2L extensions)\n");
 	printf("\t--primary-selection - use PRIMARY selection instead of CLIPBOARD X11 selection (only for GUI backend)\n");
 	printf("\t--maximize - force maximize window upon launch (only for GUI backend)\n");
 	printf("\t--nomaximize - dont maximize window upon launch even if its has saved maximized state (only for GUI backend)\n");
 	printf("\t--clipboard=SCRIPT - use external clipboard handler script that implements get/set text clipboard data via its stdin/stdout\n");
     printf("    Backend-specific options also can be set via the FAR2L_ARGS environment variable\n");
-    printf("     (for example: export FAR2L_ARGS=\"--tty --nodetect --ee\" and then simple far2l to force start only TTY backend)\n");
+    printf("     (for example: export FAR2L_ARGS=\"--tty\" to start far2l in tty mode by default)\n");
 }
 
 struct ArgOptions
@@ -261,7 +261,7 @@ struct ArgOptions
 	bool x11 = false;
 	bool wayland = false;
 	std::string ext_clipboard;
-	unsigned int esc_expiration = 0;
+	unsigned int esc_expiration = 100;
 	std::vector<char *> filtered_argv;
 
 	ArgOptions() = default;
@@ -290,7 +290,7 @@ struct ArgOptions
 			norgb = true;
 
 		} else if (strcmp(a, "--nodetect") == 0) {
-			nodetect = NODETECT_F | NODETECT_X;
+			nodetect = NODETECT_F | NODETECT_X | NODETECT_A | NODETECT_K | NODETECT_W;
 
 		} else if (strstr(a, "--nodetect=") == a) {
 			if(strstr(a+11,"xi")) {
@@ -301,11 +301,20 @@ struct ArgOptions
 			if(strchr(a+11,'f')) {
 				nodetect |= NODETECT_F;
 			}
+			if(strchr(a+11,'a')) {
+				nodetect |= NODETECT_A;
+			}
+			if(strchr(a+11,'k')) {
+				nodetect |= NODETECT_K;
+			}
+			if(strchr(a+11,'w')) {
+				nodetect |= NODETECT_W;
+			}
 		} else if (strstr(a, "--clipboard=") == a) {
 			ext_clipboard = a + 12;
 
-		} else if (strstr(a, "--ee") == a) {
-			esc_expiration = (a[4] == '=') ? atoi(&a[5]) : 100;
+		} else if (strstr(a, "--ee=") == a) {
+			esc_expiration = atoi(&a[5]);
 
 		} else if (need_strdup) {
 			char *a_dup = strdup(a);
@@ -468,6 +477,25 @@ extern "C" int WinPortMain(const char *full_exe_path, int argc, char **argv, int
 #endif
 	}
 
+	bool wsl_clipboard_workaround = (arg_opts.ext_clipboard.empty()
+		&& getenv("WSL_DISTRO_NAME")
+		&& !getenv("FAR2L_WSL_NATIVE"));
+	if (wsl_clipboard_workaround) {
+		arg_opts.ext_clipboard = full_exe_path;
+		if (TranslateInstallPath_Bin2Share(arg_opts.ext_clipboard)) {
+			ReplaceFileNamePart(arg_opts.ext_clipboard, APP_BASENAME "/wslgclip.sh");
+		} else {
+			ReplaceFileNamePart(arg_opts.ext_clipboard, "wslgclip.sh");
+		}
+		if (TestPath(arg_opts.ext_clipboard).Executable()) {
+			fprintf(stderr, "WSL cliboard workaround: '%s'\n", arg_opts.ext_clipboard.c_str());
+			ext_clipboard_backend_setter.Set<ExtClipboardBackend>(arg_opts.ext_clipboard.c_str());
+		} else {
+			fprintf(stderr, "Can't use WSL cliboard workaround: '%s'\n", arg_opts.ext_clipboard.c_str());
+			arg_opts.ext_clipboard.clear();
+		}
+	}
+
 	int result = -1;
 	if (!arg_opts.tty) {
 		std::string gui_path = full_exe_path;
@@ -480,25 +508,6 @@ extern "C" int WinPortMain(const char *full_exe_path, int argc, char **argv, int
 			if (WinPortMainBackend_p) {
 				g_winport_backend = L"GUI";
 
-				bool wsl_clipboard_workaround = (arg_opts.ext_clipboard.empty()
-					&& getenv("WSL_DISTRO_NAME")
-					&& !getenv("FAR2L_WSL_NATIVE"));
-				if (wsl_clipboard_workaround) {
-					arg_opts.ext_clipboard = full_exe_path;
-					if (TranslateInstallPath_Bin2Share(arg_opts.ext_clipboard)) {
-						ReplaceFileNamePart(arg_opts.ext_clipboard, APP_BASENAME "/wslgclip.sh");
-					} else {
-						ReplaceFileNamePart(arg_opts.ext_clipboard, "wslgclip.sh");
-					}
-					if (TestPath(arg_opts.ext_clipboard).Executable()) {
-						fprintf(stderr, "WSL cliboard workaround: '%s'\n", arg_opts.ext_clipboard.c_str());
-						ext_clipboard_backend_setter.Set<ExtClipboardBackend>(arg_opts.ext_clipboard.c_str());
-					} else {
-						fprintf(stderr, "Can't use WSL cliboard workaround: '%s'\n", arg_opts.ext_clipboard.c_str());
-						arg_opts.ext_clipboard.clear();
-					}
-				}
-
 				tty_raw_mode.reset();
 				SudoAskpassImpl askass_impl;
 				SudoAskpassServer askpass_srv(&askass_impl);
@@ -509,7 +518,7 @@ extern "C" int WinPortMain(const char *full_exe_path, int argc, char **argv, int
 					fprintf(stderr, "Cannot use GUI backend\n");
 					arg_opts.tty = !arg_opts.notty;
 					if (wsl_clipboard_workaround) {
-						arg_opts.ext_clipboard.clear();
+						//arg_opts.ext_clipboard.clear();
 					}
 				}
 			} else {

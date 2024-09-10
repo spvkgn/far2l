@@ -100,6 +100,7 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 	std::atomic<unsigned char> _keypad{0};
 	std::atomic<bool> _bracketed_paste_expected{false};
 	std::atomic<bool> _win32_input_mode_expected{false};
+	std::atomic<int> _kitty_kb_flags{0};
 	INPUT_RECORD _last_window_info_ir;
 	std::unique_ptr<VTFar2lExtensios> _far2l_exts;
 	std::unique_ptr<VTMouse> _mouse;
@@ -159,9 +160,9 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 
 		const BYTE col = static_cast<BYTE>(FarColorToReal(COL_COMMANDLINEUSERSCREEN));
 		char colorfgbg[32];
-		sprintf(colorfgbg, "%u;%u",
-			AnsiEsc::ConsoleColorToAnsi(col & 0xf),
-			AnsiEsc::ConsoleColorToAnsi((col >> 4) & 0xf));
+		snprintf(colorfgbg, sizeof(colorfgbg), "%u;%u",
+			 AnsiEsc::ConsoleColorToAnsi(col & 0xf),
+			 AnsiEsc::ConsoleColorToAnsi((col >> 4) & 0xf));
 
 		const auto color_bpp = WINPORT(GetConsoleColorPalette)(ConsoleHandle());
 		std::string askpass_app;
@@ -437,7 +438,7 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 		DWORD dw;
 		const std::string &translated = TranslateKeyEvent(KeyEvent);
 
-		if (!KeyEvent.bKeyDown && !_win32_input_mode_expected)
+		if (!KeyEvent.bKeyDown && !_win32_input_mode_expected && !(_kitty_kb_flags & 2))
 			return;
 
 		if (!translated.empty()) {
@@ -558,6 +559,16 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 		_win32_input_mode_expected = enabled;
 	}
 
+	virtual void SetKittyFlags(int flags)
+	{
+		_kitty_kb_flags = flags;
+	}
+
+	virtual int GetKittyFlags()
+	{
+		return _kitty_kb_flags;
+	}
+
 	virtual void OnApplicationProtocolCommand(const char *str)//NB: called not from main thread!
 	{
 		if (strncmp(str, "far2l", 5) == 0) {
@@ -664,20 +675,30 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 				std::lock_guard<std::mutex> lock(_read_state_mutex); // stop input readout
 				SavedScreen saved_scr;
 				ScrBuf.FillBuf();
-				auto choice = Message(MSG_KEEPBACKGROUND, 3,
-					Msg::TerminalClipboardAccessTitle,
-					Msg::TerminalClipboardSetText,
-					Msg::TerminalClipboardAccessBlock,		// 0
-					Msg::TerminalClipboardSetAllowOnce,		// 1
-					Msg::TerminalClipboardSetAllowForCommand);	// 2
-				if (choice != 1 && choice != 2) {
+				int choice;
+				do { // prevent quick thoughtless tap Enter or Space or Esc in dialog
+					choice = Message(MSG_KEEPBACKGROUND, 4,
+						Msg::TerminalClipboardAccessTitle,
+						Msg::TerminalClipboardSetText,
+						L"...",	// 0 - stub select for thoughtless tap
+						Msg::TerminalClipboardAccessBlock,		// 1
+						Msg::TerminalClipboardSetAllowOnce,		// 2
+						Msg::TerminalClipboardSetAllowForCommand);	// 3
+				} while (choice <= 0 );
+				if (choice != 2 && choice != 3) {
 					return;
 				}
-				if (choice == 2) {
+				if (choice == 3) {
 					_allow_osc_clipset = true;
 				}
 			}
 			OnTerminalResized(); // window could resize during dialog box processing
+		}
+
+		// remove "c;" prefix if any
+		size_t pos = str.rfind(';');
+		if (pos != std::string::npos) {
+			str.erase(0, pos + 1);
 		}
 
 		std::vector<unsigned char> plain;
@@ -736,7 +757,7 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 
 			if (KeyEvent.bKeyDown) {
 
-				if (!ctrl && !shift && !alt && KeyEvent.wVirtualKeyCode==VK_BACK) {
+				if (!ctrl && !shift && !alt && KeyEvent.wVirtualKeyCode==VK_BACK && !_kitty_kb_flags) {
 					//WCM has a setting for that, so probably in some cases backspace should be returned as is
 					char backspace[] = {127, 0};
 					return backspace;
@@ -768,15 +789,236 @@ class VTShell : VTOutputReader::IProcessor, VTInputReader::IProcessor, IVTShell
 				}
 			}
 
+			if (_kitty_kb_flags) {
+
+				// References:
+				// https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+				// https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+
+				char buffer[64] = {0};
+
+				// fixme: KEYPAD 5 работает как F5, а надо чтоб как F3
+
+				int keycode = towlower(KeyEvent.uChar.UnicodeChar);
+
+				int base = 0;
+				if ((KeyEvent.wVirtualKeyCode >= 'A') && (KeyEvent.wVirtualKeyCode <= 'Z')) {
+					base = towlower(KeyEvent.wVirtualKeyCode);
+					if (base == keycode) { base = 0; }
+				}
+
+				// workaround for tty backend
+				if (base && !keycode) { keycode = base; }
+
+				int shifted = 0;
+
+				// (KeyEvent.uChar.UnicodeChar && iswupper(KeyEvent.uChar.UnicodeChar))
+				// is workaround for far2l wx as it is not sending Shift state for Char events
+				// See
+				// ir.Event.KeyEvent.wVirtualKeyCode = VK_OEM_PERIOD;
+				// and below in wxMain.cpp: dwControlKeyState not set
+				if (shift || (KeyEvent.uChar.UnicodeChar && iswupper(KeyEvent.uChar.UnicodeChar))) {
+					shifted = KeyEvent.uChar.UnicodeChar;
+				}
+
+				int modifiers = 0;
+
+				if (shift) modifiers |= 1;
+				if (alt)   modifiers |= 2;
+				if (ctrl)  modifiers |= 4;
+				if (KeyEvent.dwControlKeyState & CAPSLOCK_ON) modifiers |= 64;
+				if (KeyEvent.dwControlKeyState & NUMLOCK_ON)  modifiers |= 128;
+
+				modifiers += 1; // as spec requres
+
+				char suffix = 'u';
+
+				// apply modifications for special keys
+
+				switch (KeyEvent.wVirtualKeyCode) {
+					case VK_ESCAPE:    keycode = 27;  break;
+					case VK_RETURN:    keycode = 13;  break;
+
+					case VK_TAB:       keycode = 9;   break;
+					case VK_BACK:      keycode = 127; break;
+
+					case VK_INSERT:    keycode = 2;   suffix = '~'; break;
+					case VK_DELETE:    keycode = 3;   suffix = '~'; break;
+
+					case VK_LEFT:      keycode = 1;   suffix = 'D'; break;
+					case VK_RIGHT:     keycode = 1;   suffix = 'C'; break;
+					case VK_UP:        keycode = 1;   suffix = 'A'; break;
+					case VK_DOWN:      keycode = 1;   suffix = 'B'; break;
+
+					case VK_PRIOR:     keycode = 5;   suffix = '~'; break;
+					case VK_NEXT:      keycode = 6;   suffix = '~'; break;
+
+					case VK_HOME:      keycode = 1;   suffix = 'H'; break;
+					case VK_END:       keycode = 1;   suffix = 'F'; break;
+
+					case VK_F1:        keycode = 11;  suffix = '~'; break;
+					case VK_F2:        keycode = 12;  suffix = '~'; break;
+					case VK_F3:        keycode = 13;  suffix = '~'; break;
+					case VK_F4:        keycode = 14;  suffix = '~'; break;
+					case VK_F5:        keycode = 15;  suffix = '~'; break;
+
+					case VK_F6:        keycode = 17;  suffix = '~'; break;
+					case VK_F7:        keycode = 18;  suffix = '~'; break;
+					case VK_F8:        keycode = 19;  suffix = '~'; break;
+					case VK_F9:        keycode = 20;  suffix = '~'; break;
+					case VK_F10:       keycode = 21;  suffix = '~'; break;
+
+					case VK_F11:       keycode = 23;  suffix = '~'; break;
+					case VK_F12:       keycode = 24;  suffix = '~'; break;
+
+					case VK_MENU:
+					{
+						if (KeyEvent.dwControlKeyState & ENHANCED_KEY) {
+							// right
+							keycode = 57449; suffix = 'u';
+						} else {
+							// left
+							keycode = 57443; suffix = 'u';
+						}
+
+						break;
+					}
+
+					case VK_CONTROL:
+					{
+						if ((KeyEvent.dwControlKeyState & ENHANCED_KEY)) {
+							// right
+							keycode = 57448; suffix = 'u';
+						} else {
+							// left
+							keycode = 57442; suffix = 'u';
+						}
+
+						break;
+					}
+
+					case VK_SHIFT:
+					{
+						if (KeyEvent.wVirtualScanCode == RIGHT_SHIFT_VSC) {
+							// right
+							keycode = 57447; suffix = 'u';
+						} else {
+							// left
+							keycode = 57441; suffix = 'u';
+						}
+
+						break;
+					}
+
+				}
+
+				// avoid sending base char if it is equal to keycode
+				if (base == keycode) { base = 0; }
+
+				int flags = _kitty_kb_flags;
+
+
+				if (!(flags & 8)) { // "Report all keys as escape codes" disabled
+					// do not sent modifiers themselfs
+					if (!keycode && (modifiers > 1)) {
+						return "";
+					}
+				}
+
+				// Записываем ESC-последовательность
+
+				// CSI unicode-key-code:shifted-key:base-layout-key ; modifiers:event-type ; text-as-codepoints u
+
+				// Переменная для отслеживания текущей длины строки в буфере
+				int len = 0;
+
+				// Старт последовательности
+				len += snprintf(buffer + len, sizeof(buffer) - len, "\x1B[");
+
+				// Часть 1
+
+				// We are not able to generate proper sequence for this key for now, sorry
+				if (!keycode) { return ""; }
+
+				// Добавляем значение keycode
+				len += snprintf(buffer + len, sizeof(buffer) - len, "%i", keycode);
+
+				if ((flags & 4) && (shifted || base)) { // "report alternative keys" enabled
+
+					len += snprintf(buffer + len, sizeof(buffer) - len, ":");
+
+					if (shifted) {
+						// Добавляем значение shifted
+						len += snprintf(buffer + len, sizeof(buffer) - len, "%i", shifted);
+					}
+
+					if (base) {
+
+						// Добавляем значение base
+						len += snprintf(buffer + len, sizeof(buffer) - len, ":%i", base);
+					}
+				}
+
+				// Часть 2
+
+				if ((modifiers > 1) || ((flags & 2) && !KeyEvent.bKeyDown)) {
+
+					len += snprintf(buffer + len, sizeof(buffer) - len, ";");
+
+					// Добавляем значение modifiers
+					len += snprintf(buffer + len, sizeof(buffer) - len, "%i", modifiers);
+
+					if ((flags & 2) && !KeyEvent.bKeyDown) {
+						// Добавляем значение для типа события (1 для keydown, 2 для repeat, 3 для keyup)
+						// fixme: repeat unimplemented
+						len += snprintf(buffer + len, sizeof(buffer) - len, ":%i", 3);
+					}
+				}
+
+				// Часть 3
+
+				if ((flags & 16) && KeyEvent.uChar.UnicodeChar) { // "text as code points" enabled
+
+					if (!((modifiers > 1) || ((flags & 2) && !KeyEvent.bKeyDown))) {
+						// Если часть 2 пропущена, добавим ";", чтобы обозначить это
+						len += snprintf(buffer + len, sizeof(buffer) - len, ";");
+					}
+
+					// Добавляем значение UnicodeChar
+					len += snprintf(buffer + len, sizeof(buffer) - len, ";%i", KeyEvent.uChar.UnicodeChar);
+				}
+
+				// Финал
+
+				// Добавляем значение suffix
+				len += snprintf(buffer + len, sizeof(buffer) - len, "%c", suffix);
+
+				if (!(flags & 8) && KeyEvent.uChar.UnicodeChar && !alt && !ctrl) { // "Report all keys as escape codes" disabled
+					// just send text
+					len = snprintf(buffer, sizeof(buffer), "%lc", KeyEvent.uChar.UnicodeChar);
+				}
+
+				// Финальный 0
+				len += snprintf(buffer + len, sizeof(buffer) - len, "%c", 0);
+
+				/*
+				FILE* f = fopen("far2l_k.log", "a");
+				fprintf(f, "%s\n", buffer);
+				fclose(f);
+				*/
+
+				return buffer;
+			}
+
 			if (_win32_input_mode_expected) {
-				char buffer[64];
-				sprintf(buffer, "\x1B[%i;%i;%i;%i;%i;%i_",
-						KeyEvent.wVirtualKeyCode,
-						KeyEvent.wVirtualScanCode,
-						KeyEvent.uChar.UnicodeChar,
-						KeyEvent.bKeyDown,
-						KeyEvent.dwControlKeyState,
-						KeyEvent.wRepeatCount
+				char buffer[64] = {0};
+				snprintf(buffer, sizeof(buffer), "\x1B[%i;%i;%i;%i;%i;%i_",
+						 KeyEvent.wVirtualKeyCode,
+						 KeyEvent.wVirtualScanCode,
+						 KeyEvent.uChar.UnicodeChar,
+						 KeyEvent.bKeyDown,
+						 KeyEvent.dwControlKeyState,
+						 KeyEvent.wRepeatCount
 					);
 				return buffer;
 			}
